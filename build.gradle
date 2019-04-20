@@ -9,13 +9,36 @@ repositories {
     // Use jcenter for resolving your dependencies.
     // You can declare any Maven/Ivy/file repository here.
     jcenter()
+
+    flatDir {
+        dirs 'libs'
+    }
+
 }
 
 dependencies {
+
+    // https://mvnrepository.com/artifact/at.favre.lib/hkdf
+    compile group: 'at.favre.lib', name: 'hkdf', version: '1.0.1'
+
+    // https://mvnrepository.com/artifact/commons-cli/commons-cli
+    compile group: 'commons-cli', name: 'commons-cli', version: '1.4'
+
+    compile name: 'tls13'
+
     // Use JUnit test framework
     testImplementation 'junit:junit:4.12'
 
     testCompile("org.assertj:assertj-core:3.11.1")
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir 'kwik/src/main/java'
+            srcDir 'qpack/src/main/java'
+        }
+    }
 }
 
 test {
