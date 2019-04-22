@@ -18,6 +18,8 @@
  */
 package net.luminis.http3;
 
+import net.luminis.http3.impl.Http3Connection;
+
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
 import java.io.IOException;
@@ -25,7 +27,6 @@ import java.net.Authenticator;
 import java.net.CookieHandler;
 import java.net.ProxySelector;
 import java.net.http.HttpClient;
-import java.net.http.HttpConnectTimeoutException;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
@@ -33,7 +34,16 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
+
 public class Http3Client extends HttpClient {
+
+    private static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(5);
+
+    private final Duration connectTimeout;
+
+    public Http3Client(Duration connectTimeout) {
+        this.connectTimeout = connectTimeout;
+    }
 
     public static HttpClient newHttpClient() {
         return new Http3ClientBuilder().build();
@@ -46,7 +56,7 @@ public class Http3Client extends HttpClient {
 
     @Override
     public Optional<Duration> connectTimeout() {
-        return Optional.empty();
+        return Optional.ofNullable(connectTimeout);
     }
 
     @Override
@@ -86,9 +96,18 @@ public class Http3Client extends HttpClient {
 
     @Override
     public <T> HttpResponse<T> send(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler) throws IOException, InterruptedException {
-        System.out.println("Sending HTTP3 request");
 
-        throw new HttpConnectTimeoutException("HTTP3 not implemented yet ;-(");
+        String host = request.uri().getHost();
+        int port = request.uri().getPort();
+        if (port <= 0) {
+            port = 443;
+        }
+
+        Http3Connection http3Connection = new Http3Connection(host, port);
+        http3Connection.connect((int) connectTimeout().orElse(DEFAULT_CONNECT_TIMEOUT).toMillis());
+        http3Connection.send(request);
+
+        return null;
     }
 
     @Override

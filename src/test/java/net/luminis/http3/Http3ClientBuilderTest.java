@@ -20,6 +20,7 @@ package net.luminis.http3;
 
 import org.junit.Test;
 import java.net.http.HttpClient;
+import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -32,4 +33,24 @@ public class Http3ClientBuilderTest {
 
         assertThat(client).isInstanceOf(Http3Client.class);
     }
+
+    @Test
+    public void testBuilderPassesConnectionTimeout() {
+        HttpClient client = new Http3ClientBuilder()
+                .connectTimeout(Duration.ofSeconds(3))
+                .build();
+
+        assertThat(client.connectTimeout().get()).isEqualTo(Duration.ofSeconds(3));
+    }
+
+    @Test
+    public void testConnectionTimeoutNotSet() {
+        HttpClient client = new Http3ClientBuilder()
+                .build();
+
+        // https://docs.oracle.com/en/java/javase/11/docs/api/java.net.http/java/net/http/HttpClient.html#connectTimeout()
+        // "If the connect timeout duration was not set in the client's builder, then the Optional is empty."
+        assertThat(client.connectTimeout().isEmpty()).isTrue();
+    }
+
 }
