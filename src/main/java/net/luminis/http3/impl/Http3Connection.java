@@ -18,14 +18,23 @@
  */
 package net.luminis.http3.impl;
 
+import net.luminis.qpack.Decoder;
+import net.luminis.qpack.Encoder;
 import net.luminis.quic.*;
 
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.ProtocolException;
+import java.net.http.HttpClient;
+import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.Flow;
 
 
 public class Http3Connection {
@@ -38,6 +47,7 @@ public class Http3Connection {
     private InputStream serverPushStream;
     private int serverQpackMaxTableCapacity;
     private int serverQpackBlockedStreams;
+    private final Decoder qpackDecoder;
 
     public Http3Connection(String host, int port) throws IOException {
         this.host = host;
@@ -50,6 +60,8 @@ public class Http3Connection {
 
         quicConnection = new QuicConnection(host, port, Version.IETF_draft_19, logger);
         quicConnection.setServerStreamCallback(stream -> doAsync(() -> registerServerInitiatedStream(stream)));
+
+        qpackDecoder = new Decoder();
     }
 
     public void connect(int connectTimeoutInMillis) throws IOException {
@@ -76,8 +88,83 @@ public class Http3Connection {
         // " The sender MUST NOT close the control stream."
     }
 
-    public void send(HttpRequest request) {
-        System.out.println("Sending HTTP3 request to " + host + ":" + port);
+
+    public <T> HttpResponse<T> send(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler) throws IOException {
+
+        QuicStream httpStream = quicConnection.createStream(true);
+        OutputStream requestStream = httpStream.getOutputStream();
+        InputStream responseStream = httpStream.getInputStream();
+
+        HeadersFrame headersFrame = new HeadersFrame();
+        headersFrame.setMethod(request.method());
+        headersFrame.setUri(request.uri());
+
+        requestStream.write(headersFrame.toBytes(new Encoder()));
+        requestStream.write(new DataFrame().toBytes());
+        requestStream.close();
+
+        HeadersFrame responseHeadersFrame = null;
+        List<DataFrame> responseDataFrames = new ArrayList<>();
+
+        HttpResponse.BodySubscriber<T> bodySubscriber = null;
+
+        int frameType;
+        boolean firstFrame = true;
+        while ((frameType = readFrameType(responseStream)) >= 0) {
+            if (firstFrame && frameType != 0x01) {
+                throw new ProtocolException("First frame on HTTP3 request/response stream should be a HEADERS frame");
+            }
+            firstFrame = false;
+
+            int payloadLength = VariableLengthInteger.parse(responseStream);
+            byte[] payload = new byte[payloadLength];
+            readExact(responseStream, payload);
+
+            switch (frameType) {
+                case 0x01:
+                    responseHeadersFrame = new HeadersFrame().parsePayload(payload, qpackDecoder);
+                    bodySubscriber = responseBodyHandler.apply(new HttpResponseInfo(responseHeadersFrame));
+                    bodySubscriber.onSubscribe(new Flow.Subscription() {
+                        @Override
+                        public void request(long n) {}
+
+                        @Override
+                        public void cancel() {
+                            System.out.println("BodySubscriber has cancelled the subscription.");
+                        }
+                    });
+                    break;
+                case 0x00:
+                    responseDataFrames.add(new DataFrame().parsePayload(payload));
+                    bodySubscriber.onNext(List.of(ByteBuffer.wrap(payload)));
+                    break;
+                default:
+                    // Not necessarily a protocol error, could be a frame we not yet support
+                    throw new RuntimeException("Unexpected frame type " + frameType);
+            }
+        }
+
+        bodySubscriber.onComplete();
+        if (responseDataFrames.isEmpty()) {
+            throw new ProtocolException("No DATA frames on request/response stream");
+        }
+
+        Http3Response<T> http3Response = new Http3Response<T>(
+                request,
+                responseHeadersFrame.statusCode(),
+                HttpHeaders.of(responseHeadersFrame.headers(), (k, v) -> true),
+                bodySubscriber.getBody());
+
+        return http3Response;
+    }
+
+    int readFrameType(InputStream inputStream) throws IOException {
+        try {
+            return VariableLengthInteger.parse(inputStream);
+        }
+        catch (EOFException endOfStream) {
+            return -1;
+        }
     }
 
     void registerServerInitiatedStream(QuicStream stream) {
@@ -136,7 +223,7 @@ public class Http3Connection {
                 offset += read;
             }
             else {
-                throw new EOFException();
+                throw new EOFException("Stream closed by peer");
             }
         }
     }
@@ -151,5 +238,29 @@ public class Http3Connection {
 
     public int getServerQpackBlockedStreams() {
         return serverQpackBlockedStreams;
+    }
+
+    private class HttpResponseInfo implements HttpResponse.ResponseInfo {
+        private final HeadersFrame headersFrame;
+
+        public HttpResponseInfo(HeadersFrame headersFrame) {
+
+            this.headersFrame = headersFrame;
+        }
+
+        @Override
+        public int statusCode() {
+            return 200;
+        }
+
+        @Override
+        public HttpHeaders headers() {
+            return HttpHeaders.of(headersFrame.headers(), (k, v) -> true);
+        }
+
+        @Override
+        public HttpClient.Version version() {
+            return null;
+        }
     }
 }

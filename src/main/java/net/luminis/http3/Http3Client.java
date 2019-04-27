@@ -105,9 +105,7 @@ public class Http3Client extends HttpClient {
 
         Http3Connection http3Connection = new Http3Connection(host, port);
         http3Connection.connect((int) connectTimeout().orElse(DEFAULT_CONNECT_TIMEOUT).toMillis());
-        http3Connection.send(request);
-
-        return null;
+        return http3Connection.send(request, responseBodyHandler);
     }
 
     @Override

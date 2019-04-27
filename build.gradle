@@ -1,7 +1,5 @@
 plugins {
-    // Apply the java-library plugin to add support for Java Library
     id 'java-library'
-
     id 'idea'
 }
 
@@ -42,6 +40,9 @@ sourceSets {
         java {
             srcDir 'kwik/src/main/java'
             srcDir 'qpack/src/main/java'
+        }
+        resources {
+            srcDir 'qpack/src/main/resources'
         }
     }
 }
