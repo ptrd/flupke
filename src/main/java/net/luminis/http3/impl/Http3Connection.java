@@ -48,7 +48,7 @@ public class Http3Connection {
         logger.logPackets(true);
         logger.useRelativeTime(true);
 
-        quicConnection = new QuicConnection(host, port, Version.IETF_draft_18, logger);
+        quicConnection = new QuicConnection(host, port, Version.IETF_draft_19, logger);
         quicConnection.setServerStreamCallback(stream -> doAsync(() -> registerServerInitiatedStream(stream)));
     }
 
