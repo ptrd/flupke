@@ -5,13 +5,16 @@ plugins {
     id 'idea'
 }
 
+sourceCompatibility = 11
+targetCompatibility = 11
+
 repositories {
     // Use jcenter for resolving your dependencies.
     // You can declare any Maven/Ivy/file repository here.
     jcenter()
 
     flatDir {
-        dirs 'libs'
+        dirs 'kwik/libs'
     }
 
 }
@@ -52,5 +55,14 @@ test {
         if (!desc.parent) { // will match the outermost suite
             println "Results: ${result.resultType} (${result.testCount} tests, ${result.successfulTestCount} successes, ${result.failedTestCount} failures, ${result.skippedTestCount} skipped)"
         }
+    }
+}
+
+jar {
+    doFirst {
+        from {
+           configurations.compile.collect { it.isDirectory() ? it : zipTree(it) }
+        }
+        exclude 'META-INF/*.RSA', 'META-INF/*.SF','META-INF/*.DSA'
     }
 }
