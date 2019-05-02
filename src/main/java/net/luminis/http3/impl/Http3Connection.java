@@ -58,14 +58,14 @@ public class Http3Connection {
         logger.logPackets(true);
         logger.useRelativeTime(true);
 
-        quicConnection = new QuicConnection(host, port, Version.IETF_draft_19, logger);
+        quicConnection = new QuicConnection(host, port, Version.IETF_draft_20, logger);
         quicConnection.setServerStreamCallback(stream -> doAsync(() -> registerServerInitiatedStream(stream)));
 
         qpackDecoder = new Decoder();
     }
 
     public void connect(int connectTimeoutInMillis) throws IOException {
-        quicConnection.connect(connectTimeoutInMillis, "h3-19");
+        quicConnection.connect(connectTimeoutInMillis, "h3-20");
 
         // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.2.1
         // "Each side MUST initiate a single control stream at the beginning of

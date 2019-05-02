@@ -4,9 +4,9 @@
 
 Flupke is a Java HTTP3 Client. 
 Flupke uses [Kwik](http://kwik.tech), a Java implementation of QUIC, as transport protocol. 
-Currently, Flupke supports the [HTTP3 draft-19](https://tools.ietf.org/html/draft-ietf-quic-http-19) version 
+Currently, Flupke supports the [HTTP3 draft-20](https://tools.ietf.org/html/draft-ietf-quic-http-20) version 
 and uses [QPACK version draft-8](https://tools.ietf.org/html/draft-ietf-quic-qpack-08) 
-and [QUIC version draft-19](https://tools.ietf.org/html/draft-ietf-quic-transport-19).
+and [QUIC version draft-20](https://tools.ietf.org/html/draft-ietf-quic-transport-20).
 
 ## Usage
 
@@ -28,6 +28,8 @@ As this project just started, the current version has some limitations:
 - POST and PUT are not supported (because the request body is ignored)
 - each send creates a new HTTP3 (and thus a new QUIC) connection, so multiplexing is not supported.
   Of course, support for multiplexing _will_ be added soon, as this is one of the major features of HTTP3/QUIC. 
+
+Other limitations, for example limits on the response size, are induced by current limitations in the underlying QUIC implementation.
 
 Also note that `Http3Client.version()` returns null instead of a proper Version object; 
 this is unavoidable as the Java [HTTPClient.Version](https://docs.oracle.com/en/java/javase/11/docs/api/java.net.http/java/net/http/HttpClient.Version.html)
