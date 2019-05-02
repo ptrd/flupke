@@ -23,6 +23,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.time.Duration;
 
 public class Sample {
@@ -46,6 +48,13 @@ public class Sample {
         System.out.println("Got HTTP response " + httpResponse);
         System.out.println("    HTTP headers: " + httpResponse.headers());
         System.out.println("    HTTP body (" + httpResponse.body().length() + " bytes):");
-        System.out.println(httpResponse.body());
+        if (httpResponse.body().length() > 10 * 1024) {
+            String outputFile = "http3-response.txt";
+            Files.write(Paths.get(outputFile), httpResponse.body().getBytes());
+            System.out.println("Response written to file: " + outputFile);
+        }
+        else {
+            System.out.println(httpResponse.body());
+        }
     }
 }
