@@ -53,4 +53,21 @@ public class Http3ClientBuilderTest {
         assertThat(client.connectTimeout().isEmpty()).isTrue();
     }
 
+    @Test
+    public void testBuilderPassesReceiveBufferSize() {
+        Http3Client client = (Http3Client) new Http3ClientBuilder()
+                .receiveBufferSize(100_000)
+                .build();
+
+        assertThat(client.receiveBufferSize()).hasValue(100_000L);
+    }
+
+    @Test
+    public void testReceiveBufferSizeNotSet() {
+        Http3Client client = (Http3Client) new Http3ClientBuilder()
+                .build();
+
+        assertThat(client.receiveBufferSize()).isEmpty();
+    }
+
 }

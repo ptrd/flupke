@@ -61,6 +61,16 @@ public class Http3Connection {
         quicConnection = new QuicConnection(host, port, Version.IETF_draft_20, logger);
         quicConnection.setServerStreamCallback(stream -> doAsync(() -> registerServerInitiatedStream(stream)));
 
+        // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.1
+        // "clients MUST omit or specify a value of zero for the QUIC transport parameter "initial_max_bidi_streams"."
+        quicConnection.setMaxAllowedBidirectionalStreams(0);
+
+        // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.2
+        // "To reduce the likelihood of blocking,
+        //   both clients and servers SHOULD send a value of three or greater for
+        //   the QUIC transport parameter "initial_max_uni_streams","
+        quicConnection.setMaxAllowedUnidirectionalStreams(3);
+
         qpackDecoder = new Decoder();
     }
 
@@ -238,6 +248,10 @@ public class Http3Connection {
 
     public int getServerQpackBlockedStreams() {
         return serverQpackBlockedStreams;
+    }
+
+    public void setReceiveBufferSize(long receiveBufferSize) {
+        quicConnection.setDefaultStreamReceiveBufferSize(receiveBufferSize);
     }
 
     private class HttpResponseInfo implements HttpResponse.ResponseInfo {

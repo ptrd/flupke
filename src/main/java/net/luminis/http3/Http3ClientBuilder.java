@@ -30,6 +30,12 @@ import java.util.concurrent.Executor;
 public class Http3ClientBuilder implements HttpClient.Builder {
 
     private Duration connectTimeout;
+    private Long receiveBufferSize;
+
+    public HttpClient.Builder receiveBufferSize(long bufferSize) {
+        receiveBufferSize = bufferSize;
+        return this;
+    }
 
     @Override
     public HttpClient.Builder cookieHandler(CookieHandler cookieHandler) {
@@ -84,6 +90,6 @@ public class Http3ClientBuilder implements HttpClient.Builder {
 
     @Override
     public HttpClient build() {
-        return new Http3Client(connectTimeout);
+        return new Http3Client(connectTimeout, receiveBufferSize);
     }
 }

@@ -40,13 +40,19 @@ public class Http3Client extends HttpClient {
     private static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(5);
 
     private final Duration connectTimeout;
+    private final Long receiveBufferSize;
 
-    public Http3Client(Duration connectTimeout) {
+    Http3Client(Duration connectTimeout, Long receiveBufferSize) {
         this.connectTimeout = connectTimeout;
+        this.receiveBufferSize = receiveBufferSize;
     }
 
     public static HttpClient newHttpClient() {
         return new Http3ClientBuilder().build();
+    }
+
+    public Optional<Long> receiveBufferSize() {
+        return Optional.ofNullable(receiveBufferSize);
     }
 
     @Override
@@ -104,6 +110,9 @@ public class Http3Client extends HttpClient {
         }
 
         Http3Connection http3Connection = new Http3Connection(host, port);
+        if (receiveBufferSize != null) {
+            http3Connection.setReceiveBufferSize(receiveBufferSize);
+        }
         http3Connection.connect((int) connectTimeout().orElse(DEFAULT_CONNECT_TIMEOUT).toMillis());
         return http3Connection.send(request, responseBodyHandler);
     }
