@@ -44,10 +44,13 @@ public class Sample {
                 .build();
 
         HttpClient client = Http3Client.newHttpClient();
+        long start = System.currentTimeMillis();
         HttpResponse<String> httpResponse = client.send(request, HttpResponse.BodyHandlers.ofString());
+        long end = System.currentTimeMillis();
         System.out.println("Got HTTP response " + httpResponse);
-        System.out.println("    HTTP headers: " + httpResponse.headers());
-        System.out.println("    HTTP body (" + httpResponse.body().length() + " bytes):");
+        System.out.println("-   HTTP headers: " + httpResponse.headers());
+        long downloadSpeed = httpResponse.body().length() / (end - start);
+        System.out.println("-   HTTP body (" + httpResponse.body().length() + " bytes, " + downloadSpeed + " B/s):");
         if (httpResponse.body().length() > 10 * 1024) {
             String outputFile = "http3-response.txt";
             Files.write(Paths.get(outputFile), httpResponse.body().getBytes());
