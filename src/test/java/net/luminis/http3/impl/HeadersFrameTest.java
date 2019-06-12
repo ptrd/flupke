@@ -20,20 +20,26 @@ package net.luminis.http3.impl;
 
 import net.luminis.qpack.Decoder;
 import net.luminis.qpack.Encoder;
+import net.luminis.tls.ByteUtils;
 import org.assertj.core.util.Lists;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatcher;
 
 import java.io.InputStream;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.util.AbstractMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 
 public class HeadersFrameTest {
@@ -110,6 +116,30 @@ public class HeadersFrameTest {
         byte[] bytes = new HeadersFrame().toBytes(qpackEncoder);
 
         assertThat(bytes).startsWith(0x01, 0x08, 0x33, 0x10, 0x5f, 0x6e, 0x00, 0x3c, 0x77, 0x7f);
+    }
+
+    @Test
+    public void headersFrameShouldContainCompulsaryPseudoHeaders() throws URISyntaxException {
+        HeadersFrame headersFrame = new HeadersFrame();
+        headersFrame.setMethod("GET");
+        headersFrame.setUri(new URI("/index.html"));
+
+        Encoder qpackEncoder = mock(Encoder.class);
+        when(qpackEncoder.compressHeaders(anyList())).thenReturn(ByteBuffer.allocate(1));
+
+        headersFrame.toBytes(qpackEncoder);
+
+        ArgumentCaptor<List<Map.Entry<String, String>>> listCaptor = ArgumentCaptor.forClass(List.class);
+        verify(qpackEncoder, times(1)).compressHeaders(listCaptor.capture());
+
+        List<String> headerNames = listCaptor.getValue().stream().map(entry -> entry.getKey()).collect(Collectors.toList());
+
+        // https://tools.ietf.org/html/rfc7540#section-8.1.2.3
+        // "All HTTP/2 requests MUST include exactly one valid value for the
+        //   ":method", ":scheme", and ":path" pseudo-header fields"
+        assertThat(headerNames).contains(":method");
+        assertThat(headerNames).contains(":scheme");
+        assertThat(headerNames).contains(":path");
     }
 
 }

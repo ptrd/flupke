@@ -84,6 +84,10 @@ public class HeadersFrame extends Http3Frame {
             path = "/";
         }
         qpackHeaders.add(new AbstractMap.SimpleEntry<>(":path", path));
+        // https://tools.ietf.org/html/rfc7540#section-8.1.2.3
+        // "All HTTP/2 requests MUST include exactly one valid value for the
+        //   ":method", ":scheme", and ":path" pseudo-header fields"
+        qpackHeaders.add(new AbstractMap.SimpleEntry<>(":scheme", "https"));
     }
 
     public int statusCode() {
