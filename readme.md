@@ -29,8 +29,6 @@ As this project just started, the current version has some limitations:
 - each send creates a new HTTP3 (and thus a new QUIC) connection, so multiplexing is not supported.
   Of course, support for multiplexing _will_ be added soon, as this is one of the major features of HTTP3/QUIC. 
 
-Other limitations, for example limits on the response size, are induced by current limitations in the underlying QUIC implementation.
-
 Also note that `Http3Client.version()` returns null instead of a proper Version object; 
 this is unavoidable as the Java [HTTPClient.Version](https://docs.oracle.com/en/java/javase/11/docs/api/java.net.http/java/net/http/HttpClient.Version.html)
 enum does not provide a value for HTTP3.
