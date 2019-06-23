@@ -42,15 +42,15 @@ public class SettingsFrame {
             // "The payload of a SETTINGS frame consists of zero or more parameters.
             //   Each parameter consists of a setting identifier and a value, both
             //   encoded as QUIC variable-length integers."
-             int identifier = VariableLengthInteger.parse(buffer);
-            int value = VariableLengthInteger.parse(buffer);
+            int identifier = (int) VariableLengthInteger.parseLong(buffer);
+            long value = VariableLengthInteger.parseLong(buffer);
             switch (identifier) {
                 // https://tools.ietf.org/html/draft-ietf-quic-qpack-07#section-8.1
                 case 0x01:
-                    qpackMaxTableCapacity = value;
+                    qpackMaxTableCapacity = (int) value;
                     break;
                 case 0x07:
-                    qpackBlockedStreams = value;
+                    qpackBlockedStreams = (int) value;
                     break;
                 default:
                     // "An implementation MUST ignore the contents for any SETTINGS
