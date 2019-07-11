@@ -142,4 +142,58 @@ public class HeadersFrameTest {
         assertThat(headerNames).contains(":path");
     }
 
+    @Test
+    public void headersFrameShouldContainAuthorityHeader() throws URISyntaxException {
+        HeadersFrame headersFrame = new HeadersFrame();
+        headersFrame.setMethod("GET");
+        headersFrame.setUri(new URI("http://example.com:4433/index.html"));
+
+        Encoder qpackEncoder = mock(Encoder.class);
+        when(qpackEncoder.compressHeaders(anyList())).thenReturn(ByteBuffer.allocate(1));
+
+        headersFrame.toBytes(qpackEncoder);
+
+        ArgumentCaptor<List<Map.Entry<String, String>>> listCaptor = ArgumentCaptor.forClass(List.class);
+        verify(qpackEncoder, times(1)).compressHeaders(listCaptor.capture());
+
+        List<String> headerNames = listCaptor.getValue().stream().map(entry -> entry.getKey()).collect(Collectors.toList());
+
+        // https://tools.ietf.org/html/rfc7540#section-8.1.2.3
+        // "Clients that generate HTTP/2 requests directly SHOULD use the ":authority"
+        //  pseudo-header field instead of the Host header field."
+        assertThat(headerNames).contains(":authority");
+        assertThat(listCaptor.getValue().stream()
+                .filter(entry -> entry.getKey().equals(":authority"))
+                .map(entry -> entry.getValue())
+                .findFirst().get())
+                .isEqualTo("example.com:4433");
+    }
+
+    @Test
+    public void headersFrameAuthorityHeaderShouldExludeUserInfo() throws URISyntaxException {
+        HeadersFrame headersFrame = new HeadersFrame();
+        headersFrame.setMethod("GET");
+        headersFrame.setUri(new URI("http://username:password@example.com:4433/index.html"));
+
+        Encoder qpackEncoder = mock(Encoder.class);
+        when(qpackEncoder.compressHeaders(anyList())).thenReturn(ByteBuffer.allocate(1));
+
+        headersFrame.toBytes(qpackEncoder);
+
+        ArgumentCaptor<List<Map.Entry<String, String>>> listCaptor = ArgumentCaptor.forClass(List.class);
+        verify(qpackEncoder, times(1)).compressHeaders(listCaptor.capture());
+
+        List<String> headerNames = listCaptor.getValue().stream().map(entry -> entry.getKey()).collect(Collectors.toList());
+
+        // https://tools.ietf.org/html/rfc7540#section-8.1.2.3
+        // "The authority MUST NOT include the deprecated "userinfo" subcomponent for "http"
+        // or "https" schemed URIs."
+        assertThat(headerNames).contains(":authority");
+        assertThat(listCaptor.getValue().stream()
+                .filter(entry -> entry.getKey().equals(":authority"))
+                .map(entry -> entry.getValue())
+                .findFirst().get())
+                .isEqualTo("example.com:4433");
+    }
+
 }
