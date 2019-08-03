@@ -4,9 +4,9 @@
 
 Flupke is a Java HTTP3 Client. 
 Flupke uses [Kwik](http://kwik.tech), a Java implementation of QUIC, as transport protocol. 
-Currently, Flupke supports the [HTTP3 draft-20](https://tools.ietf.org/html/draft-ietf-quic-http-20) version 
+Currently, Flupke supports the [HTTP3 draft-22](https://tools.ietf.org/html/draft-ietf-quic-http-22) version 
 and uses [QPACK version draft-8](https://tools.ietf.org/html/draft-ietf-quic-qpack-08) 
-and [QUIC version draft-20](https://tools.ietf.org/html/draft-ietf-quic-transport-20).
+and [QUIC version draft-22](https://tools.ietf.org/html/draft-ietf-quic-transport-22).
 
 ## Usage
 
