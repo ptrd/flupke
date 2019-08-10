@@ -2,8 +2,13 @@
 
 ## HTTP3 Java Client
 
-Flupke is a Java HTTP3 Client. 
-Flupke uses [Kwik](http://kwik.tech), a Java implementation of QUIC, as transport protocol. 
+Flupke is a Java HTTP3 Client.
+
+HTTP3 is a new standard that is being developed
+by the Internet Engineering Task Force (IETF) and that is still "work in progress", 
+see https://tools.ietf.org/html/draft-ietf-quic-http-22.
+
+HTTP3 uses QUIC as transport protocol. Flupke builds on [Kwik](http://kwik.tech), a Java implementation of QUIC. 
 Currently, Flupke supports the [HTTP3 draft-22](https://tools.ietf.org/html/draft-ietf-quic-http-22) version 
 and uses [QPACK version draft-8](https://tools.ietf.org/html/draft-ietf-quic-qpack-08) 
 and [QUIC version draft-22](https://tools.ietf.org/html/draft-ietf-quic-transport-22).
@@ -19,15 +24,18 @@ Flupke supports the "new" HTTP Client API, e.g.
 See the [Sample](https://bitbucket.org/pjtr/flupke/src/master/src/main/java/net/luminis/http3/Sample.java)
 class for a working example.
 
-### Limitations
+### Work in progress
 
-As this project just started, the current version has some limitations:
+This project (as well as the projects it builds on) is work in progress. 
+The speed of development might seem slow, but that is because [Kwik](http://kwik.tech) is also still being actively developed.
+
+Known limitations of the current version of Flupke include:
 
 - only synchronous requests are supported (i.e. `client.sendAsync()` won't do anything usefull)
 - request headers are ignored
-- POST and PUT are not supported (because the request body is ignored)
-- each send creates a new HTTP3 (and thus a new QUIC) connection, so multiplexing is not supported.
-  Of course, support for multiplexing _will_ be added soon, as this is one of the major features of HTTP3/QUIC. 
+- POST and PUT are not yet supported
+- each send creates a new HTTP3 (and thus a new QUIC) connection, so multiplexing is not yet supported.
+  Of course, support for multiplexing _will_ be added, as this is one of the major features of HTTP3/QUIC. 
 
 Also note that `Http3Client.version()` returns null instead of a proper Version object; 
 this is unavoidable as the Java [HTTPClient.Version](https://docs.oracle.com/en/java/javase/11/docs/api/java.net.http/java/net/http/HttpClient.Version.html)
