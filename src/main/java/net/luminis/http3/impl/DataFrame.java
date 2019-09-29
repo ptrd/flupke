@@ -18,6 +18,9 @@
  */
 package net.luminis.http3.impl;
 
+import net.luminis.quic.VariableLengthInteger;
+import java.nio.ByteBuffer;
+
 
 // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-4.2.1
 public class DataFrame extends Http3Frame {
@@ -28,15 +31,20 @@ public class DataFrame extends Http3Frame {
         payload = new byte[0];
     }
 
-    public byte[] toBytes() {
-        int length = 1 + 1 + payload.length;
-        byte[] data = new byte[length];
-        data[0] = 0x00;
-        data[1] = (byte) payload.length;
-        System.arraycopy(payload, 0, data, 2, payload.length);
-        return data;
+    public DataFrame(byte[] payload) {
+        this.payload = payload;
     }
 
+    public byte[] toBytes() {
+        ByteBuffer lengthBuffer = ByteBuffer.allocate(8);
+        int varIntLength = VariableLengthInteger.encode(payload.length, lengthBuffer);
+        int dataLength = 1 + varIntLength + payload.length;
+        byte[] data = new byte[dataLength];
+        data[0] = 0x00;
+        System.arraycopy(lengthBuffer.array(), 0, data, 1, varIntLength);
+        System.arraycopy(payload, 0, data, 1 + varIntLength, payload.length);
+        return data;
+    }
 
     public DataFrame parsePayload(byte[] payload) {
         this.payload = payload;
