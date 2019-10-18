@@ -35,6 +35,13 @@ public class Http3ClientBuilderTest {
     }
 
     @Test
+    public void newBuilderMethodCreatesHttp3Client() {
+        HttpClient client = Http3Client.newBuilder().build();
+
+        assertThat(client).isInstanceOf(Http3Client.class);
+    }
+
+    @Test
     public void testBuilderPassesConnectionTimeout() {
         HttpClient client = new Http3ClientBuilder()
                 .connectTimeout(Duration.ofSeconds(3))

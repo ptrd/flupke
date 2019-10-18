@@ -51,6 +51,10 @@ public class Http3Client extends HttpClient {
         return new Http3ClientBuilder().build();
     }
 
+    public static Builder newBuilder() {
+        return new Http3ClientBuilder();
+    }
+
     public Optional<Long> receiveBufferSize() {
         return Optional.ofNullable(receiveBufferSize);
     }
