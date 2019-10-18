@@ -36,6 +36,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 public class Http3ClientTest {
 
     @Test
+    public void followRedirectsIsNever() {
+        HttpClient httpClient = Http3Client.newHttpClient();
+
+        assertThat(httpClient.followRedirects()).isEqualTo(HttpClient.Redirect.NEVER);
+    }
+
+    @Test
     public void testSendTimesOutIfNoConnection() throws Exception {
 
         HttpClient httpClient = new Http3ClientBuilder()

@@ -18,14 +18,24 @@
  */
 package net.luminis.http3;
 
+import org.assertj.core.api.Assert;
 import org.junit.Test;
 import java.net.http.HttpClient;
 import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 
 public class Http3ClientBuilderTest {
+
+    @Test
+    public void followRedirectsIsNotSupported() {
+        assertThatThrownBy(
+                () -> new Http3ClientBuilder()
+                        .followRedirects(HttpClient.Redirect.NORMAL))
+        .isInstanceOf(IllegalArgumentException.class);
+    }
 
     @Test
     public void testBuilderCreatesHttp3Client() {

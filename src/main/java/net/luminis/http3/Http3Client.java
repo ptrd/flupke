@@ -71,7 +71,7 @@ public class Http3Client extends HttpClient {
 
     @Override
     public Redirect followRedirects() {
-        return null;
+        return Redirect.NEVER;
     }
 
     @Override

@@ -65,6 +65,9 @@ public class Http3ClientBuilder implements HttpClient.Builder {
 
     @Override
     public HttpClient.Builder followRedirects(HttpClient.Redirect policy) {
+        if (policy != HttpClient.Redirect.NEVER) {
+            throw new IllegalArgumentException("Follow redirects not supported");
+        }
         return this;
     }
 
