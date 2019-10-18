@@ -156,9 +156,6 @@ public class Http3Connection {
         }
 
         bodySubscriber.onComplete();
-        if (responseDataFrames.isEmpty()) {
-            throw new ProtocolException("No DATA frames on request/response stream");
-        }
 
         Http3Response<T> http3Response = new Http3Response<T>(
                 request,

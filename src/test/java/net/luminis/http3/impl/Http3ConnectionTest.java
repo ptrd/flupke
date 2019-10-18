@@ -190,7 +190,7 @@ public class Http3ConnectionTest {
     }
 
     @Test
-    public void testMissingDataFrame() throws Exception {
+    public void testNoDataFrames() throws Exception {
         Http3Connection http3Connection = new Http3Connection("www.example.com", 4433);
 
         byte[] responseBytes = new byte[]{
@@ -204,9 +204,8 @@ public class Http3ConnectionTest {
                 .uri(new URI("http://www.example.com"))
                 .build();
 
-        assertThatThrownBy(
-                () -> http3Connection.send(request, HttpResponse.BodyHandlers.ofString()))
-                .isInstanceOf(ProtocolException.class);
+        HttpResponse<String> response = http3Connection.send(request, HttpResponse.BodyHandlers.ofString());
+        assertThat(response.body()).isEmpty();
     }
 
     @Test
