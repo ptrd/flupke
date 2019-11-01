@@ -101,10 +101,14 @@ public class Http3Connection {
 
 
     public <T> HttpResponse<T> send(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler) throws IOException {
-
         QuicStream httpStream = quicConnection.createStream(true);
+        sendRequest(request, httpStream);
+        Http3Response<T> http3Response = receiveResponse(request, responseBodyHandler, httpStream);
+        return http3Response;
+    }
+
+    private void sendRequest(HttpRequest request, QuicStream httpStream) throws IOException {
         OutputStream requestStream = httpStream.getOutputStream();
-        InputStream responseStream = httpStream.getInputStream();
 
         HeadersFrame headersFrame = new HeadersFrame();
         headersFrame.setMethod(request.method());
@@ -113,7 +117,10 @@ public class Http3Connection {
         requestStream.write(headersFrame.toBytes(new Encoder()));
         requestStream.write(new DataFrame().toBytes());
         requestStream.close();
+    }
 
+    private <T> Http3Response<T> receiveResponse(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler, QuicStream httpStream) throws IOException {
+        InputStream responseStream = httpStream.getInputStream();
         HeadersFrame responseHeadersFrame = null;
         List<DataFrame> responseDataFrames = new ArrayList<>();
 
@@ -160,13 +167,11 @@ public class Http3Connection {
             throw new ProtocolException("No DATA frames on request/response stream");
         }
 
-        Http3Response<T> http3Response = new Http3Response<T>(
+        return new Http3Response<T>(
                 request,
                 responseHeadersFrame.statusCode(),
                 HttpHeaders.of(responseHeadersFrame.headers(), (k, v) -> true),
                 bodySubscriber.getBody());
-
-        return http3Response;
     }
 
     int readFrameType(InputStream inputStream) throws IOException {
