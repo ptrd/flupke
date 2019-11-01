@@ -19,6 +19,7 @@
 package net.luminis.http3;
 
 import net.luminis.http3.impl.Http3Connection;
+import net.luminis.quic.Statistics;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
@@ -41,6 +42,7 @@ public class Http3Client extends HttpClient {
 
     private final Duration connectTimeout;
     private final Long receiveBufferSize;
+    private Http3Connection http3Connection;
 
     Http3Client(Duration connectTimeout, Long receiveBufferSize) {
         this.connectTimeout = connectTimeout;
@@ -109,7 +111,7 @@ public class Http3Client extends HttpClient {
             port = 443;
         }
 
-        Http3Connection http3Connection = new Http3Connection(host, port);
+        http3Connection = new Http3Connection(host, port);
         if (receiveBufferSize != null) {
             http3Connection.setReceiveBufferSize(receiveBufferSize);
         }
@@ -125,5 +127,14 @@ public class Http3Client extends HttpClient {
     @Override
     public <T> CompletableFuture<HttpResponse<T>> sendAsync(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler, HttpResponse.PushPromiseHandler<T> pushPromiseHandler) {
         return null;
+    }
+
+    public Statistics getConnectionStatistics() {
+        if (http3Connection != null) {
+            return http3Connection.getConnectionStats();
+        }
+        else {
+            return null;
+        }
     }
 }

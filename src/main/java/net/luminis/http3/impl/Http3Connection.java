@@ -48,6 +48,7 @@ public class Http3Connection {
     private int serverQpackMaxTableCapacity;
     private int serverQpackBlockedStreams;
     private final Decoder qpackDecoder;
+    private Statistics connectionStats;
 
     public Http3Connection(String host, int port) throws IOException {
         this.host = host;
@@ -58,6 +59,8 @@ public class Http3Connection {
         logger.logPackets(true);
         logger.useRelativeTime(true);
         logger.logRecovery(true);
+        logger.logCongestionControl(true);
+        logger.logFlowControl(true);
 
         quicConnection = new QuicConnection(host, port, Version.IETF_draft_23, logger);
         quicConnection.setServerStreamCallback(stream -> doAsync(() -> registerServerInitiatedStream(stream)));
@@ -113,9 +116,49 @@ public class Http3Connection {
         HeadersFrame headersFrame = new HeadersFrame();
         headersFrame.setMethod(request.method());
         headersFrame.setUri(request.uri());
-
         requestStream.write(headersFrame.toBytes(new Encoder()));
-        requestStream.write(new DataFrame().toBytes());
+
+        if (request.bodyPublisher().isPresent()) {
+            Flow.Subscriber<ByteBuffer> subscriber = new Flow.Subscriber<>() {
+
+                private Flow.Subscription subscription;
+
+                @Override
+                public void onSubscribe(Flow.Subscription subscription) {
+                    this.subscription = subscription;
+                    subscription.request(Long.MAX_VALUE);
+                }
+
+                @Override
+                public void onNext(ByteBuffer item) {
+                    try {
+                        DataFrame dataFrame = new DataFrame(item);
+                        requestStream.write(dataFrame.toBytes());
+                    } catch (IOException e) {
+                        // Stop receiving data from publisher.
+                        subscription.cancel();
+                    }
+                }
+
+                @Override
+                public void onError(Throwable throwable) {
+                    // Publisher is unable to provide all data.
+                    // Ignore
+                }
+
+                @Override
+                public void onComplete() {
+                    try {
+                        // Not really necessary, because Kwik probably already sent all data frames.
+                        requestStream.flush();
+                    } catch (IOException e) {
+                        // Ignore
+                    }
+                }
+            };
+            request.bodyPublisher().get().subscribe(subscriber);
+        }
+
         requestStream.close();
     }
 
@@ -163,6 +206,9 @@ public class Http3Connection {
         }
 
         bodySubscriber.onComplete();
+
+        connectionStats = quicConnection.getStats();
+
         if (responseDataFrames.isEmpty()) {
             throw new ProtocolException("No DATA frames on request/response stream");
         }
@@ -258,6 +304,10 @@ public class Http3Connection {
 
     public void setReceiveBufferSize(long receiveBufferSize) {
         quicConnection.setDefaultStreamReceiveBufferSize(receiveBufferSize);
+    }
+
+    public Statistics getConnectionStats() {
+        return connectionStats;
     }
 
     private class HttpResponseInfo implements HttpResponse.ResponseInfo {
