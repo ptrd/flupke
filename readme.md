@@ -21,11 +21,11 @@ Flupke uses the HTTP Client API introduced with Java 11, e.g.
     HttpClient client = clientBuilder.build();
     HttpResponse<String> httpResponse = client.send(request, HttpResponse.BodyHandlers.ofString());
 
-See the [Sample](https://bitbucket.org/pjtr/flupke/src/master/src/main/java/net/luminis/http3/Sample.java)
+See the [Sample](https://bitbucket.org/pjtr/flupke/src/master/src/main/java/net/luminis/http3/sample/Sample.java)
 class for a working example.
 
 Flupke also supports POST requests, or more generally, HTTP methods that require or use a request body. 
-See the [PostExample](https://bitbucket.org/pjtr/flupke/src/master/src/main/java/net/luminis/http3/PostExample.java) for details.
+See the [PostExample](https://bitbucket.org/pjtr/flupke/src/master/src/main/java/net/luminis/http3/sample/PostExample.java) for details.
 
 ### Work in progress
 
@@ -63,7 +63,7 @@ Gradle can also generate IntelliJ Idea project files for you:
 To run the sample, use the provided `flupke.sh` shell script and pass the targer URL as a parameter.
 You can also run the java command directly:
 
-    java -cp build/libs/flupke.jar net.luminis.http3.Sample <URL>
+    java -cp build/libs/flupke.jar net.luminis.http3.sample.Sample <URL>
 
 Whether the URL is specified with HTTP or HTTPS protocol doesn't matter, Flupke will always (and only) try to setup a QUIC connection.
 The port specified in the URL must be the UDP port on which the HTTP3/QUIC server listens. 
