@@ -189,7 +189,7 @@ public class Http3ConnectionTest {
     }
 
     @Test
-    public void testMissingDataFrame() throws Exception {
+    public void noDataFrameMeansEmptyResponseBody() throws Exception {
         Http3Connection http3Connection = new Http3Connection("www.example.com", 4433);
 
         byte[] responseBytes = new byte[]{
@@ -203,9 +203,8 @@ public class Http3ConnectionTest {
                 .uri(new URI("http://www.example.com"))
                 .build();
 
-        assertThatThrownBy(
-                () -> http3Connection.send(request, HttpResponse.BodyHandlers.ofString()))
-                .isInstanceOf(ProtocolException.class);
+        HttpResponse<String> response = http3Connection.send(request, HttpResponse.BodyHandlers.ofString());
+        assertThat(response.body()).isNullOrEmpty();
     }
 
     @Test
@@ -240,12 +239,7 @@ public class Http3ConnectionTest {
                 .POST(HttpRequest.BodyPublishers.ofString("This is the request body."))
                 .build();
 
-        try {
-            http3Connection.send(request, HttpResponse.BodyHandlers.ofString());
-        }
-        catch (ProtocolException noDataFrames) {
-            // known bug, will fix later
-        }
+        http3Connection.send(request, HttpResponse.BodyHandlers.ofString());
 
         ArgumentCaptor<byte[]> captor = ArgumentCaptor.forClass(byte[].class);
         verify(http3Stream.getOutputStream(), times(2)).write(captor.capture());

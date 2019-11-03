@@ -209,10 +209,6 @@ public class Http3Connection {
 
         connectionStats = quicConnection.getStats();
 
-        if (responseDataFrames.isEmpty()) {
-            throw new ProtocolException("No DATA frames on request/response stream");
-        }
-
         return new Http3Response<T>(
                 request,
                 responseHeadersFrame.statusCode(),
