@@ -40,4 +40,22 @@ public class DataFrameTest {
         assertThat(frameBytes).containsExactly(0x00, 0x00);
     }
 
+    @Test
+    public void dataFrameWithShortPayloadShouldHaveOneBytePayloadLength() {
+        byte[] frameBytes = new DataFrame("hello world".getBytes()).toBytes();
+
+        assertThat(frameBytes).startsWith(0x00, 11);
+        assertThat(frameBytes).endsWith("hello world".getBytes());
+        assertThat(frameBytes.length).isEqualTo(1 + 1 + 11);
+    }
+
+    @Test
+    public void dataFrameWithLongerPayloadShouldHaveTwoBytesPayloadLength() {
+        String content = "01234567890123456789012345678901234567890123456789012345678901234567890123456789";
+        byte[] frameBytes = new DataFrame(content.getBytes()).toBytes();
+
+        assertThat(frameBytes).startsWith(0x00, 0x40, 80);
+        assertThat(frameBytes.length).isEqualTo(1 + 2 + 80);
+    }
+
 }

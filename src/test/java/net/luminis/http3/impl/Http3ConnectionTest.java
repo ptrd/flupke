@@ -22,7 +22,7 @@ import net.luminis.qpack.Decoder;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
 import org.junit.Test;
-import org.mockito.Mockito;
+import org.mockito.ArgumentCaptor;
 import org.mockito.internal.util.reflection.FieldSetter;
 
 import java.io.*;
@@ -36,8 +36,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 
 public class Http3ConnectionTest {
@@ -190,7 +189,7 @@ public class Http3ConnectionTest {
     }
 
     @Test
-    public void testNoDataFrames() throws Exception {
+    public void noDataFrameMeansEmptyResponseBody() throws Exception {
         Http3Connection http3Connection = new Http3Connection("www.example.com", 4433);
 
         byte[] responseBytes = new byte[]{
@@ -224,6 +223,30 @@ public class Http3ConnectionTest {
         assertThat(frameType).isEqualTo(-1);
     }
 
+    @Test
+    public void postRequestEndodesRequestBodyInDataFrame() throws Exception {
+        Http3Connection http3Connection = new Http3Connection("www.example.com", 4433);
+
+        byte[] responseBytes = new byte[]{
+                // Partial response for Headers frame, the rest is covered by the mock decoder
+                0x01, // type Headers Frame
+                0x00, // payload length
+        };
+        QuicStream http3Stream = mockQuicConnectionWithStreams(http3Connection, responseBytes);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI("http://www.example.com"))
+                .POST(HttpRequest.BodyPublishers.ofString("This is the request body."))
+                .build();
+
+        http3Connection.send(request, HttpResponse.BodyHandlers.ofString());
+
+        ArgumentCaptor<byte[]> captor = ArgumentCaptor.forClass(byte[].class);
+        verify(http3Stream.getOutputStream(), times(2)).write(captor.capture());
+        byte[] dataFrameBytes = captor.getAllValues().get(1);
+        assertThat(dataFrameBytes).endsWith("This is the request body.".getBytes());
+    }
+
     /**
      * Inserts a mock QuicConnection into the given Http3Connection object.
      * The mocked QuicConnection will return the given response bytes as output on the (first) QuicStream that is
@@ -233,15 +256,16 @@ public class Http3ConnectionTest {
      * @param response
      * @throws NoSuchFieldException
      * @throws IOException
+     * @return
      */
-    private void mockQuicConnectionWithStreams(Http3Connection http3Connection, byte[] response) throws NoSuchFieldException, IOException {
+    private QuicStream mockQuicConnectionWithStreams(Http3Connection http3Connection, byte[] response) throws NoSuchFieldException, IOException {
         QuicConnection quicConnection = mock(QuicConnection.class);
         FieldSetter.setField(http3Connection, Http3Connection.class.getDeclaredField("quicConnection"), quicConnection);
 
         QuicStream http3StreamMock = mock(QuicStream.class);
         when(quicConnection.createStream(anyBoolean())).thenReturn(http3StreamMock);
         // Create sink to send the http3 request bytes to.
-        when(http3StreamMock.getOutputStream()).thenReturn(new ByteArrayOutputStream());
+        when(http3StreamMock.getOutputStream()).thenReturn(mock(OutputStream.class));
 
         // Return given response on QuicStream's input stream
         when(http3StreamMock.getInputStream()).thenReturn(new ByteArrayInputStream(response));
@@ -253,6 +277,8 @@ public class Http3ConnectionTest {
         when(mockedQPackDecoder.decodeStream(any(InputStream.class))).thenReturn(List.of(
                 new AbstractMap.SimpleEntry<>(":status", "200")
         ));
+
+        return http3StreamMock;
     }
 
 }

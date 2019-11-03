@@ -18,32 +18,48 @@
  */
 package net.luminis.http3.impl;
 
+import net.luminis.quic.VariableLengthInteger;
+import java.nio.ByteBuffer;
+
 
 // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-4.2.1
 public class DataFrame extends Http3Frame {
 
-    private byte[] payload;
+    private ByteBuffer payload;
 
     public DataFrame() {
-        payload = new byte[0];
+        payload = ByteBuffer.allocate(0);
+    }
+
+    public DataFrame(byte[] payload) {
+        this.payload = ByteBuffer.wrap(payload);
+    }
+
+    public DataFrame(ByteBuffer payload) {
+        this.payload = payload;
     }
 
     public byte[] toBytes() {
-        int length = 1 + 1 + payload.length;
-        byte[] data = new byte[length];
+        int payloadLength = payload.limit() - payload.position();
+        ByteBuffer lengthBuffer = ByteBuffer.allocate(8);
+        int varIntLength = VariableLengthInteger.encode(payloadLength, lengthBuffer);
+        int dataLength = 1 + varIntLength + payloadLength;
+        byte[] data = new byte[dataLength];
         data[0] = 0x00;
-        data[1] = (byte) payload.length;
-        System.arraycopy(payload, 0, data, 2, payload.length);
+        lengthBuffer.flip();  // Prepare for reading length.
+        lengthBuffer.get(data, 1, varIntLength);
+        payload.get(data, 1 + varIntLength, payloadLength);
         return data;
     }
 
-
     public DataFrame parsePayload(byte[] payload) {
-        this.payload = payload;
+        this.payload = ByteBuffer.wrap(payload);
         return this;
     }
 
-    byte[] getData() {
-        return payload;
+    @Override
+    public String toString() {
+        int payloadLength = payload.limit() - payload.position();
+        return "DataFrame[" + payloadLength + "]";
     }
 }
