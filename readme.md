@@ -15,7 +15,7 @@ and [QUIC version draft-23](https://tools.ietf.org/html/draft-ietf-quic-transpor
 
 ## Usage
 
-Flupke supports the "new" HTTP Client API, e.g. 
+Flupke uses the HTTP Client API introduced with Java 11, e.g. 
 
     HttpClient.Builder clientBuilder = new Http3ClientBuilder();
     HttpClient client = clientBuilder.build();
@@ -23,6 +23,9 @@ Flupke supports the "new" HTTP Client API, e.g.
 
 See the [Sample](https://bitbucket.org/pjtr/flupke/src/master/src/main/java/net/luminis/http3/Sample.java)
 class for a working example.
+
+Flupke also supports POST requests, or more generally, HTTP methods that require or use a request body. 
+See the [PostExample](https://bitbucket.org/pjtr/flupke/src/master/src/main/java/net/luminis/http3/PostExample.java) for details.
 
 ### Work in progress
 
@@ -33,7 +36,6 @@ Known limitations of the current version of Flupke include:
 
 - only synchronous requests are supported (i.e. `client.sendAsync()` won't do anything usefull)
 - request headers are ignored
-- POST and PUT are not yet supported
 - each send creates a new HTTP3 (and thus a new QUIC) connection, so multiplexing is not yet supported.
   Of course, support for multiplexing _will_ be added, as this is one of the major features of HTTP3/QUIC. 
 
