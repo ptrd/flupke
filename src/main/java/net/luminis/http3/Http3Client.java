@@ -19,6 +19,7 @@
 package net.luminis.http3;
 
 import net.luminis.http3.impl.Http3Connection;
+import net.luminis.http3.impl.Http3ConnectionFactory;
 import net.luminis.quic.Statistics;
 
 import javax.net.ssl.SSLContext;
@@ -43,10 +44,12 @@ public class Http3Client extends HttpClient {
     private final Duration connectTimeout;
     private final Long receiveBufferSize;
     private Http3Connection http3Connection;
+    private Http3ConnectionFactory http3ConnectionFactory;
 
     Http3Client(Duration connectTimeout, Long receiveBufferSize) {
         this.connectTimeout = connectTimeout;
         this.receiveBufferSize = receiveBufferSize;
+        this.http3ConnectionFactory = new Http3ConnectionFactory(this);
     }
 
     public static HttpClient newHttpClient() {
@@ -109,16 +112,7 @@ public class Http3Client extends HttpClient {
     @Override
     public <T> HttpResponse<T> send(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler) throws IOException, InterruptedException {
 
-        String host = request.uri().getHost();
-        int port = request.uri().getPort();
-        if (port <= 0) {
-            port = 443;
-        }
-
-        http3Connection = new Http3Connection(host, port);
-        if (receiveBufferSize != null) {
-            http3Connection.setReceiveBufferSize(receiveBufferSize);
-        }
+        http3Connection = http3ConnectionFactory.getConnection(request);
         http3Connection.connect((int) connectTimeout().orElse(DEFAULT_CONNECT_TIMEOUT).toMillis());
         return http3Connection.send(request, responseBodyHandler);
     }
