@@ -247,6 +247,18 @@ public class Http3ConnectionTest {
         assertThat(dataFrameBytes).endsWith("This is the request body.".getBytes());
     }
 
+    @Test
+    public void setupConnectOnlyOnce() throws Exception {
+        Http3Connection http3Connection = new Http3Connection("www.example.com", 4433);
+
+        QuicConnection quicConnection = mockQuicConnection(http3Connection);
+
+        http3Connection.connect(10);
+        http3Connection.connect(10);
+
+        verify(quicConnection, times(1)).connect(anyInt(), anyString());
+    }
+
     /**
      * Inserts a mock QuicConnection into the given Http3Connection object.
      * The mocked QuicConnection will return the given response bytes as output on the (first) QuicStream that is
@@ -279,6 +291,18 @@ public class Http3ConnectionTest {
         ));
 
         return http3StreamMock;
+    }
+
+    private QuicConnection mockQuicConnection(Http3Connection http3Connection) throws NoSuchFieldException, IOException {
+        QuicConnection quicConnection = mock(QuicConnection.class);
+        FieldSetter.setField(http3Connection, Http3Connection.class.getDeclaredField("quicConnection"), quicConnection);
+
+        QuicStream http3StreamMock = mock(QuicStream.class);
+        when(quicConnection.createStream(anyBoolean())).thenReturn(http3StreamMock);
+        // Create sink to send the http3 request bytes to.
+        when(http3StreamMock.getOutputStream()).thenReturn(mock(OutputStream.class));
+
+        return quicConnection;
     }
 
 }

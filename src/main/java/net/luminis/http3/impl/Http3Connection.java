@@ -49,6 +49,7 @@ public class Http3Connection {
     private int serverQpackBlockedStreams;
     private final Decoder qpackDecoder;
     private Statistics connectionStats;
+    private boolean connected;
 
     public Http3Connection(String host, int port) throws IOException {
         this.host = host;
@@ -79,27 +80,33 @@ public class Http3Connection {
     }
 
     public void connect(int connectTimeoutInMillis) throws IOException {
-        quicConnection.connect(connectTimeoutInMillis, "h3-23");
+        synchronized (this) {
+            if (!connected) {
+                quicConnection.connect(connectTimeoutInMillis, "h3-23");
 
-        // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.2.1
-        // "Each side MUST initiate a single control stream at the beginning of
-        //   the connection and send its SETTINGS frame as the first frame on this
-        //   stream."
-        QuicStream clientControlStream = quicConnection.createStream(false);
-        OutputStream clientControlOutput = clientControlStream.getOutputStream();
-        // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.2.1
-        // "A control stream is indicated by a stream type of "0x00"."
-        clientControlOutput.write(0x00);
+                // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.2.1
+                // "Each side MUST initiate a single control stream at the beginning of
+                //   the connection and send its SETTINGS frame as the first frame on this
+                //   stream."
+                QuicStream clientControlStream = quicConnection.createStream(false);
+                OutputStream clientControlOutput = clientControlStream.getOutputStream();
+                // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.2.1
+                // "A control stream is indicated by a stream type of "0x00"."
+                clientControlOutput.write(0x00);
 
-        // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-2.3
-        // "After the QUIC connection is
-        //   established, a SETTINGS frame (Section 4.2.5) MUST be sent by each
-        //   endpoint as the initial frame of their respective HTTP control stream
-        //   (see Section 3.2.1)."
-        ByteBuffer settingsFrame = new SettingsFrame(0, 0).getBytes();
-        clientControlStream.getOutputStream().write(settingsFrame.array(), 0, settingsFrame.limit());
-        // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.2.1
-        // " The sender MUST NOT close the control stream."
+                // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-2.3
+                // "After the QUIC connection is
+                //   established, a SETTINGS frame (Section 4.2.5) MUST be sent by each
+                //   endpoint as the initial frame of their respective HTTP control stream
+                //   (see Section 3.2.1)."
+                ByteBuffer settingsFrame = new SettingsFrame(0, 0).getBytes();
+                clientControlStream.getOutputStream().write(settingsFrame.array(), 0, settingsFrame.limit());
+                // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.2.1
+                // " The sender MUST NOT close the control stream."
+
+                connected = true;
+            }
+        }
     }
 
 
