@@ -21,27 +21,69 @@ package net.luminis.http3.impl;
 import net.luminis.http3.Http3Client;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.http.HttpRequest;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class Http3ConnectionFactory {
 
     private final Http3Client http3Client;
+    private final Map<UdpAddress, Http3Connection> connections;
 
     public Http3ConnectionFactory(Http3Client http3Client) {
         this.http3Client = http3Client;
+        connections = new ConcurrentHashMap<>();
     }
 
     public Http3Connection getConnection(HttpRequest request) throws IOException {
-        String host = request.uri().getHost();
+        // Check hostname can be resolved
+        InetAddress.getByName(request.uri().getHost());
+
         int port = request.uri().getPort();
         if (port <= 0) {
             port = 443;
         }
+        UdpAddress address = new UdpAddress(request.uri().getHost(), port);
+        return connections.computeIfAbsent(address, this::createConnection);
+    }
 
-        Http3Connection http3Connection = new Http3Connection(host, port);
+    private Http3Connection createConnection(UdpAddress address) {
+        Http3Connection http3Connection = null;
+        try {
+            http3Connection = new Http3Connection(address.host, address.port);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
         if (http3Client.receiveBufferSize().isPresent()) {
             http3Connection.setReceiveBufferSize(http3Client.receiveBufferSize().get());
         }
         return http3Connection;
     }
+
+    static class UdpAddress {
+        String host;
+        int port;
+
+        public UdpAddress(String host, int port) {
+            this.host = host;
+            this.port = port;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            UdpAddress that = (UdpAddress) o;
+            return port == that.port &&
+                    Objects.equals(host, that.host);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(host, port);
+        }
+    }
+
 }
