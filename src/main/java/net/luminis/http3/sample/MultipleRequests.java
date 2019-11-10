@@ -14,7 +14,7 @@ import java.nio.file.Paths;
 public class MultipleRequests {
 
     public static void main(String[] args) throws Exception {
-        if (args.length != 3) {
+        if (args.length < 2) {
             System.err.println("Missing argument, expected: <server address> <path> [<path>...]");
             System.exit(1);
         }
