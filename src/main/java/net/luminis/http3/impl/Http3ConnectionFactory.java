@@ -21,11 +21,11 @@ package net.luminis.http3.impl;
 import net.luminis.http3.Http3Client;
 
 import java.io.IOException;
-import java.net.InetAddress;
 import java.net.http.HttpRequest;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+
 
 public class Http3ConnectionFactory {
 
@@ -38,15 +38,23 @@ public class Http3ConnectionFactory {
     }
 
     public Http3Connection getConnection(HttpRequest request) throws IOException {
-        // Check hostname can be resolved
-        InetAddress.getByName(request.uri().getHost());
-
         int port = request.uri().getPort();
         if (port <= 0) {
             port = 443;
         }
         UdpAddress address = new UdpAddress(request.uri().getHost(), port);
-        return connections.computeIfAbsent(address, this::createConnection);
+
+        try {
+            return connections.computeIfAbsent(address, this::createConnection);
+        }
+        catch (RuntimeException error) {
+            if (error.getCause() instanceof IOException) {
+                throw (IOException) error.getCause();
+            }
+            else {
+                throw error;
+            }
+        }
     }
 
     private Http3Connection createConnection(UdpAddress address) {

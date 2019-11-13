@@ -3,10 +3,12 @@ package net.luminis.http3.impl;
 import net.luminis.http3.Http3Client;
 import org.junit.Test;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpRequest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class Http3ConnectionFactoryTest {
 
@@ -46,6 +48,16 @@ public class Http3ConnectionFactoryTest {
         Http3Connection connection2 = connectionFactory.getConnection(request2);
 
         assertThat(connection1).isNotSameAs(connection2);
+    }
+
+    @Test
+    public void invalidHostnameThrowsCheckedException() throws Exception {
+        Http3ConnectionFactory connectionFactory = new Http3ConnectionFactory((Http3Client) Http3Client.newHttpClient());
+        HttpRequest request = HttpRequest.newBuilder().uri(new URI("https://www.doeshopefullystillnotexist.com/")).build();
+
+        assertThatThrownBy(
+                () -> connectionFactory.getConnection(request)
+        ).isInstanceOf(IOException.class);
     }
 
 }
