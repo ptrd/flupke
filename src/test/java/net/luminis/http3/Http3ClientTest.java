@@ -18,19 +18,27 @@
  */
 package net.luminis.http3;
 
+import net.luminis.http3.impl.Http3Connection;
+import net.luminis.http3.impl.Http3ConnectionFactory;
 import org.junit.Test;
+import org.mockito.internal.util.reflection.FieldSetter;
 
 import java.io.IOException;
 import java.net.ConnectException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
-
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 
 public class Http3ClientTest {
@@ -80,5 +88,26 @@ public class Http3ClientTest {
 
         Instant finished = Instant.now();
         assertThat(Duration.between(start, finished).toSeconds()).isGreaterThanOrEqualTo(5);
+    }
+
+    @Test
+    public void sendAsyncShouldThrowWhenGettingFutureResultIfSendFails() throws Exception {
+        Http3Client httpClient = (Http3Client) new Http3ClientBuilder().build();
+        Http3ConnectionFactory http3ConnectionFactory = mock(Http3ConnectionFactory.class);
+        Http3Connection http3Connection = mock(Http3Connection.class);
+        when(http3Connection.send(any(), any())).thenThrow(new IOException("something went wrong during request/response"));
+        when(http3ConnectionFactory.getConnection(any(HttpRequest.class))).thenReturn(http3Connection);
+        FieldSetter.setField(httpClient, Http3Client.class.getDeclaredField("http3ConnectionFactory"), http3ConnectionFactory);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI("http://www.example.com:4433"))
+                .build();
+
+        CompletableFuture<HttpResponse<String>> httpResponseFuture = httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString());
+        assertThatThrownBy(
+                () -> httpResponseFuture.get())
+                .isInstanceOf(ExecutionException.class)
+                .hasCauseInstanceOf(IOException.class)
+                .hasMessageContaining("something went wrong during request/response");
     }
 }

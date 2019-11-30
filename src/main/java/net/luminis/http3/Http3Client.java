@@ -20,6 +20,7 @@ package net.luminis.http3;
 
 import net.luminis.http3.impl.Http3Connection;
 import net.luminis.http3.impl.Http3ConnectionFactory;
+import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.Statistics;
 
 import javax.net.ssl.SSLContext;
@@ -35,6 +36,8 @@ import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 
 public class Http3Client extends HttpClient {
@@ -45,11 +48,14 @@ public class Http3Client extends HttpClient {
     private final Long receiveBufferSize;
     private Http3Connection http3Connection;
     private Http3ConnectionFactory http3ConnectionFactory;
+    private final ExecutorService executorService;
 
     Http3Client(Duration connectTimeout, Long receiveBufferSize) {
         this.connectTimeout = connectTimeout;
         this.receiveBufferSize = receiveBufferSize;
         this.http3ConnectionFactory = new Http3ConnectionFactory(this);
+
+        executorService = Executors.newCachedThreadPool(new DaemonThreadFactory("http3"));
     }
 
     public static HttpClient newHttpClient() {
@@ -110,8 +116,7 @@ public class Http3Client extends HttpClient {
     }
 
     @Override
-    public <T> HttpResponse<T> send(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler) throws IOException, InterruptedException {
-
+    public <T> HttpResponse<T> send(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler) throws IOException {
         http3Connection = http3ConnectionFactory.getConnection(request);
         http3Connection.connect((int) connectTimeout().orElse(DEFAULT_CONNECT_TIMEOUT).toMillis());
         return http3Connection.send(request, responseBodyHandler);
@@ -119,12 +124,20 @@ public class Http3Client extends HttpClient {
 
     @Override
     public <T> CompletableFuture<HttpResponse<T>> sendAsync(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler) {
-        return null;
+        CompletableFuture<HttpResponse<T>> future = new CompletableFuture<>();
+        executorService.submit(() -> {
+            try {
+                future.complete(send(request, responseBodyHandler));
+            } catch (IOException ex) {
+                future.completeExceptionally(ex);
+            }
+        });
+        return future;
     }
 
     @Override
     public <T> CompletableFuture<HttpResponse<T>> sendAsync(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler, HttpResponse.PushPromiseHandler<T> pushPromiseHandler) {
-        return null;
+        throw new UnsupportedOperationException("server push is not (yet) supported");
     }
 
     public Statistics getConnectionStatistics() {
