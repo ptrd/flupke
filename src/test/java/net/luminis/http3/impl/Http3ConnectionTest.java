@@ -208,9 +208,47 @@ public class Http3ConnectionTest {
     }
 
     @Test
+    public void reservedLargeFrameTypeIsIgnored() throws Exception {
+        Http3Connection http3Connection = new Http3Connection("www.example.com", 4433);
+
+        byte[] responseBytes = new byte[] {
+                // Reserved frame type: 3344129617399856696 (0x2E68BC2B47FB3E38) = 3344129617399856675 * 31 + 33
+                (byte) (0x2E | 0xc0),  // Variable length integer: 8 bytes => most significant 2 bits are 1
+                0x68,
+                (byte) 0xBC,
+                0x2B,
+                0x47,
+                (byte) 0xFB,
+                0x3E,
+                0x38,
+                0x00, // Length 0
+                // Partial response for Headers frame, the rest is covered by the mock decoder
+                0x01, // type Headers Frame
+                0x00, // payload length (payload omitted for the test, is covered by the mock decoder
+                // Complete response for Data frame
+                0x00, // type Data Frame
+                0x05, // payload length
+                0x4e, // 'N'
+                0x69, // 'i'
+                0x63, // 'c'
+                0x65, // 'e'
+                0x21, // '!'
+        };
+        mockQuicConnectionWithStreams(http3Connection, responseBytes);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI("http://www.example.com"))
+                .build();
+
+        HttpResponse<String> httpResponse = http3Connection.send(request, HttpResponse.BodyHandlers.ofString());
+        assertThat(httpResponse.statusCode()).isEqualTo(200);
+        assertThat(httpResponse.body()).isEqualTo("Nice!");
+    }
+
+    @Test
     public void testReadFrameTypeFromStream() throws Exception {
         Http3Connection http3Connection = new Http3Connection("www.example.com", 4433);
-        int frameType = http3Connection.readFrameType(new ByteArrayInputStream(new byte[] { 0x01, 0x02, 0x03 }));
+        long frameType = http3Connection.readFrameType(new ByteArrayInputStream(new byte[] { 0x01, 0x02, 0x03 }));
         assertThat(frameType).isEqualTo(1);
     }
 
@@ -219,7 +257,7 @@ public class Http3ConnectionTest {
         Http3Connection http3Connection = new Http3Connection("www.example.com", 4433);
         InputStream inputStream = new ByteArrayInputStream(new byte[]{ 0x01, 0x02, 0x03 });
         inputStream.read(new byte[3]);
-        int frameType = http3Connection.readFrameType(inputStream);
+        long frameType = http3Connection.readFrameType(inputStream);
         assertThat(frameType).isEqualTo(-1);
     }
 

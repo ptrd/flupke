@@ -175,19 +175,25 @@ public class Http3Connection {
 
         HttpResponse.BodySubscriber<T> bodySubscriber = null;
 
-        int frameType;
+        long frameType;
         boolean firstFrame = true;
         while ((frameType = readFrameType(responseStream)) >= 0) {
+            int payloadLength = VariableLengthInteger.parse(responseStream);
+            byte[] payload = new byte[payloadLength];
+            readExact(responseStream, payload);
+
+            if (frameType > 0x0e) {
+                // https://tools.ietf.org/html/draft-ietf-quic-http-24#section-9
+                // "Implementations MUST discard frames and unidirectional streams that have unknown or unsupported types."
+                continue;
+            }
+
             if (firstFrame && frameType != 0x01) {
                 throw new ProtocolException("First frame on HTTP3 request/response stream should be a HEADERS frame");
             }
             firstFrame = false;
 
-            int payloadLength = VariableLengthInteger.parse(responseStream);
-            byte[] payload = new byte[payloadLength];
-            readExact(responseStream, payload);
-
-            switch (frameType) {
+            switch ((int) frameType) {
                 case 0x01:
                     responseHeadersFrame = new HeadersFrame().parsePayload(payload, qpackDecoder);
                     bodySubscriber = responseBodyHandler.apply(new HttpResponseInfo(responseHeadersFrame));
@@ -222,9 +228,9 @@ public class Http3Connection {
                 bodySubscriber.getBody());
     }
 
-    int readFrameType(InputStream inputStream) throws IOException {
+    long readFrameType(InputStream inputStream) throws IOException {
         try {
-            return VariableLengthInteger.parse(inputStream);
+            return VariableLengthInteger.parseLong(inputStream);
         }
         catch (EOFException endOfStream) {
             return -1;
