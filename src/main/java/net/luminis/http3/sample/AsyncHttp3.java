@@ -12,6 +12,7 @@ import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -55,13 +56,13 @@ public class AsyncHttp3 {
         }
 
         // Wait for all requests to finish.
+        CompletableFuture<Void> allResults = CompletableFuture.allOf(results);
+        Duration timeout = Duration.ofMinutes(10);
         try {
-            for (int i = 0; i < downloadUrls.length; i++) {
-                results[i].get(1, TimeUnit.MINUTES);   // TODO: time out of 1 minute is ok for the interop test, but for other use cases....
-            }
+            allResults.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         }
-        catch (TimeoutException timeout) {
-            System.out.println("Request time out.");
+        catch (TimeoutException timedOut) {
+            System.out.println("Not all responses are received within timeout of " + timeout);
         }
 
         System.out.println("Terminating.");
