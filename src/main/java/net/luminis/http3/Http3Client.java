@@ -128,7 +128,11 @@ public class Http3Client extends HttpClient {
         executorService.submit(() -> {
             try {
                 future.complete(send(request, responseBodyHandler));
-            } catch (IOException ex) {
+            }
+            catch (IOException ex) {
+                future.completeExceptionally(ex);
+            }
+            catch (RuntimeException ex) {
                 future.completeExceptionally(ex);
             }
         });
