@@ -21,6 +21,7 @@ package net.luminis.http3.impl;
 import net.luminis.qpack.Decoder;
 import net.luminis.qpack.Encoder;
 import net.luminis.quic.*;
+import net.luminis.quic.log.SysOutLogger;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -63,7 +64,7 @@ public class Http3Connection {
         logger.logCongestionControl(true);
         logger.logFlowControl(true);
 
-        quicConnection = new QuicConnection(host, port, Version.IETF_draft_24, logger);
+        quicConnection = new QuicConnection(host, port, Version.IETF_draft_25, logger);
         quicConnection.setServerStreamCallback(stream -> doAsync(() -> registerServerInitiatedStream(stream)));
 
         // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.1
@@ -82,7 +83,7 @@ public class Http3Connection {
     public void connect(int connectTimeoutInMillis) throws IOException {
         synchronized (this) {
             if (!connected) {
-                quicConnection.connect(connectTimeoutInMillis, "h3-24");
+                quicConnection.connect(connectTimeoutInMillis, "h3-25", null);
 
                 // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.2.1
                 // "Each side MUST initiate a single control stream at the beginning of

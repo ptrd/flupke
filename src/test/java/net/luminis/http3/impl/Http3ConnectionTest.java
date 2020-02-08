@@ -21,7 +21,9 @@ package net.luminis.http3.impl;
 import net.luminis.qpack.Decoder;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
+import net.luminis.quic.TransportParameters;
 import org.junit.Test;
+import org.mockito.AdditionalMatchers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.internal.util.reflection.FieldSetter;
 
@@ -37,6 +39,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.*;
+import static org.mockito.AdditionalMatchers.or;
 
 
 public class Http3ConnectionTest {
@@ -294,7 +297,7 @@ public class Http3ConnectionTest {
         http3Connection.connect(10);
         http3Connection.connect(10);
 
-        verify(quicConnection, times(1)).connect(anyInt(), anyString());
+        verify(quicConnection, times(1)).connect(anyInt(), anyString(), nullable(TransportParameters.class));
     }
 
     /**
