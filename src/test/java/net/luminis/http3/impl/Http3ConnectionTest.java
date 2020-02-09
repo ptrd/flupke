@@ -20,8 +20,8 @@ package net.luminis.http3.impl;
 
 import net.luminis.qpack.Decoder;
 import net.luminis.quic.QuicConnection;
-import net.luminis.quic.QuicStream;
 import net.luminis.quic.TransportParameters;
+import net.luminis.quic.stream.QuicStream;
 import org.junit.Test;
 import org.mockito.AdditionalMatchers;
 import org.mockito.ArgumentCaptor;

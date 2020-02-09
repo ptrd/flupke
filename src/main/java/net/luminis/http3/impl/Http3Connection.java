@@ -22,6 +22,8 @@ import net.luminis.qpack.Decoder;
 import net.luminis.qpack.Encoder;
 import net.luminis.quic.*;
 import net.luminis.quic.log.SysOutLogger;
+import net.luminis.quic.stream.QuicStream;
+
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -64,7 +66,7 @@ public class Http3Connection {
         logger.logCongestionControl(true);
         logger.logFlowControl(true);
 
-        quicConnection = new QuicConnection(host, port, Version.IETF_draft_25, logger);
+        quicConnection = new QuicConnectionImpl(host, port, Version.IETF_draft_25, logger);
         quicConnection.setServerStreamCallback(stream -> doAsync(() -> registerServerInitiatedStream(stream)));
 
         // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.1
