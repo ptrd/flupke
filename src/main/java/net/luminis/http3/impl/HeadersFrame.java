@@ -20,10 +20,12 @@ package net.luminis.http3.impl;
 
 import net.luminis.qpack.Decoder;
 import net.luminis.qpack.Encoder;
+import net.luminis.quic.ProtocolError;
 import net.luminis.quic.VariableLengthInteger;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.net.ProtocolException;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.util.*;
@@ -32,7 +34,7 @@ import java.util.*;
 // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-4.2.2
 public class HeadersFrame extends Http3Frame {
 
-    private int statusCode;
+    private Optional<Integer> statusCode;
     private Map<String, List<String>> httpHeaders;
     private List<Map.Entry<String, String>> qpackHeaders;
 
@@ -64,12 +66,20 @@ public class HeadersFrame extends Http3Frame {
                 .filter(entry -> !entry.getKey().equals(":status"))
                 .forEach(entry -> httpHeaders.put(entry.getKey(), List.of(entry.getValue())));
 
-        statusCode = Integer.parseInt(
-                responseHeaders.stream()
+        Optional<String> statusCodeValue = responseHeaders.stream()
                 .filter(entry -> entry.getKey().equals(":status"))
-                .findFirst()
-                .orElseThrow(() -> new RuntimeException("Missing pseudo header :status"))
-                .getValue());
+                .map(entry -> entry.getValue())
+                .findFirst();
+        if (statusCodeValue.isPresent()) {
+            try {
+                statusCode = Optional.of(Integer.parseInt(statusCodeValue.get()));
+            } catch (NumberFormatException noNumber) {
+                throw new ProtocolException("Invalid status code " + statusCodeValue.get());
+            }
+        }
+        else {
+            statusCode = Optional.empty();
+        }
 
         return this;
     }
@@ -96,7 +106,7 @@ public class HeadersFrame extends Http3Frame {
     }
 
     public int statusCode() {
-        return statusCode;
+        return statusCode.get();
     }
 
     public Map<String, List<String>> headers() {

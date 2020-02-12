@@ -36,8 +36,11 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Flow;
+import java.util.stream.Collectors;
 
 
 public class Http3Connection {
@@ -173,13 +176,12 @@ public class Http3Connection {
 
     private <T> Http3Response<T> receiveResponse(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler, QuicStream httpStream) throws IOException {
         InputStream responseStream = httpStream.getInputStream();
-        HeadersFrame responseHeadersFrame = null;
-        List<DataFrame> responseDataFrames = new ArrayList<>();
 
         HttpResponse.BodySubscriber<T> bodySubscriber = null;
+        HttpResponseInfo responseInfo = null;
+        ResponseState responseState = new ResponseState();
 
         long frameType;
-        boolean firstFrame = true;
         while ((frameType = readFrameType(responseStream)) >= 0) {
             int payloadLength = VariableLengthInteger.parse(responseStream);
             byte[] payload = new byte[payloadLength];
@@ -191,27 +193,34 @@ public class Http3Connection {
                 continue;
             }
 
-            if (firstFrame && frameType != 0x01) {
-                throw new ProtocolException("First frame on HTTP3 request/response stream should be a HEADERS frame");
-            }
-            firstFrame = false;
-
             switch ((int) frameType) {
                 case 0x01:
-                    responseHeadersFrame = new HeadersFrame().parsePayload(payload, qpackDecoder);
-                    bodySubscriber = responseBodyHandler.apply(new HttpResponseInfo(responseHeadersFrame));
-                    bodySubscriber.onSubscribe(new Flow.Subscription() {
-                        @Override
-                        public void request(long n) {}
+                    responseState.gotHeader();
+                    HeadersFrame responseHeadersFrame = new HeadersFrame().parsePayload(payload, qpackDecoder);
+                    if (responseInfo == null) {
+                        // First frame should contain :status pseudo-header and other headers that the body handler might use to determine what kind of body subscriber to use
+                        responseInfo = new HttpResponseInfo(responseHeadersFrame);
+                        bodySubscriber = responseBodyHandler.apply(responseInfo);
+                        bodySubscriber.onSubscribe(new Flow.Subscription() {
+                            @Override
+                            public void request(long n) {
+                                // Always called with max long, so can be safely ignored.
+                            }
 
-                        @Override
-                        public void cancel() {
-                            System.out.println("BodySubscriber has cancelled the subscription.");
-                        }
-                    });
+                            @Override
+                            public void cancel() {
+                                System.out.println("BodySubscriber has cancelled the subscription.");
+                            }
+                        });
+                    }
+                    else {
+                        // Must be trailing header
+                        responseInfo.add(responseHeadersFrame);
+                    }
                     break;
                 case 0x00:
-                    responseDataFrames.add(new DataFrame().parsePayload(payload));
+                    responseState.gotData();
+                    DataFrame dataFrame = new DataFrame().parsePayload(payload);
                     bodySubscriber.onNext(List.of(ByteBuffer.wrap(payload)));
                     break;
                 default:
@@ -219,15 +228,15 @@ public class Http3Connection {
                     throw new RuntimeException("Unexpected frame type " + frameType);
             }
         }
-
+        responseState.done();
         bodySubscriber.onComplete();
 
         connectionStats = quicConnection.getStats();
 
         return new Http3Response<T>(
                 request,
-                responseHeadersFrame.statusCode(),
-                HttpHeaders.of(responseHeadersFrame.headers(), (k, v) -> true),
+                responseInfo.statusCode(),
+                responseInfo.headers(),
                 bodySubscriber.getBody());
     }
 
@@ -321,27 +330,80 @@ public class Http3Connection {
         return connectionStats;
     }
 
-    private class HttpResponseInfo implements HttpResponse.ResponseInfo {
-        private final HeadersFrame headersFrame;
+    private static class HttpResponseInfo implements HttpResponse.ResponseInfo {
+        private final Map<String, List<String>> headers;
+        private final int statusCode;
 
-        public HttpResponseInfo(HeadersFrame headersFrame) {
-
-            this.headersFrame = headersFrame;
+        public HttpResponseInfo(HeadersFrame headersFrame) throws ProtocolException {
+            headers = new HashMap<>();
+            headers.putAll(headersFrame.headers());
+            statusCode = headersFrame.statusCode();
         }
 
         @Override
         public int statusCode() {
-            return 200;
+           return statusCode;
         }
 
         @Override
         public HttpHeaders headers() {
-            return HttpHeaders.of(headersFrame.headers(), (k, v) -> true);
+            return HttpHeaders.of(headers, (k, v) -> true);
         }
 
         @Override
         public HttpClient.Version version() {
             return null;
+        }
+
+        public void add(HeadersFrame headersFrame) {
+            headers.putAll(headersFrame.headers());
+        }
+    }
+
+    private static class ResponseState {
+
+        enum ResponseStatus {
+            INITIAL,
+            GOT_HEADER,
+            GOT_HEADER_AND_DATA,
+            GOT_HEADER_AND_DATA_AND_TRAILING_HEADER,
+        };
+        ResponseStatus status = ResponseStatus.INITIAL;
+
+        void gotHeader() throws ProtocolException {
+            if (status == ResponseStatus.INITIAL) {
+                status = ResponseStatus.GOT_HEADER;
+            }
+            else if (status == ResponseStatus.GOT_HEADER) {
+                throw new ProtocolException("Header frame is not allowed after initial header frame");
+            }
+            else if (status == ResponseStatus.GOT_HEADER_AND_DATA) {
+                status = ResponseStatus.GOT_HEADER_AND_DATA_AND_TRAILING_HEADER;
+            }
+            else if (status == ResponseStatus.GOT_HEADER_AND_DATA_AND_TRAILING_HEADER) {
+                throw new ProtocolException("Header frame is not allowed after trailing header frame");
+            }
+        }
+
+        public void gotData() throws ProtocolException {
+            if (status == ResponseStatus.INITIAL) {
+                throw new ProtocolException("Missing header frame");
+            }
+            else if (status == ResponseStatus.GOT_HEADER) {
+                status = ResponseStatus.GOT_HEADER_AND_DATA;
+            }
+            else if (status == ResponseStatus.GOT_HEADER_AND_DATA) {
+                // No status change
+            }
+            else if (status == ResponseStatus.GOT_HEADER_AND_DATA_AND_TRAILING_HEADER) {
+                throw new ProtocolException("Data frame not allowed after trailing header frame");
+            }
+        }
+
+        public void done() throws ProtocolException {
+            if (status == ResponseStatus.INITIAL) {
+                throw new ProtocolException("Missing header frame");
+            }
         }
     }
 }

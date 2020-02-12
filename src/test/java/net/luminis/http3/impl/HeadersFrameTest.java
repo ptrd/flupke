@@ -27,6 +27,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatcher;
 
 import java.io.InputStream;
+import java.net.ProtocolException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
@@ -71,14 +72,14 @@ public class HeadersFrameTest {
     }
 
     @Test
-    public void decodedResponseWithoutStatusPseudoHeaderThrows() throws Exception {
+    public void decodedResponseWitInvalidStatusPseudoHeaderThrows() throws Exception {
 
         Decoder qpackDecoder = mock(Decoder.class);
-        when(qpackDecoder.decodeStream(any(InputStream.class))).thenReturn(Lists.emptyList());
+        when(qpackDecoder.decodeStream(any(InputStream.class))).thenReturn(List.of(new AbstractMap.SimpleEntry<>(":status", "invalid")));
 
         assertThatThrownBy(
                 () -> new HeadersFrame().parsePayload(new byte[0], qpackDecoder))
-                .isInstanceOf(RuntimeException.class);
+                .isInstanceOf(ProtocolException.class);
     }
 
     @Test

@@ -26,6 +26,8 @@ import org.junit.Test;
 import org.mockito.AdditionalMatchers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.internal.util.reflection.FieldSetter;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 import java.io.*;
 import java.net.ProtocolException;
@@ -119,7 +121,6 @@ public class Http3ConnectionTest {
         assertThat(httpResponse.body()).isEqualTo("Nice!");
     }
 
-
     @Test
     public void testMissingHeaderFrame() throws Exception {
         Http3Connection http3Connection = new Http3Connection("www.example.com", 4433);
@@ -143,6 +144,38 @@ public class Http3ConnectionTest {
         assertThatThrownBy(
                 () -> http3Connection.send(request, HttpResponse.BodyHandlers.ofString()))
                 .isInstanceOf(IOException.class);
+    }
+
+    @Test
+    public void testResponseCanHaveTwoHeadersFrame() throws Exception {
+        Http3Connection http3Connection = new Http3Connection("www.example.com", 4433);
+
+        byte[] responseBytes = new byte[] {
+                // Partial response for Headers frame, the rest is covered by the mock decoder
+                0x01, // type Headers Frame
+                0x00, // payload length (payload omitted for the test, is covered by the mock decoder
+                // Complete response for Data frame
+                0x00, // type Data Frame
+                0x05, // payload length
+                0x4e, // 'N'
+                0x69, // 'i'
+                0x63, // 'c'
+                0x65, // 'e'
+                0x21, // '!'
+                // Partial response for Headers frame, the rest is covered by the mock decoder
+                0x01, // type Headers Frame
+                0x00, // payload length (payload omitted for the test, is covered by the mock decoder
+        };
+        mockQuicConnectionWithStreams(http3Connection, responseBytes);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI("http://www.example.com"))
+                .build();
+
+        HttpResponse<String> httpResponse = http3Connection.send(request, HttpResponse.BodyHandlers.ofString());
+        assertThat(httpResponse.statusCode()).isEqualTo(200);
+        assertThat(httpResponse.body()).isEqualTo("Nice!");
+        assertThat(httpResponse.headers().map()).containsKeys("Content-Type", "x-whatever");
     }
 
     @Test
@@ -327,9 +360,23 @@ public class Http3ConnectionTest {
         // mocked to return decent headers.
         Decoder mockedQPackDecoder = mock(Decoder.class);
         FieldSetter.setField(http3Connection, Http3Connection.class.getDeclaredField("qpackDecoder"), mockedQPackDecoder);
-        when(mockedQPackDecoder.decodeStream(any(InputStream.class))).thenReturn(List.of(
-                new AbstractMap.SimpleEntry<>(":status", "200")
-        ));
+        when(mockedQPackDecoder.decodeStream(any(InputStream.class))).thenAnswer(new Answer() {
+            private int invocation = 0;
+
+            @Override
+            public Object answer(InvocationOnMock invocationOnMock) throws Throwable {
+                invocation++;
+                if (invocation == 1) {
+                    return List.of(new AbstractMap.SimpleEntry<>(":status", "200"), new AbstractMap.SimpleEntry<>("Content-Type", "crap"));
+                }
+                else if (invocation == 2) {
+                    return List.of(new AbstractMap.SimpleEntry<>("x-whatever", "true"));
+                }
+                else {
+                    return List.of(new AbstractMap.SimpleEntry<>("header-number", "3"));
+                }
+            }
+        });
 
         return http3StreamMock;
     }
