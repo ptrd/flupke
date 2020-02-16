@@ -179,7 +179,7 @@ public class Http3Connection {
 
         HttpResponse.BodySubscriber<T> bodySubscriber = null;
         HttpResponseInfo responseInfo = null;
-        ResponseState responseState = new ResponseState();
+        ResponseState responseState = new ResponseState(httpStream);
 
         long frameType;
         while ((frameType = readFrameType(responseStream)) >= 0) {
@@ -362,6 +362,12 @@ public class Http3Connection {
 
     private static class ResponseState {
 
+        private final QuicStream httpStream;
+
+        public ResponseState(QuicStream httpStream) {
+            this.httpStream = httpStream;
+        }
+
         enum ResponseStatus {
             INITIAL,
             GOT_HEADER,
@@ -375,19 +381,19 @@ public class Http3Connection {
                 status = ResponseStatus.GOT_HEADER;
             }
             else if (status == ResponseStatus.GOT_HEADER) {
-                throw new ProtocolException("Header frame is not allowed after initial header frame");
+                throw new ProtocolException("Header frame is not allowed after initial header frame (quic stream " + httpStream.getStreamId() + ")");
             }
             else if (status == ResponseStatus.GOT_HEADER_AND_DATA) {
                 status = ResponseStatus.GOT_HEADER_AND_DATA_AND_TRAILING_HEADER;
             }
             else if (status == ResponseStatus.GOT_HEADER_AND_DATA_AND_TRAILING_HEADER) {
-                throw new ProtocolException("Header frame is not allowed after trailing header frame");
+                throw new ProtocolException("Header frame is not allowed after trailing header frame (quic stream " + httpStream.getStreamId() + ")");
             }
         }
 
         public void gotData() throws ProtocolException {
             if (status == ResponseStatus.INITIAL) {
-                throw new ProtocolException("Missing header frame");
+                throw new ProtocolException("Missing header frame (quic stream " + httpStream.getStreamId() + ")");
             }
             else if (status == ResponseStatus.GOT_HEADER) {
                 status = ResponseStatus.GOT_HEADER_AND_DATA;
@@ -396,13 +402,13 @@ public class Http3Connection {
                 // No status change
             }
             else if (status == ResponseStatus.GOT_HEADER_AND_DATA_AND_TRAILING_HEADER) {
-                throw new ProtocolException("Data frame not allowed after trailing header frame");
+                throw new ProtocolException("Data frame not allowed after trailing header frame (quic stream " + httpStream.getStreamId() + ")");
             }
         }
 
         public void done() throws ProtocolException {
             if (status == ResponseStatus.INITIAL) {
-                throw new ProtocolException("Missing header frame");
+                throw new ProtocolException("Missing header frame (quic stream " + httpStream.getStreamId() + ")");
             }
         }
     }

@@ -143,7 +143,8 @@ public class Http3ConnectionTest {
 
         assertThatThrownBy(
                 () -> http3Connection.send(request, HttpResponse.BodyHandlers.ofString()))
-                .isInstanceOf(IOException.class);
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("(quic stream");
     }
 
     @Test
