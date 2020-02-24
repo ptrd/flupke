@@ -43,6 +43,7 @@ sourceSets {
         }
         resources {
             srcDir 'qpack/src/main/resources'
+            srcDir "${buildDir}/generated"
         }
     }
 }
@@ -67,3 +68,23 @@ jar {
         exclude 'META-INF/*.RSA', 'META-INF/*.SF','META-INF/*.DSA'
     }
 }
+
+task determineVersion {
+    doLast {
+        def proc = "git describe --always --dirty".execute()
+        proc.waitFor()
+        if (proc.exitValue()) {
+            logger.quiet("Building development version.")
+        } else {
+            def versionTag = proc.in.readLines()[0]
+            logger.quiet("Building version ${versionTag}.")
+
+            ext.versionDir = new File("${buildDir}", "generated/net/luminis/http3/sample")
+            versionDir.mkdirs()
+
+            new File(versionDir, "version.properties").text = versionTag
+        }
+    }
+}
+
+compileJava.dependsOn determineVersion
