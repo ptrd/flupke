@@ -69,7 +69,7 @@ public class Http3Connection {
         logger.logCongestionControl(true);
         logger.logFlowControl(true);
 
-        quicConnection = new QuicConnectionImpl(host, port, Version.IETF_draft_25, logger);
+        quicConnection = new QuicConnectionImpl(host, port, Version.IETF_draft_27, logger);
         quicConnection.setServerStreamCallback(stream -> doAsync(() -> registerServerInitiatedStream(stream)));
 
         // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.1
@@ -88,7 +88,7 @@ public class Http3Connection {
     public void connect(int connectTimeoutInMillis) throws IOException {
         synchronized (this) {
             if (!connected) {
-                quicConnection.connect(connectTimeoutInMillis, "h3-25", null);
+                quicConnection.connect(connectTimeoutInMillis, "h3-27", null);
 
                 // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.2.1
                 // "Each side MUST initiate a single control stream at the beginning of

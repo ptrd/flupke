@@ -6,12 +6,14 @@ Flupke is a Java HTTP3 Client.
 
 HTTP3 is a new standard that is being developed
 by the Internet Engineering Task Force (IETF) and that is still "work in progress", 
-see https://tools.ietf.org/html/draft-ietf-quic-http-25.
+see https://tools.ietf.org/html/draft-ietf-quic-http-27.
 
 HTTP3 uses QUIC as transport protocol. Flupke builds on [Kwik](http://kwik.tech), a Java implementation of QUIC. 
-Currently, Flupke supports the [HTTP3 draft-25](https://tools.ietf.org/html/draft-ietf-quic-http-25) version 
-and uses [QPACK version draft-8](https://tools.ietf.org/html/draft-ietf-quic-qpack-08) 
-and [QUIC version draft-25](https://tools.ietf.org/html/draft-ietf-quic-transport-25).
+Currently, Flupke supports the [HTTP3 draft-27](https://tools.ietf.org/html/draft-ietf-quic-http-27) version 
+and uses [QPACK version draft-14](https://tools.ietf.org/html/draft-ietf-quic-qpack-14) 
+and [QUIC version draft-27](https://tools.ietf.org/html/draft-ietf-quic-transport-27).
+
+Flupke is created and maintained by Peter Doornbosch. The latest greatest can always be found on [BitBucket](https://bitbucket.org/pjtr/flupke/).
 
 ## Usage
 
@@ -29,19 +31,20 @@ See the [PostExample](https://bitbucket.org/pjtr/flupke/src/master/src/main/java
 
 ### Work in progress
 
-This project (as well as the projects it builds on) is work in progress. 
-The speed of development might seem slow, but that is because [Kwik](http://kwik.tech) is also still being actively developed.
+This project (as well as the projects it builds on) is work in progress.
+
+Features:
+- HTTP3 request & response with all methods (GET, PUT, POST etc)
+- Multiplexing of HTTP3 requests over one underlying QUIC connection
+- Support for asynchronous handling with ```HttpClient.sendAsync()```
 
 Known limitations of the current version of Flupke include:
-
-- only synchronous requests are supported (i.e. `client.sendAsync()` won't do anything usefull)
 - request headers are ignored
-- each send creates a new HTTP3 (and thus a new QUIC) connection, so multiplexing is not yet supported.
-  Of course, support for multiplexing _will_ be added, as this is one of the major features of HTTP3/QUIC. 
+- QPack dynamic table is not supported.
 
 Also note that `Http3Client.version()` returns null instead of a proper Version object; 
 this is unavoidable as the Java [HTTPClient.Version](https://docs.oracle.com/en/java/javase/11/docs/api/java.net.http/java/net/http/HttpClient.Version.html)
-enum does not provide a value for HTTP3.
+enum does not provide a value for HTTP3. See [JDK-8229533](https://bugs.java.com/bugdatabase/view_bug.do?bug_id=JDK-8229533).
 
 ## Build & run
 
