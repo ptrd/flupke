@@ -18,6 +18,7 @@
  */
 package net.luminis.http3.impl;
 
+import net.luminis.quic.InvalidIntegerEncodingException;
 import net.luminis.quic.VariableLengthInteger;
 
 import java.nio.ByteBuffer;
@@ -42,8 +43,14 @@ public class SettingsFrame {
             // "The payload of a SETTINGS frame consists of zero or more parameters.
             //   Each parameter consists of a setting identifier and a value, both
             //   encoded as QUIC variable-length integers."
-            int identifier = (int) VariableLengthInteger.parseLong(buffer);
-            long value = VariableLengthInteger.parseLong(buffer);
+            int identifier = 0;
+            long value = 0;
+            try {
+                identifier = (int) VariableLengthInteger.parseLong(buffer);
+                value = VariableLengthInteger.parseLong(buffer);
+            } catch (InvalidIntegerEncodingException e) {
+                // TODO: if this happens, we can close/abort this connection
+            }
             switch (identifier) {
                 // https://tools.ietf.org/html/draft-ietf-quic-qpack-07#section-8.1
                 case 0x01:

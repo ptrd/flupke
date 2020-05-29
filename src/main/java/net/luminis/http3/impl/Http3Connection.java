@@ -30,15 +30,14 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.ProtocolException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.Flow;
 import java.util.stream.Collectors;
 
@@ -69,7 +68,16 @@ public class Http3Connection {
         logger.logCongestionControl(true);
         logger.logFlowControl(true);
 
-        quicConnection = new QuicConnectionImpl(host, port, Version.IETF_draft_27, logger);
+        QuicConnectionImpl.Builder builder = QuicConnectionImpl.newBuilder();
+        try {
+            builder.uri(new URI("//" + host + ":" + port));
+        } catch (URISyntaxException e) {
+            // Impossible
+            throw new RuntimeException();
+        }
+        builder.version​(Version.IETF_draft_28);
+        builder.logger(logger);
+        quicConnection = builder.build();
         quicConnection.setServerStreamCallback(stream -> doAsync(() -> registerServerInitiatedStream(stream)));
 
         // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.1
@@ -88,7 +96,7 @@ public class Http3Connection {
     public void connect(int connectTimeoutInMillis) throws IOException {
         synchronized (this) {
             if (!connected) {
-                quicConnection.connect(connectTimeoutInMillis, "h3-27", null);
+                quicConnection.connect(connectTimeoutInMillis, "h3-28", null, Collections.emptyList());
 
                 // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.2.1
                 // "Each side MUST initiate a single control stream at the beginning of

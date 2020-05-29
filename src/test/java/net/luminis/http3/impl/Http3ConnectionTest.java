@@ -35,6 +35,7 @@ import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.AbstractMap;
+import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.*;
@@ -331,7 +332,7 @@ public class Http3ConnectionTest {
         http3Connection.connect(10);
         http3Connection.connect(10);
 
-        verify(quicConnection, times(1)).connect(anyInt(), anyString(), nullable(TransportParameters.class));
+        verify(quicConnection, times(1)).connect(anyInt(), anyString(), nullable(TransportParameters.class), Collections.emptyList());
     }
 
     /**
