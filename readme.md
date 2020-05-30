@@ -6,12 +6,12 @@ Flupke is a Java HTTP3 Client.
 
 HTTP3 is a new standard that is being developed
 by the Internet Engineering Task Force (IETF) and that is still "work in progress", 
-see https://tools.ietf.org/html/draft-ietf-quic-http-27.
+see https://tools.ietf.org/html/draft-ietf-quic-http-28.
 
 HTTP3 uses QUIC as transport protocol. Flupke builds on [Kwik](http://kwik.tech), a Java implementation of QUIC. 
-Currently, Flupke supports the [HTTP3 draft-27](https://tools.ietf.org/html/draft-ietf-quic-http-27) version 
+Currently, Flupke supports the [HTTP3 draft-28](https://tools.ietf.org/html/draft-ietf-quic-http-28) version 
 and uses [QPACK version draft-14](https://tools.ietf.org/html/draft-ietf-quic-qpack-14) 
-and [QUIC version draft-27](https://tools.ietf.org/html/draft-ietf-quic-transport-27).
+and [QUIC version draft-28](https://tools.ietf.org/html/draft-ietf-quic-transport-28).
 
 Flupke is created and maintained by Peter Doornbosch. The latest greatest can always be found on [BitBucket](https://bitbucket.org/pjtr/flupke/).
 
