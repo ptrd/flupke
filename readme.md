@@ -34,11 +34,13 @@ See the [PostExample](https://bitbucket.org/pjtr/flupke/src/master/src/main/java
 This project (as well as the projects it builds on) is work in progress.
 
 Features:
+
 - HTTP3 request & response with all methods (GET, PUT, POST etc)
 - Multiplexing of HTTP3 requests over one underlying QUIC connection
 - Support for asynchronous handling with ```HttpClient.sendAsync()```
 
 Known limitations of the current version of Flupke include:
+
 - request headers are ignored
 - QPack dynamic table is not supported.
 
