@@ -332,7 +332,7 @@ public class Http3ConnectionTest {
         http3Connection.connect(10);
         http3Connection.connect(10);
 
-        verify(quicConnection, times(1)).connect(anyInt(), anyString(), nullable(TransportParameters.class), Collections.emptyList());
+        verify(quicConnection, times(1)).connect(anyInt(), anyString(), nullable(TransportParameters.class), anyList());
     }
 
     /**
