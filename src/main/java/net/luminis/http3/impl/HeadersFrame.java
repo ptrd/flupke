@@ -27,8 +27,10 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.ProtocolException;
 import java.net.URI;
+import java.net.http.HttpHeaders;
 import java.nio.ByteBuffer;
 import java.util.*;
+import java.util.stream.Collectors;
 
 
 // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-4.2.2
@@ -103,6 +105,15 @@ public class HeadersFrame extends Http3Frame {
         // "Clients that generate HTTP/2 requests directly SHOULD use the ":authority"
         //  pseudo-header field instead of the Host header field."
         qpackHeaders.add(new AbstractMap.SimpleEntry<>(":authority", uri.getHost() + ":" + uri.getPort()));
+    }
+
+    public void setHeaders(HttpHeaders headers) {
+        headers.map().entrySet().forEach(entry -> {
+            String value = entry.getValue().stream().collect(Collectors.joining(","));
+            // https://tools.ietf.org/html/draft-ietf-quic-http-28#4.1.1
+            // "As in HTTP/2, characters in field names MUST be converted to lowercase prior to their encoding."
+            qpackHeaders.add(new AbstractMap.SimpleEntry<>(entry.getKey().toLowerCase(), value));
+        });
     }
 
     public int statusCode() {

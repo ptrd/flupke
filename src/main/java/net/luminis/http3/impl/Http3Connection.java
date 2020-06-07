@@ -136,6 +136,7 @@ public class Http3Connection {
         HeadersFrame headersFrame = new HeadersFrame();
         headersFrame.setMethod(request.method());
         headersFrame.setUri(request.uri());
+        headersFrame.setHeaders(request.headers());
         requestStream.write(headersFrame.toBytes(new Encoder()));
 
         if (request.bodyPublisher().isPresent()) {

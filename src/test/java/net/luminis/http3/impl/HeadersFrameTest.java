@@ -20,16 +20,14 @@ package net.luminis.http3.impl;
 
 import net.luminis.qpack.Decoder;
 import net.luminis.qpack.Encoder;
-import net.luminis.tls.ByteUtils;
-import org.assertj.core.util.Lists;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatcher;
 
 import java.io.InputStream;
 import java.net.ProtocolException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.http.HttpHeaders;
 import java.nio.ByteBuffer;
 import java.util.AbstractMap;
 import java.util.List;
@@ -197,4 +195,66 @@ public class HeadersFrameTest {
                 .isEqualTo("example.com:4433");
     }
 
+    @Test
+    public void httpHeadersAreMappedToQpack() {
+        HeadersFrame headersFrame = new HeadersFrame();
+        HttpHeaders httpHeaders = HttpHeaders.of(
+                Map.of("headername1", List.of("value1"),
+                        "headername2", List.of("value2")), (a, b) -> true);
+        headersFrame.setHeaders(httpHeaders);
+
+        Encoder qpackEncoder = mock(Encoder.class);
+        when(qpackEncoder.compressHeaders(anyList())).thenReturn(ByteBuffer.allocate(1));
+
+        headersFrame.toBytes(qpackEncoder);
+
+        ArgumentCaptor<List<Map.Entry<String, String>>> listCaptor = ArgumentCaptor.forClass(List.class);
+        verify(qpackEncoder, times(1)).compressHeaders(listCaptor.capture());
+
+        assertThat(listCaptor.getValue())
+                .hasSize(2)
+                .contains(new AbstractMap.SimpleEntry("headername1", "value1"))
+                .contains(new AbstractMap.SimpleEntry("headername2", "value2"));
+    }
+
+    @Test
+    public void httpHeaderNamesAreConvertedToLowercaseBeforeEncoding() {
+        HeadersFrame headersFrame = new HeadersFrame();
+        HttpHeaders httpHeaders = HttpHeaders.of(
+                Map.of("HeaderName", List.of("CamelCasedValue")), (a, b) -> true);
+        headersFrame.setHeaders(httpHeaders);
+
+        Encoder qpackEncoder = mock(Encoder.class);
+        when(qpackEncoder.compressHeaders(anyList())).thenReturn(ByteBuffer.allocate(1));
+
+        headersFrame.toBytes(qpackEncoder);
+
+        ArgumentCaptor<List<Map.Entry<String, String>>> listCaptor = ArgumentCaptor.forClass(List.class);
+        verify(qpackEncoder, times(1)).compressHeaders(listCaptor.capture());
+
+        assertThat(listCaptor.getValue())
+                .contains(new AbstractMap.SimpleEntry("headername", "CamelCasedValue"));
+    }
+
+    @Test
+    public void multiValuedHttpHeadersAreCompressedAsSingleValue() {
+        HeadersFrame headersFrame = new HeadersFrame();
+        HttpHeaders httpHeaders = HttpHeaders.of(
+                Map.of("headername1", List.of("value1", "value2", "value3"),
+                        "headername2", List.of("value20")), (a, b) -> true);
+        headersFrame.setHeaders(httpHeaders);
+
+        Encoder qpackEncoder = mock(Encoder.class);
+        when(qpackEncoder.compressHeaders(anyList())).thenReturn(ByteBuffer.allocate(1));
+
+        headersFrame.toBytes(qpackEncoder);
+
+        ArgumentCaptor<List<Map.Entry<String, String>>> listCaptor = ArgumentCaptor.forClass(List.class);
+        verify(qpackEncoder, times(1)).compressHeaders(listCaptor.capture());
+
+        assertThat(listCaptor.getValue())
+                .hasSize(2)
+                .contains(new AbstractMap.SimpleEntry("headername1", "value1,value2,value3"))
+                .contains(new AbstractMap.SimpleEntry("headername2", "value20"));
+    }
 }

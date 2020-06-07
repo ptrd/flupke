@@ -42,6 +42,7 @@ public class Sample {
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(serverUrl)
+                .header("User-Agent", "Flupke http3 library")
                 .timeout(Duration.ofSeconds(10))
                 .build();
 
