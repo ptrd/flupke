@@ -4,3 +4,6 @@
 [submodule "qpack"]
 	path = qpack
 	url = git@bitbucket.org:pjtr/qpack.git
+[submodule "tls13-java"]
+	path = tls13-java
+	url = git@bitbucket.org:pjtr/tls13-java.git

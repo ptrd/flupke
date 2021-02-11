@@ -10,11 +10,6 @@ repositories {
     // Use jcenter for resolving your dependencies.
     // You can declare any Maven/Ivy/file repository here.
     jcenter()
-
-    flatDir {
-        dirs 'kwik/libs'
-    }
-
 }
 
 dependencies {
@@ -25,7 +20,7 @@ dependencies {
     // https://mvnrepository.com/artifact/commons-cli/commons-cli
     compile group: 'commons-cli', name: 'commons-cli', version: '1.4'
 
-    compile name: 'tls13'
+    implementation 'org.glassfish:javax.json:1.1.4'
 
     // Use JUnit test framework
     testImplementation 'junit:junit:4.12'
@@ -40,6 +35,7 @@ sourceSets {
         java {
             srcDir 'kwik/src/main/java'
             srcDir 'qpack/src/main/java'
+            srcDir 'tls13-java/src'
         }
         resources {
             srcDir 'qpack/src/main/resources'

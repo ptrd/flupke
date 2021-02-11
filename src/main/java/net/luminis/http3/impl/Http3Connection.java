@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
 
 public class Http3Connection {
 
-    private final QuicConnection quicConnection;
+    private final QuicClientConnection quicConnection;
     private final String host;
     private final int port;
     private InputStream serverControlStream;
@@ -68,7 +68,7 @@ public class Http3Connection {
         logger.logCongestionControl(true);
         logger.logFlowControl(true);
 
-        QuicConnectionImpl.Builder builder = QuicConnectionImpl.newBuilder();
+        QuicClientConnectionImpl.Builder builder = QuicClientConnectionImpl.newBuilder();
         try {
             builder.uri(new URI("//" + host + ":" + port));
         } catch (URISyntaxException e) {
@@ -78,7 +78,7 @@ public class Http3Connection {
         builder.version(Version.IETF_draft_29);
         builder.logger(logger);
         quicConnection = builder.build();
-        quicConnection.setServerStreamCallback(stream -> doAsync(() -> registerServerInitiatedStream(stream)));
+        quicConnection.setPeerInitiatedStreamCallback(stream -> doAsync(() -> registerServerInitiatedStream(stream)));
 
         // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.1
         // "clients MUST omit or specify a value of zero for the QUIC transport parameter "initial_max_bidi_streams"."
