@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
 
 public class Http3Connection {
 
-    private final QuicConnection quicConnection;
+    private final QuicClientConnection quicConnection;
     private final String host;
     private final int port;
     private InputStream serverControlStream;
@@ -68,14 +68,14 @@ public class Http3Connection {
         logger.logCongestionControl(true);
         logger.logFlowControl(true);
 
-        QuicConnectionImpl.Builder builder = QuicConnectionImpl.newBuilder();
+        QuicClientConnectionImpl.Builder builder = QuicClientConnectionImpl.newBuilder();
         try {
             builder.uri(new URI("//" + host + ":" + port));
         } catch (URISyntaxException e) {
             // Impossible
             throw new RuntimeException();
         }
-        builder.version(Version.IETF_draft_29);
+        builder.version(Version.QUIC_version_1);
         builder.logger(logger);
         quicConnection = builder.build();
         quicConnection.setServerStreamCallback(stream -> doAsync(() -> registerServerInitiatedStream(stream)));
@@ -96,7 +96,7 @@ public class Http3Connection {
     public void connect(int connectTimeoutInMillis) throws IOException {
         synchronized (this) {
             if (!connected) {
-                quicConnection.connect(connectTimeoutInMillis, "h3-29", null, Collections.emptyList());
+                quicConnection.connect(connectTimeoutInMillis, "h3", null, Collections.emptyList());
 
                 // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.2.1
                 // "Each side MUST initiate a single control stream at the beginning of
