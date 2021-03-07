@@ -206,6 +206,9 @@ public class Http3ServerConnection extends ApplicationProtocolConnection impleme
 
     private void get(String path, OutputStream outputStream) throws HttpError {
         System.out.println("GET " + path);
+        if (path.trim().equals("/")) {
+            path = "/index.html";
+        }
         try {
             File file = getFileInWwwDir(path);
             if (file != null && file.exists() && file.isFile()) {
