@@ -179,16 +179,14 @@ public class Http3ServerConnection extends ApplicationProtocolConnection impleme
     }
 
     private void handleStream(List<Http3Frame> receivedFrames, QuicStream quicStream) throws HttpError {
-        HttpHeaders httpHeaders = receivedFrames.stream()
+        RequestHeadersFrame headersFrame = (RequestHeadersFrame) receivedFrames.stream()
                 .filter(f -> f instanceof HeadersFrame)
-                .map(f -> ((HeadersFrame) f).headers())
                 .findFirst()
                 .orElseThrow(() -> new HttpError("", 400));
 
-        Map<String, List<String>> requestHeaders = httpHeaders.map();
-        if (requestHeaders.containsKey(":method") && requestHeaders.containsKey(":path")) {
-            if (requestHeaders.get(":method").get(0).equals("GET")) {
-                get(requestHeaders.get(":path").get(0), quicStream.getOutputStream());
+        if (headersFrame.getMethod() != null && headersFrame.getPath() != null) {
+            if (headersFrame.getMethod().equals("GET")) {
+                get(headersFrame.getPath(), quicStream.getOutputStream());
             }
             else {
                 throw new HttpError("http method not supported", 405);
@@ -197,8 +195,8 @@ public class Http3ServerConnection extends ApplicationProtocolConnection impleme
     }
 
     private void sendStatus(int statusCode, OutputStream outputStream) throws IOException {
-        HeadersFrame headersFrame = new ResponseHeadersFrame();
-        headersFrame.setHeaders(HttpHeaders.of(Map.of(":status", List.of(String.valueOf(statusCode))), (a,b) -> true));
+        ResponseHeadersFrame headersFrame = new ResponseHeadersFrame();
+        headersFrame.setStatus(statusCode);
         outputStream.write(headersFrame.toBytes(new Encoder()));
     }
 

@@ -23,6 +23,7 @@ import net.luminis.qpack.Decoder;
 import java.io.IOException;
 import java.net.ProtocolException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.AbstractMap;
 import java.util.List;
 import java.util.Map;
@@ -33,8 +34,25 @@ public class RequestHeadersFrame extends HeadersFrame {
     public RequestHeadersFrame() {
     }
 
+    public String getMethod() {
+        return pseudoHeaders.get(":method");
+    }
+
     public void setMethod(String method) {
         pseudoHeaders.put(":method", method);
+    }
+
+    public URI getUri() {
+        try {
+            return new URI("https://" + pseudoHeaders.get(":authority") + pseudoHeaders.get(":path"));
+        } catch (URISyntaxException e) {
+            // Impossible
+            throw new RuntimeException();
+        }
+    }
+
+    public String getPath() {
+        return pseudoHeaders.get(":path");
     }
 
     public void setUri(URI uri) {
@@ -62,9 +80,9 @@ public class RequestHeadersFrame extends HeadersFrame {
         qpackHeaders.add(new AbstractMap.SimpleEntry<>(":authority", pseudoHeaders.get(":authority")));
     }
 
-
     @Override
-    protected void extractAndRemovePseudoHeader(Map<String, List<String>> headersMap) throws ProtocolException {
-
+    protected void extractPseudoHeaders(Map<String, List<String>> headersMap) throws ProtocolException {
+        List.of(":method", ":scheme", ":path", ":authority").forEach(key ->
+                pseudoHeaders.put(key, headersMap.get(key).get(0)));
     }
 }

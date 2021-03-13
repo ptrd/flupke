@@ -51,7 +51,7 @@ public class HeadersFrameTest {
                 new AbstractMap.SimpleEntry<>(":status", "200"),
                 new AbstractMap.SimpleEntry<>("content-type", "text/plain")
         ));
-        HeadersFrame headersFrame = new RequestHeadersFrame().parsePayload(new byte[0], qpackDecoder);
+        HeadersFrame headersFrame = new ResponseHeadersFrame().parsePayload(new byte[0], qpackDecoder);
 
         assertThat(headersFrame.headers().map()).containsEntry("content-type", List.of("text/plain"));
     }
@@ -64,7 +64,7 @@ public class HeadersFrameTest {
                 new AbstractMap.SimpleEntry<>(":status", "200"),
                 new AbstractMap.SimpleEntry<>("content-type", "text/plain")
         ));
-        HeadersFrame headersFrame = new RequestHeadersFrame().parsePayload(new byte[0], qpackDecoder);
+        HeadersFrame headersFrame = new ResponseHeadersFrame().parsePayload(new byte[0], qpackDecoder);
 
         assertThat(headersFrame.headers().map()).doesNotContainKey(":status");
     }

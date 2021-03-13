@@ -36,7 +36,7 @@ public class ResponseHeadersFrame extends HeadersFrame {
     }
 
     @Override
-    protected void extractAndRemovePseudoHeader(Map<String, List<String>> headersMap) throws ProtocolException {
+    protected void extractPseudoHeaders(Map<String, List<String>> headersMap) throws ProtocolException {
         if (headersMap.containsKey(":status")) {
             try {
                 statusCode = Optional.of(Integer.parseInt(headersMap.get(":status").get(0)));
@@ -58,10 +58,14 @@ public class ResponseHeadersFrame extends HeadersFrame {
         // https://tools.ietf.org/html/draft-ietf-quic-http-34#section-4.1.1.1
         // "For responses, a single ":status" pseudo-header field is defined that carries the HTTP status code (...)
         //  This pseudo-header field MUST be included in all responses;"
-        qpackHeaders.add(new AbstractMap.SimpleEntry<>(":status", pseudoHeaders.get(":status")));
+        qpackHeaders.add(new AbstractMap.SimpleEntry<>(":status", String.valueOf(statusCode.get())));
     }
 
     public int statusCode() {
         return statusCode.get();
+    }
+
+    public void setStatus(int statusCode) {
+        this.statusCode = Optional.of(statusCode);
     }
 }

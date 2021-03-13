@@ -65,12 +65,14 @@ public abstract class HeadersFrame extends Http3Frame {
     public HeadersFrame parsePayload(byte[] headerBlock, Decoder decoder) throws IOException {
         List<Map.Entry<String, String>> headersList = decoder.decodeStream(new ByteArrayInputStream(headerBlock));
         Map<String, List<String>> headersMap = headersList.stream().collect(Collectors.toMap(Map.Entry::getKey, this::mapValue));
-        extractAndRemovePseudoHeader(headersMap);
-        httpHeaders = HttpHeaders.of(headersMap, (key, value) -> ! key.equals(":status"));
+        // https://tools.ietf.org/html/draft-ietf-quic-http-34#section-4.1.1.1
+        // "Pseudo-header fields are not HTTP fields."
+        extractPseudoHeaders(headersMap);
+        httpHeaders = HttpHeaders.of(headersMap, (key, value) -> ! key.startsWith(":"));
         return this;
     }
 
-    protected abstract void extractAndRemovePseudoHeader(Map<String, List<String>> headersMap) throws ProtocolException;
+    protected abstract void extractPseudoHeaders(Map<String, List<String>> headersMap) throws ProtocolException;
 
     public void setHeaders(HttpHeaders headers) {
         this.httpHeaders = headers;
