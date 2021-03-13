@@ -212,7 +212,6 @@ public class HeadersFrameTest {
         verify(qpackEncoder, times(1)).compressHeaders(listCaptor.capture());
 
         assertThat(listCaptor.getValue())
-                .hasSize(2)
                 .contains(new AbstractMap.SimpleEntry("headername1", "value1"))
                 .contains(new AbstractMap.SimpleEntry("headername2", "value2"));
     }
@@ -253,8 +252,54 @@ public class HeadersFrameTest {
         verify(qpackEncoder, times(1)).compressHeaders(listCaptor.capture());
 
         assertThat(listCaptor.getValue())
-                .hasSize(2)
                 .contains(new AbstractMap.SimpleEntry("headername1", "value1,value2,value3"))
                 .contains(new AbstractMap.SimpleEntry("headername2", "value20"));
+    }
+
+    @Test
+    public void whenHeadersAreSetFirstPseudoHeadersMustStillBeEncodedFirst() throws Exception {
+        // Given
+        HeadersFrame headersFrame = new HeadersFrame(HeadersFrame.Type.REQUEST);
+
+        // When
+        headersFrame.setHeaders(HttpHeaders.of(Map.of("Example-Field", List.of("value")), (a, b) -> true));
+        headersFrame.setUri(new URI("https://www.example.com"));
+
+        // Then
+        Encoder encoder = mockEncoder();
+        headersFrame.toBytes(encoder);
+        ArgumentCaptor<List<Map.Entry<String, String>>> listCaptor = ArgumentCaptor.forClass(List.class);
+        verify(encoder, times(1)).compressHeaders(listCaptor.capture());
+
+        List<Map.Entry<String, String>> compressedItems = listCaptor.getValue();
+        assertThat(compressedItems.get(0).getKey()).startsWith((":"));
+        assertThat(compressedItems.get(compressedItems.size()-1).getKey()).isEqualTo("example-field");
+    }
+
+    @Test
+    public void anyRequestMustContainPseudoHeaders()  throws Exception {
+        // Given
+        HeadersFrame headersFrame = new HeadersFrame(HeadersFrame.Type.REQUEST);
+
+        // When
+        headersFrame.setUri(new URI("https://www.example.com"));
+
+        // Then
+        Encoder encoder = mockEncoder();
+        headersFrame.toBytes(encoder);
+        ArgumentCaptor<List<Map.Entry<String, String>>> listCaptor = ArgumentCaptor.forClass(List.class);
+        verify(encoder, times(1)).compressHeaders(listCaptor.capture());
+
+        List<String> headerNames = listCaptor.getValue().stream().map(e -> e.getKey()).collect(Collectors.toList());
+        assertThat(headerNames)
+                .contains(":method")
+                .contains(":scheme")
+                .contains(":path");
+    }
+
+    private Encoder mockEncoder() {
+        Encoder qpackEncoder = mock(Encoder.class);
+        when(qpackEncoder.compressHeaders(anyList())).thenReturn(ByteBuffer.allocate(1));
+        return qpackEncoder;
     }
 }

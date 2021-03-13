@@ -22,6 +22,7 @@ import net.luminis.qpack.Decoder;
 import net.luminis.qpack.Encoder;
 import net.luminis.quic.VariableLengthInteger;
 
+import javax.swing.*;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.ProtocolException;
@@ -42,15 +43,21 @@ public class HeadersFrame extends Http3Frame {
 
     private Optional<Integer> statusCode;
     private HttpHeaders httpHeaders;
-    private List<Map.Entry<String, String>> qpackHeaders;
+    private Map<String, String> pseudoHeaders;
+
     private final Type type;
 
     public HeadersFrame(Type type) {
         this.type = type;
-        qpackHeaders = new ArrayList<>();
+        pseudoHeaders = new HashMap<>();
+        httpHeaders = HttpHeaders.of(Collections.emptyMap(), (a,b) -> true);
     }
 
     public byte[] toBytes(Encoder encoder) {
+        List<Map.Entry<String, String>> qpackHeaders = new ArrayList<>();
+        addPseudoHeaders(qpackHeaders);
+        addHeaders(qpackHeaders);
+
         ByteBuffer compressedHeaders = encoder.compressHeaders(qpackHeaders);
         compressedHeaders.flip();
 
@@ -84,7 +91,7 @@ public class HeadersFrame extends Http3Frame {
     }
 
     public void setMethod(String method) {
-        qpackHeaders.add(new AbstractMap.SimpleEntry<>(":method", method));
+        pseudoHeaders.put(":method", method);
     }
 
     public void setUri(URI uri) {
@@ -92,26 +99,12 @@ public class HeadersFrame extends Http3Frame {
         if (path.isBlank()) {
             path = "/";
         }
-        qpackHeaders.add(new AbstractMap.SimpleEntry<>(":path", path));
-        // https://tools.ietf.org/html/rfc7540#section-8.1.2.3
-        // "All HTTP/2 requests MUST include exactly one valid value for the
-        //   ":method", ":scheme", and ":path" pseudo-header fields"
-        qpackHeaders.add(new AbstractMap.SimpleEntry<>(":scheme", "https"));
-
-        // https://tools.ietf.org/html/rfc7540#section-8.1.2.3
-        // "Clients that generate HTTP/2 requests directly SHOULD use the ":authority"
-        //  pseudo-header field instead of the Host header field."
-        qpackHeaders.add(new AbstractMap.SimpleEntry<>(":authority", uri.getHost() + ":" + uri.getPort()));
+        pseudoHeaders.put(":path", path);
+        pseudoHeaders.put(":authority", uri.getHost() + ":" + uri.getPort());
     }
 
     public void setHeaders(HttpHeaders headers) {
         this.httpHeaders = headers;
-        headers.map().entrySet().forEach(entry -> {
-            String value = entry.getValue().stream().collect(Collectors.joining(","));
-            // https://tools.ietf.org/html/draft-ietf-quic-http-28#4.1.1
-            // "As in HTTP/2, characters in field names MUST be converted to lowercase prior to their encoding."
-            qpackHeaders.add(new AbstractMap.SimpleEntry<>(entry.getKey().toLowerCase(), value));
-        });
     }
 
     public int statusCode() {
@@ -120,6 +113,34 @@ public class HeadersFrame extends Http3Frame {
 
     public HttpHeaders headers() {
         return httpHeaders;
+    }
+
+    private void addPseudoHeaders(List<Map.Entry<String, String>> qpackHeaders) {
+        if (type == Type.REQUEST) {
+            // https://tools.ietf.org/html/draft-ietf-quic-http-34#section-4.1.1.1
+            // "All HTTP/3 requests MUST include exactly one value for the ":method", ":scheme", and ":path"
+            // pseudo-header fields, unless it is a CONNECT request; "
+            qpackHeaders.add(new AbstractMap.SimpleEntry<>(":method", pseudoHeaders.getOrDefault(":method", "GET")));
+            qpackHeaders.add(new AbstractMap.SimpleEntry<>(":scheme", pseudoHeaders.getOrDefault(":scheme", "https")));
+            qpackHeaders.add(new AbstractMap.SimpleEntry<>(":path", pseudoHeaders.getOrDefault(":path", "/")));
+            // "Clients that generate HTTP/3 requests directly SHOULD use the ":authority" pseudo-header field instead of the Host field."
+            qpackHeaders.add(new AbstractMap.SimpleEntry<>(":authority", pseudoHeaders.get(":authority")));
+        }
+        else {
+            // https://tools.ietf.org/html/draft-ietf-quic-http-34#section-4.1.1.1
+            // "For responses, a single ":status" pseudo-header field is defined that carries the HTTP status code (...)
+            //  This pseudo-header field MUST be included in all responses;"
+            qpackHeaders.add(new AbstractMap.SimpleEntry<>(":status", pseudoHeaders.get(":status")));
+        }
+    }
+
+    private void addHeaders(List<Map.Entry<String, String>> qpackHeaders) {
+        httpHeaders.map().entrySet().forEach(entry -> {
+            String value = entry.getValue().stream().collect(Collectors.joining(","));
+            // https://tools.ietf.org/html/draft-ietf-quic-http-28#4.1.1
+            // "As in HTTP/2, characters in field names MUST be converted to lowercase prior to their encoding."
+            qpackHeaders.add(new AbstractMap.SimpleEntry<>(entry.getKey().toLowerCase(), value));
+        });
     }
 
     private List<String> mapValue(Map.Entry<String, String> entry) {
