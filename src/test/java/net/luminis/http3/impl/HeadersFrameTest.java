@@ -53,7 +53,7 @@ public class HeadersFrameTest {
         ));
         HeadersFrame headersFrame = new HeadersFrame(HeadersFrame.Type.REQUEST).parsePayload(new byte[0], qpackDecoder);
 
-        assertThat(headersFrame.headers()).containsEntry("content-type", List.of("text/plain"));
+        assertThat(headersFrame.headers().map()).containsEntry("content-type", List.of("text/plain"));
     }
 
     @Test
@@ -66,7 +66,7 @@ public class HeadersFrameTest {
         ));
         HeadersFrame headersFrame = new HeadersFrame(HeadersFrame.Type.REQUEST).parsePayload(new byte[0], qpackDecoder);
 
-        assertThat(headersFrame.headers()).doesNotContainKey(":status");
+        assertThat(headersFrame.headers().map()).doesNotContainKey(":status");
     }
 
     @Test

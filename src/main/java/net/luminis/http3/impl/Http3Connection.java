@@ -339,12 +339,11 @@ public class Http3Connection {
     }
 
     private static class HttpResponseInfo implements HttpResponse.ResponseInfo {
-        private final Map<String, List<String>> headers;
+        private HttpHeaders headers;
         private final int statusCode;
 
         public HttpResponseInfo(HeadersFrame headersFrame) throws ProtocolException {
-            headers = new HashMap<>();
-            headers.putAll(headersFrame.headers());
+            headers = headersFrame.headers();
             statusCode = headersFrame.statusCode();
         }
 
@@ -355,7 +354,7 @@ public class Http3Connection {
 
         @Override
         public HttpHeaders headers() {
-            return HttpHeaders.of(headers, (k, v) -> true);
+            return headers;
         }
 
         @Override
@@ -364,7 +363,10 @@ public class Http3Connection {
         }
 
         public void add(HeadersFrame headersFrame) {
-            headers.putAll(headersFrame.headers());
+            Map<String, List<String>> mergedHeadersMap = new HashMap<>();
+            mergedHeadersMap.putAll(headers.map());
+            mergedHeadersMap.putAll(headersFrame.headers().map());
+            headers = HttpHeaders.of(mergedHeadersMap, (a,b) -> true);
         }
     }
 

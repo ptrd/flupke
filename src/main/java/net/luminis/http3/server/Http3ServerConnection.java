@@ -182,12 +182,13 @@ public class Http3ServerConnection extends ApplicationProtocolConnection impleme
     }
 
     private void handleStream(List<Http3Frame> receivedFrames, QuicStream quicStream) throws HttpError {
-        Map<String, List<String>> requestHeaders = receivedFrames.stream()
+        HttpHeaders httpHeaders = receivedFrames.stream()
                 .filter(f -> f instanceof HeadersFrame)
                 .map(f -> ((HeadersFrame) f).headers())
                 .findFirst()
                 .orElseThrow(() -> new HttpError("", 400));
 
+        Map<String, List<String>> requestHeaders = httpHeaders.map();
         if (requestHeaders.containsKey(":method") && requestHeaders.containsKey(":path")) {
             if (requestHeaders.get(":method").get(0).equals("GET")) {
                 get(requestHeaders.get(":path").get(0), quicStream.getOutputStream());

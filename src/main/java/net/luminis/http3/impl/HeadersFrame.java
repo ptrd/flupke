@@ -41,13 +41,12 @@ public class HeadersFrame extends Http3Frame {
     }
 
     private Optional<Integer> statusCode;
-    private Map<String, List<String>> httpHeaders;
+    private HttpHeaders httpHeaders;
     private List<Map.Entry<String, String>> qpackHeaders;
     private final Type type;
 
     public HeadersFrame(Type type) {
         this.type = type;
-        httpHeaders = new HashMap<>();
         qpackHeaders = new ArrayList<>();
     }
 
@@ -68,26 +67,19 @@ public class HeadersFrame extends Http3Frame {
     }
 
     public HeadersFrame parsePayload(byte[] headerBlock, Decoder decoder) throws IOException {
-        List<Map.Entry<String, String>> responseHeaders = decoder.decodeStream(new ByteArrayInputStream(headerBlock));
-        responseHeaders.stream()
-                .filter(entry -> !entry.getKey().equals(":status"))
-                .forEach(entry -> httpHeaders.put(entry.getKey(), List.of(entry.getValue())));
-
-        Optional<String> statusCodeValue = responseHeaders.stream()
-                .filter(entry -> entry.getKey().equals(":status"))
-                .map(entry -> entry.getValue())
-                .findFirst();
-        if (statusCodeValue.isPresent()) {
+        List<Map.Entry<String, String>> headersList = decoder.decodeStream(new ByteArrayInputStream(headerBlock));
+        Map<String, List<String>> headersMap = headersList.stream().collect(Collectors.toMap(Map.Entry::getKey, this::mapValue));
+        if (headersMap.containsKey(":status")) {
             try {
-                statusCode = Optional.of(Integer.parseInt(statusCodeValue.get()));
+                statusCode = Optional.of(Integer.parseInt(headersMap.get(":status").get(0)));
             } catch (NumberFormatException noNumber) {
-                throw new ProtocolException("Invalid status code " + statusCodeValue.get());
+                throw new ProtocolException("Invalid status code " + headersMap.get(":status"));
             }
         }
         else {
             statusCode = Optional.empty();
         }
-
+        httpHeaders = HttpHeaders.of(headersMap, (key, value) -> ! key.equals(":status"));
         return this;
     }
 
@@ -113,6 +105,7 @@ public class HeadersFrame extends Http3Frame {
     }
 
     public void setHeaders(HttpHeaders headers) {
+        this.httpHeaders = headers;
         headers.map().entrySet().forEach(entry -> {
             String value = entry.getValue().stream().collect(Collectors.joining(","));
             // https://tools.ietf.org/html/draft-ietf-quic-http-28#4.1.1
@@ -125,7 +118,11 @@ public class HeadersFrame extends Http3Frame {
         return statusCode.get();
     }
 
-    public Map<String, List<String>> headers() {
+    public HttpHeaders headers() {
         return httpHeaders;
+    }
+
+    private List<String> mapValue(Map.Entry<String, String> entry) {
+        return List.of(entry.getValue());
     }
 }
