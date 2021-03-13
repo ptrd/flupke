@@ -156,7 +156,7 @@ public class Http3ServerConnection extends ApplicationProtocolConnection impleme
                     }
                     byte[] payload = readExact(requestStream, payloadLength);
                     headerSize += payloadLength;
-                    HeadersFrame responseHeadersFrame = new HeadersFrame().parsePayload(payload, qpackDecoder);
+                    HeadersFrame responseHeadersFrame = new HeadersFrame(HeadersFrame.Type.REQUEST).parsePayload(payload, qpackDecoder);
                     receivedFrames.add(responseHeadersFrame);
                     break;
                 case 0x00:
@@ -199,7 +199,7 @@ public class Http3ServerConnection extends ApplicationProtocolConnection impleme
     }
 
     private void sendStatus(int statusCode, OutputStream outputStream) throws IOException {
-        HeadersFrame headersFrame = new HeadersFrame();
+        HeadersFrame headersFrame = new HeadersFrame(HeadersFrame.Type.RESPONSE);
         headersFrame.setHeaders(HttpHeaders.of(Map.of(":status", List.of(String.valueOf(statusCode))), (a,b) -> true));
         outputStream.write(headersFrame.toBytes(new Encoder()));
     }

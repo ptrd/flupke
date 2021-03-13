@@ -51,7 +51,7 @@ public class HeadersFrameTest {
                 new AbstractMap.SimpleEntry<>(":status", "200"),
                 new AbstractMap.SimpleEntry<>("content-type", "text/plain")
         ));
-        HeadersFrame headersFrame = new HeadersFrame().parsePayload(new byte[0], qpackDecoder);
+        HeadersFrame headersFrame = new HeadersFrame(HeadersFrame.Type.REQUEST).parsePayload(new byte[0], qpackDecoder);
 
         assertThat(headersFrame.headers()).containsEntry("content-type", List.of("text/plain"));
     }
@@ -64,7 +64,7 @@ public class HeadersFrameTest {
                 new AbstractMap.SimpleEntry<>(":status", "200"),
                 new AbstractMap.SimpleEntry<>("content-type", "text/plain")
         ));
-        HeadersFrame headersFrame = new HeadersFrame().parsePayload(new byte[0], qpackDecoder);
+        HeadersFrame headersFrame = new HeadersFrame(HeadersFrame.Type.REQUEST).parsePayload(new byte[0], qpackDecoder);
 
         assertThat(headersFrame.headers()).doesNotContainKey(":status");
     }
@@ -76,7 +76,7 @@ public class HeadersFrameTest {
         when(qpackDecoder.decodeStream(any(InputStream.class))).thenReturn(List.of(new AbstractMap.SimpleEntry<>(":status", "invalid")));
 
         assertThatThrownBy(
-                () -> new HeadersFrame().parsePayload(new byte[0], qpackDecoder))
+                () -> new HeadersFrame(HeadersFrame.Type.REQUEST).parsePayload(new byte[0], qpackDecoder))
                 .isInstanceOf(ProtocolException.class);
     }
 
@@ -85,7 +85,7 @@ public class HeadersFrameTest {
         Encoder qpackEncoder = mock(Encoder.class);
         when(qpackEncoder.compressHeaders(anyList())).thenReturn(ByteBuffer.wrap(new byte[0]));
 
-        byte[] bytes = new HeadersFrame().toBytes(qpackEncoder);
+        byte[] bytes = new HeadersFrame(HeadersFrame.Type.REQUEST).toBytes(qpackEncoder);
 
         https://tools.ietf.org/html/draft-ietf-quic-http-20#section-4.2.2: The HEADERS frame (type=0x1)...
         assertThat(bytes).startsWith(0x01);  // Headers frame
@@ -98,7 +98,7 @@ public class HeadersFrameTest {
         payload.put(new byte[67]);  // Put ByteByffer in "write" mode
         when(qpackEncoder.compressHeaders(anyList())).thenReturn(payload);
 
-        byte[] bytes = new HeadersFrame().toBytes(qpackEncoder);
+        byte[] bytes = new HeadersFrame(HeadersFrame.Type.REQUEST).toBytes(qpackEncoder);
 
         assertThat(bytes).startsWith(0x01, 0x40, 67);
     }
@@ -112,14 +112,14 @@ public class HeadersFrameTest {
 
         when(qpackEncoder.compressHeaders(anyList())).thenReturn(payloadBuffer);
 
-        byte[] bytes = new HeadersFrame().toBytes(qpackEncoder);
+        byte[] bytes = new HeadersFrame(HeadersFrame.Type.REQUEST).toBytes(qpackEncoder);
 
         assertThat(bytes).startsWith(0x01, 0x08, 0x33, 0x10, 0x5f, 0x6e, 0x00, 0x3c, 0x77, 0x7f);
     }
 
     @Test
     public void headersFrameShouldContainCompulsaryPseudoHeaders() throws URISyntaxException {
-        HeadersFrame headersFrame = new HeadersFrame();
+        HeadersFrame headersFrame = new HeadersFrame(HeadersFrame.Type.REQUEST);
         headersFrame.setMethod("GET");
         headersFrame.setUri(new URI("/index.html"));
 
@@ -143,7 +143,7 @@ public class HeadersFrameTest {
 
     @Test
     public void headersFrameShouldContainAuthorityHeader() throws URISyntaxException {
-        HeadersFrame headersFrame = new HeadersFrame();
+        HeadersFrame headersFrame = new HeadersFrame(HeadersFrame.Type.REQUEST);
         headersFrame.setMethod("GET");
         headersFrame.setUri(new URI("http://example.com:4433/index.html"));
 
@@ -170,7 +170,7 @@ public class HeadersFrameTest {
 
     @Test
     public void headersFrameAuthorityHeaderShouldExludeUserInfo() throws URISyntaxException {
-        HeadersFrame headersFrame = new HeadersFrame();
+        HeadersFrame headersFrame = new HeadersFrame(HeadersFrame.Type.REQUEST);
         headersFrame.setMethod("GET");
         headersFrame.setUri(new URI("http://username:password@example.com:4433/index.html"));
 
@@ -197,7 +197,7 @@ public class HeadersFrameTest {
 
     @Test
     public void httpHeadersAreMappedToQpack() {
-        HeadersFrame headersFrame = new HeadersFrame();
+        HeadersFrame headersFrame = new HeadersFrame(HeadersFrame.Type.REQUEST);
         HttpHeaders httpHeaders = HttpHeaders.of(
                 Map.of("headername1", List.of("value1"),
                         "headername2", List.of("value2")), (a, b) -> true);
@@ -219,7 +219,7 @@ public class HeadersFrameTest {
 
     @Test
     public void httpHeaderNamesAreConvertedToLowercaseBeforeEncoding() {
-        HeadersFrame headersFrame = new HeadersFrame();
+        HeadersFrame headersFrame = new HeadersFrame(HeadersFrame.Type.REQUEST);
         HttpHeaders httpHeaders = HttpHeaders.of(
                 Map.of("HeaderName", List.of("CamelCasedValue")), (a, b) -> true);
         headersFrame.setHeaders(httpHeaders);
@@ -238,7 +238,7 @@ public class HeadersFrameTest {
 
     @Test
     public void multiValuedHttpHeadersAreCompressedAsSingleValue() {
-        HeadersFrame headersFrame = new HeadersFrame();
+        HeadersFrame headersFrame = new HeadersFrame(HeadersFrame.Type.REQUEST);
         HttpHeaders httpHeaders = HttpHeaders.of(
                 Map.of("headername1", List.of("value1", "value2", "value3"),
                         "headername2", List.of("value20")), (a, b) -> true);

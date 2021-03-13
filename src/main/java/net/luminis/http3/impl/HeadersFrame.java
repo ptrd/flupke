@@ -20,7 +20,6 @@ package net.luminis.http3.impl;
 
 import net.luminis.qpack.Decoder;
 import net.luminis.qpack.Encoder;
-import net.luminis.quic.ProtocolError;
 import net.luminis.quic.VariableLengthInteger;
 
 import java.io.ByteArrayInputStream;
@@ -36,12 +35,18 @@ import java.util.stream.Collectors;
 // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-4.2.2
 public class HeadersFrame extends Http3Frame {
 
+    public enum Type {
+        REQUEST,
+        RESPONSE
+    }
+
     private Optional<Integer> statusCode;
     private Map<String, List<String>> httpHeaders;
     private List<Map.Entry<String, String>> qpackHeaders;
+    private final Type type;
 
-
-    public HeadersFrame() {
+    public HeadersFrame(Type type) {
+        this.type = type;
         httpHeaders = new HashMap<>();
         qpackHeaders = new ArrayList<>();
     }

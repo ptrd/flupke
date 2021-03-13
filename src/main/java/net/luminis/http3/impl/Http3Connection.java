@@ -39,7 +39,6 @@ import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.Flow;
-import java.util.stream.Collectors;
 
 
 public class Http3Connection {
@@ -133,7 +132,7 @@ public class Http3Connection {
     private void sendRequest(HttpRequest request, QuicStream httpStream) throws IOException {
         OutputStream requestStream = httpStream.getOutputStream();
 
-        HeadersFrame headersFrame = new HeadersFrame();
+        HeadersFrame headersFrame = new HeadersFrame(HeadersFrame.Type.REQUEST);
         headersFrame.setMethod(request.method());
         headersFrame.setUri(request.uri());
         headersFrame.setHeaders(request.headers());
@@ -205,7 +204,7 @@ public class Http3Connection {
             switch ((int) frameType) {
                 case 0x01:
                     responseState.gotHeader();
-                    HeadersFrame responseHeadersFrame = new HeadersFrame().parsePayload(payload, qpackDecoder);
+                    HeadersFrame responseHeadersFrame = new HeadersFrame(HeadersFrame.Type.RESPONSE).parsePayload(payload, qpackDecoder);
                     if (responseInfo == null) {
                         // First frame should contain :status pseudo-header and other headers that the body handler might use to determine what kind of body subscriber to use
                         responseInfo = new HttpResponseInfo(responseHeadersFrame);
