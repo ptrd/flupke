@@ -132,7 +132,7 @@ public class Http3Connection {
     private void sendRequest(HttpRequest request, QuicStream httpStream) throws IOException {
         OutputStream requestStream = httpStream.getOutputStream();
 
-        HeadersFrame headersFrame = new HeadersFrame(HeadersFrame.Type.REQUEST);
+        RequestHeadersFrame headersFrame = new RequestHeadersFrame();
         headersFrame.setMethod(request.method());
         headersFrame.setUri(request.uri());
         headersFrame.setHeaders(request.headers());
@@ -204,7 +204,7 @@ public class Http3Connection {
             switch ((int) frameType) {
                 case 0x01:
                     responseState.gotHeader();
-                    HeadersFrame responseHeadersFrame = new HeadersFrame(HeadersFrame.Type.RESPONSE).parsePayload(payload, qpackDecoder);
+                    ResponseHeadersFrame responseHeadersFrame = new ResponseHeadersFrame().parsePayload(payload, qpackDecoder);
                     if (responseInfo == null) {
                         // First frame should contain :status pseudo-header and other headers that the body handler might use to determine what kind of body subscriber to use
                         responseInfo = new HttpResponseInfo(responseHeadersFrame);
@@ -342,7 +342,7 @@ public class Http3Connection {
         private HttpHeaders headers;
         private final int statusCode;
 
-        public HttpResponseInfo(HeadersFrame headersFrame) throws ProtocolException {
+        public HttpResponseInfo(ResponseHeadersFrame headersFrame) throws ProtocolException {
             headers = headersFrame.headers();
             statusCode = headersFrame.statusCode();
         }
