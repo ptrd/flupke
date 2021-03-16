@@ -24,9 +24,11 @@ import net.luminis.qpack.Encoder;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.VariableLengthInteger;
 import net.luminis.quic.server.ApplicationProtocolConnection;
+import net.luminis.quic.server.ServerConnection;
 import net.luminis.quic.stream.QuicStream;
 
 import java.io.*;
+import java.net.InetAddress;
 import java.net.http.HttpHeaders;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -54,6 +56,7 @@ public class Http3ServerConnection extends ApplicationProtocolConnection impleme
     private int peerQpackMaxTableCapacity;
     private InputStream clientEncoderStream;
     private final Decoder qpackDecoder;
+    private final InetAddress clientAddress;
 
 
     public Http3ServerConnection(QuicConnection quicConnection, HttpRequestHandler requestHandler) {
@@ -61,6 +64,7 @@ public class Http3ServerConnection extends ApplicationProtocolConnection impleme
         this.requestHandler = requestHandler;
         quicConnection.setPeerInitiatedStreamCallback(this);
         qpackDecoder = new Decoder();
+        clientAddress = ((ServerConnection) quicConnection).getInitialClientAddress();
         startControlStream();
     }
 
@@ -181,7 +185,7 @@ public class Http3ServerConnection extends ApplicationProtocolConnection impleme
                 .findFirst()
                 .orElseThrow(() -> new HttpError("", 400));  // TODO
 
-        HttpServerRequest request = new HttpServerRequest(headersFrame.getMethod(), headersFrame.getPath(), null, null);
+        HttpServerRequest request = new HttpServerRequest(headersFrame.getMethod(), headersFrame.getPath(), null, clientAddress);
         HttpServerResponse response = new HttpServerResponse() {
             private boolean outputStarted;
             private DataFrameWriter dataFrameWriter;

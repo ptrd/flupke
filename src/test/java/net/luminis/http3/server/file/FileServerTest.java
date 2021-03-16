@@ -9,6 +9,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.Inet4Address;
 import java.nio.file.Files;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
@@ -58,7 +59,7 @@ public class FileServerTest {
         verify(response).setStatus(intThat(arg -> arg == 404));
     }
 
-    private HttpServerRequest createGetRequest(String filename) {
-        return new HttpServerRequest("GET", filename, null, null);
+    private HttpServerRequest createGetRequest(String filename) throws IOException {
+        return new HttpServerRequest("GET", filename, null, Inet4Address.getByAddress(new byte[] { 10, 0, 0, 58 }));
     }
 }

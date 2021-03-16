@@ -67,7 +67,7 @@ public class FileServer implements HttpRequestHandler {
 
     private void log(HttpServerRequest request, HttpServerResponse response) {
         // Using standard Apache Access Log format
-        String logLine = request.clientAddress() + " " +
+        String logLine = request.clientAddress().getHostAddress() + " " +
                 // client identity
                 "- " +
                 // client userid

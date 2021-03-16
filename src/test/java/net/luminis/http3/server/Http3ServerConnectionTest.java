@@ -24,6 +24,7 @@ import net.luminis.http3.impl.ResponseHeadersFrame;
 import net.luminis.qpack.Decoder;
 import net.luminis.qpack.Encoder;
 import net.luminis.quic.QuicConnection;
+import net.luminis.quic.server.ServerConnection;
 import net.luminis.quic.stream.QuicStream;
 import org.junit.Test;
 
@@ -116,7 +117,7 @@ public class Http3ServerConnectionTest {
     }
 
     private QuicConnection createMockQuicConnection() {
-        QuicConnection connection = mock(QuicConnection.class);
+        ServerConnection connection = mock(ServerConnection.class);
         QuicStream stream = mock(QuicStream.class);
         when(connection.createStream(false)).thenReturn(stream);
         when(stream.getOutputStream()).thenReturn(new ByteArrayOutputStream());
