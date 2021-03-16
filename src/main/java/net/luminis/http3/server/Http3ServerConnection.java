@@ -29,7 +29,6 @@ import net.luminis.quic.stream.QuicStream;
 import java.io.*;
 import java.net.http.HttpHeaders;
 import java.nio.ByteBuffer;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -49,7 +48,7 @@ public class Http3ServerConnection extends ApplicationProtocolConnection impleme
     private static AtomicInteger threadCount = new AtomicInteger();
 
     private final QuicConnection quicConnection;
-    private final File wwwDir;
+    private final HttpRequestHandler requestHandler;
     private InputStream controlStream;
     private int peerQpackBlockedStreams;
     private int peerQpackMaxTableCapacity;
@@ -57,9 +56,9 @@ public class Http3ServerConnection extends ApplicationProtocolConnection impleme
     private final Decoder qpackDecoder;
 
 
-    public Http3ServerConnection(QuicConnection quicConnection, File wwwDir) {
+    public Http3ServerConnection(QuicConnection quicConnection, HttpRequestHandler requestHandler) {
         this.quicConnection = quicConnection;
-        this.wwwDir = wwwDir;
+        this.requestHandler = requestHandler;
         quicConnection.setPeerInitiatedStreamCallback(this);
         qpackDecoder = new Decoder();
         startControlStream();
@@ -67,14 +66,12 @@ public class Http3ServerConnection extends ApplicationProtocolConnection impleme
 
     @Override
     public void accept(QuicStream quicStream) {
-        Thread thread = new Thread(() -> handleStream(quicStream));
+        Thread thread = new Thread(() -> handle(quicStream));
         thread.setName("http-" + threadCount.getAndIncrement());
         thread.start();
     }
 
-    void handleStream(QuicStream quicStream) {
-        System.out.println("HTTP3 Server: client opening stream " + quicStream.getStreamId());
-
+    void handle(QuicStream quicStream) {
         if (quicStream.isUnidirectional()) {
             // https://tools.ietf.org/html/draft-ietf-quic-http-34#section-6.2
             // "Unidirectional streams, in either direction, are used for a range of purposes. The purpose is
@@ -107,7 +104,7 @@ public class Http3ServerConnection extends ApplicationProtocolConnection impleme
             InputStream requestStream = quicStream.getInputStream();
             try {
                 List<Http3Frame> receivedFrames = parseHttp3Frames(requestStream);
-                handleStream(receivedFrames, quicStream);
+                handleHttpRequest(receivedFrames, quicStream, new Encoder());
             }
             catch (IOException ioError) {
                 sendHttpErrorResponse(500, "", quicStream);
@@ -178,19 +175,51 @@ public class Http3ServerConnection extends ApplicationProtocolConnection impleme
         return receivedFrames;
     }
 
-    private void handleStream(List<Http3Frame> receivedFrames, QuicStream quicStream) throws HttpError {
+    void handleHttpRequest(List<Http3Frame> receivedFrames, QuicStream quicStream, Encoder qpackEncoder) throws HttpError {
         RequestHeadersFrame headersFrame = (RequestHeadersFrame) receivedFrames.stream()
                 .filter(f -> f instanceof HeadersFrame)
                 .findFirst()
-                .orElseThrow(() -> new HttpError("", 400));
+                .orElseThrow(() -> new HttpError("", 400));  // TODO
 
-        if (headersFrame.getMethod() != null && headersFrame.getPath() != null) {
-            if (headersFrame.getMethod().equals("GET")) {
-                get(headersFrame.getPath(), quicStream.getOutputStream());
+        HttpServerRequest request = new HttpServerRequest(headersFrame.getMethod(), headersFrame.getPath(), null, null);
+        HttpServerResponse response = new HttpServerResponse() {
+            private boolean outputStarted;
+            private DataFrameWriter dataFrameWriter;
+
+            @Override
+            public OutputStream getOutputStream() {
+                if (!outputStarted) {
+                    ResponseHeadersFrame headersFrame = new ResponseHeadersFrame();
+                    headersFrame.setStatus(status());
+                    OutputStream outputStream = quicStream.getOutputStream();
+                    try {
+                        outputStream.write(headersFrame.toBytes(qpackEncoder));
+                    } catch (IOException e) {
+                        // Ignore, there is nothing we can do. Note Kwik will not throw exception when writing to stream.
+                    }
+                    outputStarted = true;
+                    dataFrameWriter = new DataFrameWriter(quicStream.getOutputStream());
+                }
+                return dataFrameWriter;
             }
-            else {
-                throw new HttpError("http method not supported", 405);
+
+            @Override
+            public long size() {
+                if (dataFrameWriter != null) {
+                    return dataFrameWriter.getBytesWritten();
+                }
+                else {
+                    return 0;
+                }
             }
+        };
+
+        try {
+            requestHandler.handleRequest(request, response);
+            response.getOutputStream().close();
+        } catch (IOException e) {
+            // Ignore, there is nothing we can do. Note Kwik will not throw exception when writing to stream
+            // (except when writing to a closed stream)
         }
     }
 
@@ -198,43 +227,6 @@ public class Http3ServerConnection extends ApplicationProtocolConnection impleme
         ResponseHeadersFrame headersFrame = new ResponseHeadersFrame();
         headersFrame.setStatus(statusCode);
         outputStream.write(headersFrame.toBytes(new Encoder()));
-    }
-
-    private void get(String path, OutputStream outputStream) throws HttpError {
-        System.out.println("GET " + path);
-        if (path.trim().equals("/")) {
-            path = "/index.html";
-        }
-        try {
-            File file = getFileInWwwDir(path);
-            if (file != null && file.exists() && file.isFile()) {
-                DataFrame dataFrame = new DataFrame(Files.readAllBytes(file.toPath()));
-                sendStatus(200, outputStream);
-                outputStream.write(dataFrame.toBytes());
-                outputStream.close();
-            } else {
-                throw new HttpError("file not found", 404);
-            }
-        }
-        catch (IOException e){
-            throw new HttpError("internal server error", 500);
-        }
-    }
-
-    /**
-     * Check that file specified by argument is actually in the www dir (to prevent file traversal).
-     * @param fileName
-     * @return
-     * @throws IOException
-     */
-    private File getFileInWwwDir(String fileName) throws IOException {
-        String requestedFilePath = new File(wwwDir, fileName).getCanonicalPath();
-        if (requestedFilePath.startsWith(wwwDir.getCanonicalPath())) {
-            return new File(requestedFilePath);
-        }
-        else {
-            return null;
-        }
     }
 
     long readFrameType(InputStream inputStream) {

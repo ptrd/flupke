@@ -18,30 +18,23 @@
  */
 package net.luminis.http3.server;
 
+import java.io.OutputStream;
 
-import net.luminis.http3.server.file.FileServer;
-import net.luminis.quic.QuicConnection;
-import net.luminis.quic.server.ApplicationProtocolConnection;
-import net.luminis.quic.server.ApplicationProtocolConnectionFactory;
+public abstract class HttpServerResponse {
 
+    private int status;
 
-import java.io.File;
+    public abstract OutputStream getOutputStream();
 
-public class Http3ApplicationProtocolFactory extends ApplicationProtocolConnectionFactory {
-
-    private File wwwDir;
-    private final FileServer fileServer;
-
-    public Http3ApplicationProtocolFactory(File wwwDir) {
-        if (wwwDir == null) {
-            throw new IllegalArgumentException();
-        }
-        this.wwwDir = wwwDir;
-        fileServer = new FileServer(wwwDir);
+    public void setStatus(int status) {
+        this.status = status;
     }
 
-    @Override
-    public ApplicationProtocolConnection createConnection(String protocol, QuicConnection quicConnection) {
-        return new Http3ServerConnection(quicConnection, fileServer);
+    public int status() {
+        return status;
+    }
+
+    public long size() {
+        return 0;
     }
 }
