@@ -65,6 +65,14 @@ jar {
     }
 }
 
+task flupkePlugin(type: Jar) {
+    archiveBaseName = "flupke-plugin"
+    from(sourceSets.main.output) {
+        include "net/luminis/http3/**"
+        include "net/luminis/qpack/**"
+    }
+}
+
 task determineVersion {
     doLast {
         def proc = "git describe --always --dirty".execute()
