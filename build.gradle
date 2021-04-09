@@ -83,7 +83,7 @@ task determineVersion {
             def versionTag = proc.in.readLines()[0]
             logger.quiet("Building version ${versionTag}.")
 
-            ext.versionDir = new File("${buildDir}", "generated/net/luminis/http3/sample")
+            ext.versionDir = new File("${buildDir}", "generated/net/luminis/http3/impl")
             versionDir.mkdirs()
 
             new File(versionDir, "version.properties").text = versionTag

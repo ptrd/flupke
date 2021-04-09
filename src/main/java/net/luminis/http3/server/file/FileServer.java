@@ -18,9 +18,11 @@
  */
 package net.luminis.http3.server.file;
 
+import net.luminis.http3.impl.FlupkeVersion;
 import net.luminis.http3.server.HttpRequestHandler;
 import net.luminis.http3.server.HttpServerRequest;
 import net.luminis.http3.server.HttpServerResponse;
+import net.luminis.quic.run.KwikVersion;
 
 import java.io.File;
 import java.io.IOException;
@@ -46,6 +48,16 @@ public class FileServer implements HttpRequestHandler {
     public void handleRequest(HttpServerRequest request, HttpServerResponse response) throws IOException {
         if (request.method().equals("GET")) {
             String path = request.path();
+            if (path.equals("/version")) {
+                response.setStatus(200);
+                String versionLine = "Kwik version: " + KwikVersion.getVersion() + "\n"
+                        + "Flupke version: " + FlupkeVersion.getVersion() + "\n";
+                response.getOutputStream().write(versionLine.getBytes());
+                response.getOutputStream().close();
+                log(request, response);
+                return;
+            }
+
             if (path.isBlank() || path.equals("/")) {
                 path = "index.html";
             }
