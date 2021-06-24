@@ -14,8 +14,8 @@ public class Http3ConnectionFactoryTest {
 
     @Test
     public void requestsForSameAddressReuseConnection() throws Exception {
-        HttpRequest request1 = HttpRequest.newBuilder().uri(new URI("http://www.example.com:433/index.html")).build();
-        HttpRequest request2 = HttpRequest.newBuilder().uri(new URI("http://www.example.com:433/whatever.html")).build();
+        HttpRequest request1 = HttpRequest.newBuilder().uri(new URI("http://localhost:433/index.html")).build();
+        HttpRequest request2 = HttpRequest.newBuilder().uri(new URI("http://localhost:433/whatever.html")).build();
 
         Http3ConnectionFactory connectionFactory = new Http3ConnectionFactory((Http3Client) Http3Client.newHttpClient());
 
@@ -27,7 +27,7 @@ public class Http3ConnectionFactoryTest {
 
     @Test
     public void requestsToDifferentServersDontReuseConnection() throws Exception {
-        HttpRequest request1 = HttpRequest.newBuilder().uri(new URI("http://www.example.com:433/index.html")).build();
+        HttpRequest request1 = HttpRequest.newBuilder().uri(new URI("http://localhost:433/index.html")).build();
         HttpRequest request2 = HttpRequest.newBuilder().uri(new URI("http://www.developer.com:433/whatever.html")).build();
 
         Http3ConnectionFactory connectionFactory = new Http3ConnectionFactory((Http3Client) Http3Client.newHttpClient());
@@ -40,8 +40,8 @@ public class Http3ConnectionFactoryTest {
 
     @Test
     public void requestsToDifferentPortsDontReuseConnection() throws Exception {
-        HttpRequest request1 = HttpRequest.newBuilder().uri(new URI("http://www.example.com:433/index.html")).build();
-        HttpRequest request2 = HttpRequest.newBuilder().uri(new URI("http://www.example.com:80/whatever.html")).build();
+        HttpRequest request1 = HttpRequest.newBuilder().uri(new URI("http://localhost:433/index.html")).build();
+        HttpRequest request2 = HttpRequest.newBuilder().uri(new URI("http://localhost:80/whatever.html")).build();
 
         Http3ConnectionFactory connectionFactory = new Http3ConnectionFactory((Http3Client) Http3Client.newHttpClient());
 

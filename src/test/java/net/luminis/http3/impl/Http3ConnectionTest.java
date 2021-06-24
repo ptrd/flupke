@@ -19,6 +19,7 @@
 package net.luminis.http3.impl;
 
 import net.luminis.qpack.Decoder;
+import net.luminis.quic.QuicClientConnection;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.TransportParameters;
 import net.luminis.quic.stream.QuicStream;
@@ -49,7 +50,7 @@ public class Http3ConnectionTest {
 
     @Test
     public void testServerSettingsFrameIsProcessed() throws IOException {
-        Http3Connection http3Connection = new Http3Connection("www.example.com",4433);
+        Http3Connection http3Connection = new Http3Connection("localhost",4433);
 
         InputStream serverControlInputStream = new ByteArrayInputStream(new byte[]{
                 0x00,  // type: control stream
@@ -72,8 +73,8 @@ public class Http3ConnectionTest {
 
     @Test
     public void testClientSendsSettingsFrameOnControlStream() throws Exception {
-        Http3Connection http3Connection = new Http3Connection("www.example.com", 4433);
-        QuicConnection quicConnection = mock(QuicConnection.class);
+        Http3Connection http3Connection = new Http3Connection("localhost", 4433);
+        QuicClientConnection quicConnection = mock(QuicClientConnection.class);
         FieldSetter.setField(http3Connection, Http3Connection.class.getDeclaredField("quicConnection"), quicConnection);
 
         QuicStream quicStreamMock = mock(QuicStream.class);
@@ -96,7 +97,7 @@ public class Http3ConnectionTest {
 
     @Test
     public void testReceiveHttpResponse() throws Exception {
-        Http3Connection http3Connection = new Http3Connection("www.example.com", 4433);
+        Http3Connection http3Connection = new Http3Connection("localhost", 4433);
 
         byte[] responseBytes = new byte[] {
                 // Partial response for Headers frame, the rest is covered by the mock decoder
@@ -114,7 +115,7 @@ public class Http3ConnectionTest {
         mockQuicConnectionWithStreams(http3Connection, responseBytes);
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://www.example.com"))
+                .uri(new URI("http://localhost"))
                 .build();
 
         HttpResponse<String> httpResponse = http3Connection.send(request, HttpResponse.BodyHandlers.ofString());
@@ -124,7 +125,7 @@ public class Http3ConnectionTest {
 
     @Test
     public void testMissingHeaderFrame() throws Exception {
-        Http3Connection http3Connection = new Http3Connection("www.example.com", 4433);
+        Http3Connection http3Connection = new Http3Connection("localhost", 4433);
 
         byte[] responseBytes = new byte[] {
                 // Complete response for Data frame
@@ -139,7 +140,7 @@ public class Http3ConnectionTest {
         mockQuicConnectionWithStreams(http3Connection, responseBytes);
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://www.example.com"))
+                .uri(new URI("http://localhost"))
                 .build();
 
         assertThatThrownBy(
@@ -150,7 +151,7 @@ public class Http3ConnectionTest {
 
     @Test
     public void testResponseCanHaveTwoHeadersFrame() throws Exception {
-        Http3Connection http3Connection = new Http3Connection("www.example.com", 4433);
+        Http3Connection http3Connection = new Http3Connection("localhost", 4433);
 
         byte[] responseBytes = new byte[] {
                 // Partial response for Headers frame, the rest is covered by the mock decoder
@@ -171,7 +172,7 @@ public class Http3ConnectionTest {
         mockQuicConnectionWithStreams(http3Connection, responseBytes);
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://www.example.com"))
+                .uri(new URI("http://localhost"))
                 .build();
 
         HttpResponse<String> httpResponse = http3Connection.send(request, HttpResponse.BodyHandlers.ofString());
@@ -182,7 +183,7 @@ public class Http3ConnectionTest {
 
     @Test
     public void testStreamAbortedInHeadersFrame() throws Exception {
-        Http3Connection http3Connection = new Http3Connection("www.example.com", 4433);
+        Http3Connection http3Connection = new Http3Connection("localhost", 4433);
 
         byte[] responseBytes = new byte[]{
                 // Partial response for Headers frame, to model aborted stream
@@ -193,7 +194,7 @@ public class Http3ConnectionTest {
         mockQuicConnectionWithStreams(http3Connection, responseBytes);
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://www.example.com"))
+                .uri(new URI("http://localhost"))
                 .build();
 
         assertThatThrownBy(
@@ -203,7 +204,7 @@ public class Http3ConnectionTest {
 
     @Test
     public void testStreamAbortedInDataFrame() throws Exception {
-        Http3Connection http3Connection = new Http3Connection("www.example.com", 4433);
+        Http3Connection http3Connection = new Http3Connection("localhost", 4433);
 
         byte[] responseBytes = new byte[] {
                 // Partial response for Headers frame, the rest is covered by the mock decoder
@@ -218,7 +219,7 @@ public class Http3ConnectionTest {
         mockQuicConnectionWithStreams(http3Connection, responseBytes);
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://www.example.com"))
+                .uri(new URI("http://localhost"))
                 .build();
 
         assertThatThrownBy(
@@ -228,7 +229,7 @@ public class Http3ConnectionTest {
 
     @Test
     public void noDataFrameMeansEmptyResponseBody() throws Exception {
-        Http3Connection http3Connection = new Http3Connection("www.example.com", 4433);
+        Http3Connection http3Connection = new Http3Connection("localhost", 4433);
 
         byte[] responseBytes = new byte[]{
                 // Partial response for Headers frame, the rest is covered by the mock decoder
@@ -238,7 +239,7 @@ public class Http3ConnectionTest {
         mockQuicConnectionWithStreams(http3Connection, responseBytes);
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://www.example.com"))
+                .uri(new URI("http://localhost"))
                 .build();
 
         HttpResponse<String> response = http3Connection.send(request, HttpResponse.BodyHandlers.ofString());
@@ -247,7 +248,7 @@ public class Http3ConnectionTest {
 
     @Test
     public void reservedLargeFrameTypeIsIgnored() throws Exception {
-        Http3Connection http3Connection = new Http3Connection("www.example.com", 4433);
+        Http3Connection http3Connection = new Http3Connection("localhost", 4433);
 
         byte[] responseBytes = new byte[] {
                 // Reserved frame type: 3344129617399856696 (0x2E68BC2B47FB3E38) = 3344129617399856675 * 31 + 33
@@ -275,7 +276,7 @@ public class Http3ConnectionTest {
         mockQuicConnectionWithStreams(http3Connection, responseBytes);
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://www.example.com"))
+                .uri(new URI("http://localhost"))
                 .build();
 
         HttpResponse<String> httpResponse = http3Connection.send(request, HttpResponse.BodyHandlers.ofString());
@@ -285,14 +286,14 @@ public class Http3ConnectionTest {
 
     @Test
     public void testReadFrameTypeFromStream() throws Exception {
-        Http3Connection http3Connection = new Http3Connection("www.example.com", 4433);
+        Http3Connection http3Connection = new Http3Connection("localhost", 4433);
         long frameType = http3Connection.readFrameType(new ByteArrayInputStream(new byte[] { 0x01, 0x02, 0x03 }));
         assertThat(frameType).isEqualTo(1);
     }
 
     @Test
     public void readFrameTypeFromClosedStreamShouldReturnNegativeValue() throws Exception {
-        Http3Connection http3Connection = new Http3Connection("www.example.com", 4433);
+        Http3Connection http3Connection = new Http3Connection("localhost", 4433);
         InputStream inputStream = new ByteArrayInputStream(new byte[]{ 0x01, 0x02, 0x03 });
         inputStream.read(new byte[3]);
         long frameType = http3Connection.readFrameType(inputStream);
@@ -301,7 +302,7 @@ public class Http3ConnectionTest {
 
     @Test
     public void postRequestEndodesRequestBodyInDataFrame() throws Exception {
-        Http3Connection http3Connection = new Http3Connection("www.example.com", 4433);
+        Http3Connection http3Connection = new Http3Connection("localhost", 4433);
 
         byte[] responseBytes = new byte[]{
                 // Partial response for Headers frame, the rest is covered by the mock decoder
@@ -311,7 +312,7 @@ public class Http3ConnectionTest {
         QuicStream http3Stream = mockQuicConnectionWithStreams(http3Connection, responseBytes);
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://www.example.com"))
+                .uri(new URI("http://localhost"))
                 .POST(HttpRequest.BodyPublishers.ofString("This is the request body."))
                 .build();
 
@@ -325,9 +326,9 @@ public class Http3ConnectionTest {
 
     @Test
     public void setupConnectOnlyOnce() throws Exception {
-        Http3Connection http3Connection = new Http3Connection("www.example.com", 4433);
+        Http3Connection http3Connection = new Http3Connection("localhost", 4433);
 
-        QuicConnection quicConnection = mockQuicConnection(http3Connection);
+        QuicClientConnection quicConnection = mockQuicConnection(http3Connection);
 
         http3Connection.connect(10);
         http3Connection.connect(10);
@@ -347,7 +348,7 @@ public class Http3ConnectionTest {
      * @return
      */
     private QuicStream mockQuicConnectionWithStreams(Http3Connection http3Connection, byte[] response) throws NoSuchFieldException, IOException {
-        QuicConnection quicConnection = mock(QuicConnection.class);
+        QuicClientConnection quicConnection = mock(QuicClientConnection.class);
         FieldSetter.setField(http3Connection, Http3Connection.class.getDeclaredField("quicConnection"), quicConnection);
 
         QuicStream http3StreamMock = mock(QuicStream.class);
@@ -383,8 +384,8 @@ public class Http3ConnectionTest {
         return http3StreamMock;
     }
 
-    private QuicConnection mockQuicConnection(Http3Connection http3Connection) throws NoSuchFieldException, IOException {
-        QuicConnection quicConnection = mock(QuicConnection.class);
+    private QuicClientConnection mockQuicConnection(Http3Connection http3Connection) throws NoSuchFieldException, IOException {
+        QuicClientConnection quicConnection = mock(QuicClientConnection.class);
         FieldSetter.setField(http3Connection, Http3Connection.class.getDeclaredField("quicConnection"), quicConnection);
 
         QuicStream http3StreamMock = mock(QuicStream.class);

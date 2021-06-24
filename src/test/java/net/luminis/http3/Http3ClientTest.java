@@ -58,7 +58,7 @@ public class Http3ClientTest {
                 .build();
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://www.example.com:4433"))
+                .uri(new URI("http://localhost:4433"))
                 .build();
 
         Instant start = Instant.now();
@@ -77,7 +77,7 @@ public class Http3ClientTest {
                 .build();
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://www.example.com:4433"))
+                .uri(new URI("http://localhost:4433"))
                 .build();
 
         Instant start = Instant.now();
@@ -97,7 +97,7 @@ public class Http3ClientTest {
         when(http3Connection.send(any(), any())).thenThrow(new IOException("something went wrong during request/response"));
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://www.example.com:4433"))
+                .uri(new URI("http://localhost:4433"))
                 .build();
 
         CompletableFuture<HttpResponse<String>> httpResponseFuture = httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString());
@@ -115,7 +115,7 @@ public class Http3ClientTest {
         when(http3Connection.send(any(), any())).thenThrow(new RuntimeException("something went wrong during request/response"));
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://www.example.com:4433"))
+                .uri(new URI("http://localhost:4433"))
                 .build();
 
         CompletableFuture<HttpResponse<String>> httpResponseFuture = httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString());

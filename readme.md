@@ -39,10 +39,14 @@ Features:
 - Multiplexing of HTTP3 requests over one underlying QUIC connection
 - Support for asynchronous handling with ```HttpClient.sendAsync()```
 
-Limitations:
+Limitations in the current version:
 
-- QPack dynamic table is not supported
-- server certificate is not verified (inherited limitation of current version of Kwik)
+- QPack dynamic table is not supported, neither does the QPack _encoder_ use Huffman encoding. Note that even with these
+  limitations, Flupke can talk to any HTTP/3 compliant server.
+- No support for server push.
+- No support for CONNECT method.
+- No support for GOAWAY.
+
 
 Also note that `Http3Client.version()` returns null instead of a proper Version object; 
 this is unavoidable as the Java [HTTPClient.Version](https://docs.oracle.com/en/java/javase/11/docs/api/java.net.http/java/net/http/HttpClient.Version.html)

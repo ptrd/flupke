@@ -24,7 +24,6 @@ import net.luminis.quic.*;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.stream.QuicStream;
 
-
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -37,16 +36,19 @@ import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
-import java.util.*;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Flow;
-import java.util.stream.Collectors;
 
 
 public class Http3Connection {
 
-    private final QuicConnection quicConnection;
+    private final QuicClientConnection quicConnection;
     private final String host;
     private final int port;
+    private final String applicationProtocol;
     private InputStream serverControlStream;
     private InputStream serverEncoderStream;
     private InputStream serverPushStream;
@@ -68,14 +70,16 @@ public class Http3Connection {
         logger.logCongestionControl(true);
         logger.logFlowControl(true);
 
-        QuicConnectionImpl.Builder builder = QuicConnectionImpl.newBuilder();
+        QuicClientConnectionImpl.Builder builder = QuicClientConnectionImpl.newBuilder();
         try {
             builder.uri(new URI("//" + host + ":" + port));
         } catch (URISyntaxException e) {
             // Impossible
             throw new RuntimeException();
         }
-        builder.version(Version.IETF_draft_29);
+        Version quicVersion = determinePreferredQuicVersion();
+        builder.version(quicVersion);
+        applicationProtocol = quicVersion.equals(Version.QUIC_version_1)? "h3": determineH3Version(quicVersion);
         builder.logger(logger);
         quicConnection = builder.build();
         quicConnection.setServerStreamCallback(stream -> doAsync(() -> registerServerInitiatedStream(stream)));
@@ -96,7 +100,7 @@ public class Http3Connection {
     public void connect(int connectTimeoutInMillis) throws IOException {
         synchronized (this) {
             if (!connected) {
-                quicConnection.connect(connectTimeoutInMillis, "h3-29", null, Collections.emptyList());
+                quicConnection.connect(connectTimeoutInMillis, applicationProtocol, null, Collections.emptyList());
 
                 // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.2.1
                 // "Each side MUST initiate a single control stream at the beginning of
@@ -321,6 +325,41 @@ public class Http3Connection {
 
     private void doAsync(Runnable task) {
         new Thread(task).start();
+    }
+
+    private Version determinePreferredQuicVersion() {
+        String quicVersionEnvVar = System.getenv("QUIC_VERSION");
+        if (quicVersionEnvVar != null) {
+            quicVersionEnvVar = quicVersionEnvVar.trim().toLowerCase();
+            if (quicVersionEnvVar.equals("1")) {
+                return Version.QUIC_version_1;
+            }
+            if (quicVersionEnvVar.startsWith("draft-")) {
+                try {
+                    int draftNumber = Integer.parseInt(quicVersionEnvVar.substring("draft-".length(), quicVersionEnvVar.length()));
+                    if (draftNumber >= 29 && draftNumber <= 32) {
+                        try {
+                            return Version.parse(0xff000000 + draftNumber);
+                        } catch (UnknownVersionException e) {
+                            // Impossible
+                            throw new RuntimeException();
+                        }
+                    }
+                } catch (NumberFormatException e) {}
+            }
+            System.err.println("Unsupported QUIC version '" + quicVersionEnvVar + "'; should be one of: 1, draft-29, draft-30, draft-31, draft-32.");
+        }
+        return Version.QUIC_version_1;
+    }
+
+    private String determineH3Version(Version quicVersion) {
+        if (quicVersion.atLeast(Version.IETF_draft_29)) {
+            String versionString = quicVersion.toString();
+            return "h3-" + versionString.substring(versionString.length() - 2, versionString.length());
+        }
+        else {
+            return "";
+        }
     }
 
     public int getServerQpackMaxTableCapacity() {
