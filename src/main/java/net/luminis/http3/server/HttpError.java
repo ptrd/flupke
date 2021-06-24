@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020, 2021 Peter Doornbosch
+ * Copyright © 2021 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *
@@ -16,19 +16,19 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.http3.sample;
+package net.luminis.http3.server;
 
-import net.luminis.http3.impl.FlupkeVersion;
-import net.luminis.quic.QuicConnection;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+public class HttpError extends Exception {
 
-public class Flupke {
+    private int statusCode;
 
-    public static void main(String[] args) {
-        System.out.println("Flupke version (build id): " + FlupkeVersion.getVersion());
+    public HttpError(String message, int statusCode) {
+        super(message);
+        this.statusCode = statusCode;
+    }
+
+    public int getStatusCode() {
+        return statusCode;
     }
 }

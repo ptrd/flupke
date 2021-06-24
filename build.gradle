@@ -26,6 +26,7 @@ dependencies {
     implementation group: 'commons-cli', name: 'commons-cli', version: '1.4'
 
     implementation name: 'tls13'
+    implementation 'org.glassfish:javax.json:1.1.4'
 
     // Use JUnit test framework
     testImplementation 'junit:junit:4.12'
@@ -68,6 +69,14 @@ jar {
     }
 }
 
+task flupkePlugin(type: Jar) {
+    archiveBaseName = "flupke-plugin"
+    from(sourceSets.main.output) {
+        include "net/luminis/http3/**"
+        include "net/luminis/qpack/**"
+    }
+}
+
 task determineVersion {
     doLast {
         def proc = "git describe --always --dirty".execute()
@@ -78,7 +87,7 @@ task determineVersion {
             def versionTag = proc.in.readLines()[0]
             logger.quiet("Building version ${versionTag}.")
 
-            ext.versionDir = new File("${buildDir}", "generated/net/luminis/http3/sample")
+            ext.versionDir = new File("${buildDir}", "generated/net/luminis/http3/impl")
             versionDir.mkdirs()
 
             new File(versionDir, "version.properties").text = versionTag

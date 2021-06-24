@@ -20,6 +20,8 @@ package net.luminis.http3.impl;
 
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 
@@ -58,4 +60,50 @@ public class DataFrameTest {
         assertThat(frameBytes.length).isEqualTo(1 + 2 + 80);
     }
 
+    @Test
+    public void testCreatePayloadFromSlicedBuffer() {
+        // Given
+        byte[] rawPayload = new byte[] { 0x00, 0x00, 0x00, (byte) 0xca, (byte) 0xfe, (byte) 0xba, (byte) 0xbe, 0x00, 0x00, 0x00 };
+        ByteBuffer buffer = ByteBuffer.wrap(rawPayload);
+        buffer.position(3);
+        buffer.limit(7);
+        ByteBuffer slice = buffer.slice();
+
+        // When
+        DataFrame dataFrame = new DataFrame(slice);
+
+        // Then
+        byte[] payload = dataFrame.getPayload();
+        assertThat(payload).isEqualTo(new byte[] { (byte) 0xca, (byte) 0xfe, (byte) 0xba, (byte) 0xbe });
+        // And second call gives same result
+        payload = dataFrame.getPayload();
+        assertThat(payload).isEqualTo(new byte[] { (byte) 0xca, (byte) 0xfe, (byte) 0xba, (byte) 0xbe });
+    }
+
+    @Test
+    public void testCreatePayloadFromBuffer() {
+        // Given
+        byte[] rawPayload = new byte[] { (byte) 0xca, (byte) 0xfe, (byte) 0xba, (byte) 0xbe };
+        ByteBuffer buffer = ByteBuffer.wrap(rawPayload);
+
+        // When
+        DataFrame dataFrame = new DataFrame(buffer);
+
+        // Then
+        byte[] payload = dataFrame.getPayload();
+        assertThat(payload).isEqualTo(new byte[] { (byte) 0xca, (byte) 0xfe, (byte) 0xba, (byte) 0xbe });
+    }
+
+    @Test
+    public void testParseFrame() throws Exception {
+        // Given
+        byte[] rawFrame = new byte[] { 0x00, 0x04, (byte) 0xca, (byte) 0xfe, (byte) 0xba, (byte) 0xbe };
+
+        // When
+        DataFrame dataFrame = new DataFrame().parse(rawFrame);
+
+        // Then
+        byte[] payload = dataFrame.getPayload();
+        assertThat(payload).isEqualTo(new byte[] { (byte) 0xca, (byte) 0xfe, (byte) 0xba, (byte) 0xbe });
+    }
 }

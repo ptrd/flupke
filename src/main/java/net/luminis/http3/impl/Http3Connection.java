@@ -82,7 +82,7 @@ public class Http3Connection {
         applicationProtocol = quicVersion.equals(Version.QUIC_version_1)? "h3": determineH3Version(quicVersion);
         builder.logger(logger);
         quicConnection = builder.build();
-        quicConnection.setServerStreamCallback(stream -> doAsync(() -> registerServerInitiatedStream(stream)));
+        quicConnection.setPeerInitiatedStreamCallback(stream -> doAsync(() -> registerServerInitiatedStream(stream)));
 
         // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.1
         // "clients MUST omit or specify a value of zero for the QUIC transport parameter "initial_max_bidi_streams"."
@@ -137,7 +137,7 @@ public class Http3Connection {
     private void sendRequest(HttpRequest request, QuicStream httpStream) throws IOException {
         OutputStream requestStream = httpStream.getOutputStream();
 
-        HeadersFrame headersFrame = new HeadersFrame();
+        RequestHeadersFrame headersFrame = new RequestHeadersFrame();
         headersFrame.setMethod(request.method());
         headersFrame.setUri(request.uri());
         headersFrame.setHeaders(request.headers());
@@ -209,7 +209,7 @@ public class Http3Connection {
             switch ((int) frameType) {
                 case 0x01:
                     responseState.gotHeader();
-                    HeadersFrame responseHeadersFrame = new HeadersFrame().parsePayload(payload, qpackDecoder);
+                    ResponseHeadersFrame responseHeadersFrame = new ResponseHeadersFrame().parsePayload(payload, qpackDecoder);
                     if (responseInfo == null) {
                         // First frame should contain :status pseudo-header and other headers that the body handler might use to determine what kind of body subscriber to use
                         responseInfo = new HttpResponseInfo(responseHeadersFrame);
@@ -379,12 +379,11 @@ public class Http3Connection {
     }
 
     private static class HttpResponseInfo implements HttpResponse.ResponseInfo {
-        private final Map<String, List<String>> headers;
+        private HttpHeaders headers;
         private final int statusCode;
 
-        public HttpResponseInfo(HeadersFrame headersFrame) throws ProtocolException {
-            headers = new HashMap<>();
-            headers.putAll(headersFrame.headers());
+        public HttpResponseInfo(ResponseHeadersFrame headersFrame) throws ProtocolException {
+            headers = headersFrame.headers();
             statusCode = headersFrame.statusCode();
         }
 
@@ -395,7 +394,7 @@ public class Http3Connection {
 
         @Override
         public HttpHeaders headers() {
-            return HttpHeaders.of(headers, (k, v) -> true);
+            return headers;
         }
 
         @Override
@@ -404,7 +403,10 @@ public class Http3Connection {
         }
 
         public void add(HeadersFrame headersFrame) {
-            headers.putAll(headersFrame.headers());
+            Map<String, List<String>> mergedHeadersMap = new HashMap<>();
+            mergedHeadersMap.putAll(headers.map());
+            mergedHeadersMap.putAll(headersFrame.headers().map());
+            headers = HttpHeaders.of(mergedHeadersMap, (a,b) -> true);
         }
     }
 

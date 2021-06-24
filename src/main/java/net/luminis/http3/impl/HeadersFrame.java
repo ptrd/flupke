@@ -20,13 +20,11 @@ package net.luminis.http3.impl;
 
 import net.luminis.qpack.Decoder;
 import net.luminis.qpack.Encoder;
-import net.luminis.quic.ProtocolError;
 import net.luminis.quic.VariableLengthInteger;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.ProtocolException;
-import java.net.URI;
 import java.net.http.HttpHeaders;
 import java.nio.ByteBuffer;
 import java.util.*;
@@ -34,19 +32,21 @@ import java.util.stream.Collectors;
 
 
 // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-4.2.2
-public class HeadersFrame extends Http3Frame {
+public abstract class HeadersFrame extends Http3Frame {
 
-    private Optional<Integer> statusCode;
-    private Map<String, List<String>> httpHeaders;
-    private List<Map.Entry<String, String>> qpackHeaders;
-
+    protected HttpHeaders httpHeaders;
+    protected Map<String, String> pseudoHeaders;
 
     public HeadersFrame() {
-        httpHeaders = new HashMap<>();
-        qpackHeaders = new ArrayList<>();
+        pseudoHeaders = new HashMap<>();
+        httpHeaders = HttpHeaders.of(Collections.emptyMap(), (a,b) -> true);
     }
 
     public byte[] toBytes(Encoder encoder) {
+        List<Map.Entry<String, String>> qpackHeaders = new ArrayList<>();
+        addPseudoHeaders(qpackHeaders);
+        addHeaders(qpackHeaders);
+
         ByteBuffer compressedHeaders = encoder.compressHeaders(qpackHeaders);
         compressedHeaders.flip();
 
@@ -63,52 +63,29 @@ public class HeadersFrame extends Http3Frame {
     }
 
     public HeadersFrame parsePayload(byte[] headerBlock, Decoder decoder) throws IOException {
-        List<Map.Entry<String, String>> responseHeaders = decoder.decodeStream(new ByteArrayInputStream(headerBlock));
-        responseHeaders.stream()
-                .filter(entry -> !entry.getKey().equals(":status"))
-                .forEach(entry -> httpHeaders.put(entry.getKey(), List.of(entry.getValue())));
-
-        Optional<String> statusCodeValue = responseHeaders.stream()
-                .filter(entry -> entry.getKey().equals(":status"))
-                .map(entry -> entry.getValue())
-                .findFirst();
-        if (statusCodeValue.isPresent()) {
-            try {
-                statusCode = Optional.of(Integer.parseInt(statusCodeValue.get()));
-            } catch (NumberFormatException noNumber) {
-                throw new ProtocolException("Invalid status code " + statusCodeValue.get());
-            }
-        }
-        else {
-            statusCode = Optional.empty();
-        }
-
+        List<Map.Entry<String, String>> headersList = decoder.decodeStream(new ByteArrayInputStream(headerBlock));
+        Map<String, List<String>> headersMap = headersList.stream().collect(Collectors.toMap(Map.Entry::getKey, this::mapValue));
+        // https://tools.ietf.org/html/draft-ietf-quic-http-34#section-4.1.1.1
+        // "Pseudo-header fields are not HTTP fields."
+        extractPseudoHeaders(headersMap);
+        httpHeaders = HttpHeaders.of(headersMap, (key, value) -> ! key.startsWith(":"));
         return this;
     }
 
-    public void setMethod(String method) {
-        qpackHeaders.add(new AbstractMap.SimpleEntry<>(":method", method));
-    }
-
-    public void setUri(URI uri) {
-        String path = uri.getPath();
-        if (path.isBlank()) {
-            path = "/";
-        }
-        qpackHeaders.add(new AbstractMap.SimpleEntry<>(":path", path));
-        // https://tools.ietf.org/html/rfc7540#section-8.1.2.3
-        // "All HTTP/2 requests MUST include exactly one valid value for the
-        //   ":method", ":scheme", and ":path" pseudo-header fields"
-        qpackHeaders.add(new AbstractMap.SimpleEntry<>(":scheme", "https"));
-
-        // https://tools.ietf.org/html/rfc7540#section-8.1.2.3
-        // "Clients that generate HTTP/2 requests directly SHOULD use the ":authority"
-        //  pseudo-header field instead of the Host header field."
-        qpackHeaders.add(new AbstractMap.SimpleEntry<>(":authority", uri.getHost() + ":" + uri.getPort()));
-    }
+    protected abstract void extractPseudoHeaders(Map<String, List<String>> headersMap) throws ProtocolException;
 
     public void setHeaders(HttpHeaders headers) {
-        headers.map().entrySet().forEach(entry -> {
+        this.httpHeaders = headers;
+    }
+
+    public HttpHeaders headers() {
+        return httpHeaders;
+    }
+
+    protected abstract void addPseudoHeaders(List<Map.Entry<String, String>> qpackHeaders);
+
+    private void addHeaders(List<Map.Entry<String, String>> qpackHeaders) {
+        httpHeaders.map().entrySet().forEach(entry -> {
             String value = entry.getValue().stream().collect(Collectors.joining(","));
             // https://tools.ietf.org/html/draft-ietf-quic-http-28#4.1.1
             // "As in HTTP/2, characters in field names MUST be converted to lowercase prior to their encoding."
@@ -116,11 +93,7 @@ public class HeadersFrame extends Http3Frame {
         });
     }
 
-    public int statusCode() {
-        return statusCode.get();
-    }
-
-    public Map<String, List<String>> headers() {
-        return httpHeaders;
+    private List<String> mapValue(Map.Entry<String, String> entry) {
+        return List.of(entry.getValue());
     }
 }
