@@ -60,7 +60,7 @@ public class Http3ConnectionFactory {
     private Http3Connection createConnection(UdpAddress address) {
         Http3Connection http3Connection = null;
         try {
-            http3Connection = new Http3Connection(address.host, address.port);
+            http3Connection = new Http3Connection(address.host, address.port, http3Client.isDisableCertificateCheck());
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

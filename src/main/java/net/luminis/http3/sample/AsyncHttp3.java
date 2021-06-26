@@ -1,6 +1,7 @@
 package net.luminis.http3.sample;
 
 import net.luminis.http3.Http3Client;
+import net.luminis.http3.Http3ClientBuilder;
 
 import java.io.File;
 import java.io.IOException;
@@ -20,13 +21,19 @@ import java.util.concurrent.TimeoutException;
 
 public class AsyncHttp3 {
 
+    public static final String DISABLE_CERT_CHECK_OPTION = "--disableCertificateCheck";
+
     public static void main(String[] args) throws Exception {
-        if (args.length < 2) {
-            System.out.println("Excpected arguments: <download-dir> <url1> [<url2>, ....]");
+        int argStartIndex = 0;
+        if (args.length >= 1 && args[0].equals(DISABLE_CERT_CHECK_OPTION)) {
+            argStartIndex++;
+        }
+        if (argStartIndex + args.length < 2) {
+            System.out.println("Excpected arguments: [" + DISABLE_CERT_CHECK_OPTION + "] <download-dir> <url1> [<url2>, ....]");
             return;
         }
 
-        File downloadDir = new File(args[0]);
+        File downloadDir = new File(args[argStartIndex]);
         if (downloadDir.exists() && !downloadDir.isDirectory()) {
             System.out.println("'" + downloadDir + "' exists, but is not a directory");
             return;
@@ -35,12 +42,15 @@ public class AsyncHttp3 {
             downloadDir.mkdir();
         }
 
-        URI[] downloadUrls = new URI[args.length-1];
-        for (int i = 0; i < args.length-1; i++) {
-            downloadUrls[i] = new URI(args[i+1]);
+        int nrOfDownloads = args.length - 1 - argStartIndex;
+        URI[] downloadUrls = new URI[nrOfDownloads];
+        for (int i = 0; i < nrOfDownloads; i++) {
+            downloadUrls[i] = new URI(args[argStartIndex + 1 + i]);
         }
 
-        HttpClient client = Http3Client.newHttpClient();
+        HttpClient client = new Http3ClientBuilder()
+                .disableCertificateCheck()
+                .build();
         CompletableFuture<HttpResponse<Path>>[] results = new CompletableFuture[downloadUrls.length];
         for (int i = 0; i < downloadUrls.length; i++) {
             HttpRequest request = HttpRequest.newBuilder().uri(downloadUrls[i]).build();

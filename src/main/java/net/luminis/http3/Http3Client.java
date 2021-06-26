@@ -46,13 +46,15 @@ public class Http3Client extends HttpClient {
 
     private final Duration connectTimeout;
     private final Long receiveBufferSize;
+    private final boolean disableCertificateCheck;
     private Http3Connection http3Connection;
     private Http3ConnectionFactory http3ConnectionFactory;
     private final ExecutorService executorService;
 
-    Http3Client(Duration connectTimeout, Long receiveBufferSize) {
+    Http3Client(Duration connectTimeout, Long receiveBufferSize, boolean disableCertificateCheck) {
         this.connectTimeout = connectTimeout;
         this.receiveBufferSize = receiveBufferSize;
+        this.disableCertificateCheck = disableCertificateCheck;
         this.http3ConnectionFactory = new Http3ConnectionFactory(this);
 
         executorService = Executors.newCachedThreadPool(new DaemonThreadFactory("http3"));
@@ -113,6 +115,10 @@ public class Http3Client extends HttpClient {
     @Override
     public Optional<Executor> executor() {
         return Optional.empty();
+    }
+
+    public boolean isDisableCertificateCheck() {
+        return disableCertificateCheck;
     }
 
     @Override

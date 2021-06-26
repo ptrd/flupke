@@ -31,6 +31,7 @@ public class Http3ClientBuilder implements HttpClient.Builder {
 
     private Duration connectTimeout;
     private Long receiveBufferSize;
+    private boolean disableCertificateCheck;
 
     public HttpClient.Builder receiveBufferSize(long bufferSize) {
         receiveBufferSize = bufferSize;
@@ -91,8 +92,13 @@ public class Http3ClientBuilder implements HttpClient.Builder {
         return this;
     }
 
+    public HttpClient.Builder disableCertificateCheck() {
+        disableCertificateCheck = true;
+        return this;
+    }
+
     @Override
     public HttpClient build() {
-        return new Http3Client(connectTimeout, receiveBufferSize);
+        return new Http3Client(connectTimeout, receiveBufferSize, disableCertificateCheck);
     }
 }

@@ -74,10 +74,11 @@ public class Http3ClientTest {
     @Test
     public void testDefaultConnectionTimeout() throws Exception {
         HttpClient httpClient = new Http3ClientBuilder()
+                .disableCertificateCheck()
                 .build();
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://localhost:4433"))
+                .uri(new URI("http://localhost:5896"))
                 .build();
 
         Instant start = Instant.now();

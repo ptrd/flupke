@@ -59,6 +59,10 @@ public class Http3Connection {
     private boolean connected;
 
     public Http3Connection(String host, int port) throws IOException {
+        this(host, port, false);
+    }
+
+    public Http3Connection(String host, int port, boolean disableCertificateCheck) throws IOException {
         this.host = host;
         this.port = port;
 
@@ -79,6 +83,9 @@ public class Http3Connection {
         }
         Version quicVersion = determinePreferredQuicVersion();
         builder.version(quicVersion);
+        if (disableCertificateCheck) {
+            builder.noServerCertificateCheck();
+        }
         applicationProtocol = quicVersion.equals(Version.QUIC_version_1)? "h3": determineH3Version(quicVersion);
         builder.logger(logger);
         quicConnection = builder.build();
