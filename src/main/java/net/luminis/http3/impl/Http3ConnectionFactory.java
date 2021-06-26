@@ -40,7 +40,7 @@ public class Http3ConnectionFactory {
     public Http3Connection getConnection(HttpRequest request) throws IOException {
         int port = request.uri().getPort();
         if (port <= 0) {
-            port = 443;
+            port = Http3Connection.DEFAULT_PORT;
         }
         UdpAddress address = new UdpAddress(request.uri().getHost(), port);
 

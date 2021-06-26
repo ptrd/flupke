@@ -61,7 +61,11 @@ public class RequestHeadersFrame extends HeadersFrame {
             path = "/";
         }
         pseudoHeaders.put(":path", path);
-        pseudoHeaders.put(":authority", uri.getHost() + ":" + uri.getPort());
+        int port = uri.getPort();
+        if (port <= 0) {
+            port = Http3Connection.DEFAULT_PORT;
+        }
+        pseudoHeaders.put(":authority", uri.getHost() + ":" + port);
     }
 
     @Override

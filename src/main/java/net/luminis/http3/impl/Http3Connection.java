@@ -45,6 +45,8 @@ import java.util.concurrent.Flow;
 
 public class Http3Connection {
 
+    public static final int DEFAULT_PORT = 443;
+
     private final QuicClientConnection quicConnection;
     private final String host;
     private final int port;
