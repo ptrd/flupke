@@ -28,9 +28,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.ProtocolException;
-import java.net.URI;
-import java.net.URISyntaxException;
+import java.net.*;
 import java.net.http.HttpClient;
 import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
@@ -48,9 +46,6 @@ public class Http3Connection {
     public static final int DEFAULT_PORT = 443;
 
     private final QuicClientConnection quicConnection;
-    private final String host;
-    private final int port;
-    private final String applicationProtocol;
     private InputStream serverControlStream;
     private InputStream serverEncoderStream;
     private InputStream serverPushStream;
@@ -58,39 +53,19 @@ public class Http3Connection {
     private int serverQpackBlockedStreams;
     private final Decoder qpackDecoder;
     private Statistics connectionStats;
-    private boolean connected;
+    private boolean initialized;
 
     public Http3Connection(String host, int port) throws IOException {
         this(host, port, false);
     }
 
     public Http3Connection(String host, int port, boolean disableCertificateCheck) throws IOException {
-        this.host = host;
-        this.port = port;
+        this(createQuicConnection(host, port, disableCertificateCheck));
+    }
 
-        SysOutLogger logger = new SysOutLogger();
-        logger.logInfo(true);
-        logger.logPackets(true);
-        logger.useRelativeTime(true);
-        logger.logRecovery(true);
-        logger.logCongestionControl(true);
-        logger.logFlowControl(true);
+    public Http3Connection(QuicConnection quicConnection) {
+        this.quicConnection = (QuicClientConnection) quicConnection;
 
-        QuicClientConnectionImpl.Builder builder = QuicClientConnectionImpl.newBuilder();
-        try {
-            builder.uri(new URI("//" + host + ":" + port));
-        } catch (URISyntaxException e) {
-            // Impossible
-            throw new RuntimeException();
-        }
-        Version quicVersion = determinePreferredQuicVersion();
-        builder.version(quicVersion);
-        if (disableCertificateCheck) {
-            builder.noServerCertificateCheck();
-        }
-        applicationProtocol = quicVersion.equals(Version.QUIC_version_1)? "h3": determineH3Version(quicVersion);
-        builder.logger(logger);
-        quicConnection = builder.build();
         quicConnection.setPeerInitiatedStreamCallback(stream -> doAsync(() -> registerServerInitiatedStream(stream)));
 
         // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.1
@@ -108,9 +83,12 @@ public class Http3Connection {
 
     public void connect(int connectTimeoutInMillis) throws IOException {
         synchronized (this) {
-            if (!connected) {
+            if (!quicConnection.isConnected()) {
+                Version quicVersion = determinePreferredQuicVersion();
+                String applicationProtocol = quicVersion.equals(Version.QUIC_version_1) ? "h3" : determineH3Version(quicVersion);
                 quicConnection.connect(connectTimeoutInMillis, applicationProtocol, null, Collections.emptyList());
-
+            }
+            if (!initialized) {
                 // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.2.1
                 // "Each side MUST initiate a single control stream at the beginning of
                 //   the connection and send its SETTINGS frame as the first frame on this
@@ -131,7 +109,7 @@ public class Http3Connection {
                 // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.2.1
                 // " The sender MUST NOT close the control stream."
 
-                connected = true;
+                initialized = true;
             }
         }
     }
@@ -141,6 +119,31 @@ public class Http3Connection {
         sendRequest(request, httpStream);
         Http3Response<T> http3Response = receiveResponse(request, responseBodyHandler, httpStream);
         return http3Response;
+    }
+
+    private static QuicConnection createQuicConnection(String host, int port, boolean disableCertificateCheck) throws SocketException, UnknownHostException {
+        SysOutLogger logger = new SysOutLogger();
+        logger.logInfo(true);
+        logger.logPackets(true);
+        logger.useRelativeTime(true);
+        logger.logRecovery(true);
+        logger.logCongestionControl(true);
+        logger.logFlowControl(true);
+
+        QuicClientConnectionImpl.Builder builder = QuicClientConnectionImpl.newBuilder();
+        try {
+            builder.uri(new URI("//" + host + ":" + port));
+        } catch (URISyntaxException e) {
+            // Impossible
+            throw new RuntimeException();
+        }
+        Version quicVersion = determinePreferredQuicVersion();
+        builder.version(quicVersion);
+        if (disableCertificateCheck) {
+            builder.noServerCertificateCheck();
+        }
+        builder.logger(logger);
+        return builder.build();
     }
 
     private void sendRequest(HttpRequest request, QuicStream httpStream) throws IOException {
@@ -336,7 +339,7 @@ public class Http3Connection {
         new Thread(task).start();
     }
 
-    private Version determinePreferredQuicVersion() {
+    private static Version determinePreferredQuicVersion() {
         String quicVersionEnvVar = System.getenv("QUIC_VERSION");
         if (quicVersionEnvVar != null) {
             quicVersionEnvVar = quicVersionEnvVar.trim().toLowerCase();
@@ -361,7 +364,7 @@ public class Http3Connection {
         return Version.QUIC_version_1;
     }
 
-    private String determineH3Version(Version quicVersion) {
+    private static String determineH3Version(Version quicVersion) {
         if (quicVersion.atLeast(Version.IETF_draft_29)) {
             String versionString = quicVersion.toString();
             return "h3-" + versionString.substring(versionString.length() - 2, versionString.length());

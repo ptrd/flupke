@@ -42,13 +42,13 @@ import java.util.concurrent.Executors;
 
 public class Http3Client extends HttpClient {
 
-    private static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(5);
+    protected static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(5);
 
     private final Duration connectTimeout;
     private final Long receiveBufferSize;
     private final boolean disableCertificateCheck;
     private Http3Connection http3Connection;
-    private Http3ConnectionFactory http3ConnectionFactory;
+    protected Http3ConnectionFactory http3ConnectionFactory;
     private final ExecutorService executorService;
 
     Http3Client(Duration connectTimeout, Long receiveBufferSize, boolean disableCertificateCheck) {

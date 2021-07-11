@@ -329,6 +329,7 @@ public class Http3ConnectionTest {
         Http3Connection http3Connection = new Http3Connection("localhost", 4433);
 
         QuicClientConnection quicConnection = mockQuicConnection(http3Connection);
+        when(quicConnection.isConnected()).thenReturn(false, true);  // Assuming (knowing) that Http3Connection.connect calls QuicConnection.isConnected once
 
         http3Connection.connect(10);
         http3Connection.connect(10);
