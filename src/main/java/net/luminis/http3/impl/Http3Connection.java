@@ -22,7 +22,7 @@ import net.luminis.qpack.Decoder;
 import net.luminis.qpack.Encoder;
 import net.luminis.quic.*;
 import net.luminis.quic.log.SysOutLogger;
-import net.luminis.quic.stream.QuicStream;
+import net.luminis.quic.QuicStream;
 
 import java.io.EOFException;
 import java.io.IOException;

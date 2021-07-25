@@ -25,7 +25,7 @@ import net.luminis.quic.QuicConnection;
 import net.luminis.quic.VariableLengthInteger;
 import net.luminis.quic.server.ApplicationProtocolConnection;
 import net.luminis.quic.server.ServerConnection;
-import net.luminis.quic.stream.QuicStream;
+import net.luminis.quic.QuicStream;
 
 import java.io.*;
 import java.net.InetAddress;

@@ -25,7 +25,7 @@ import net.luminis.qpack.Decoder;
 import net.luminis.qpack.Encoder;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.server.ServerConnection;
-import net.luminis.quic.stream.QuicStream;
+import net.luminis.quic.QuicStream;
 import org.junit.Test;
 
 import java.io.ByteArrayOutputStream;
