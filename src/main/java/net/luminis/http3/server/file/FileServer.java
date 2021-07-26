@@ -25,7 +25,9 @@ import net.luminis.http3.server.HttpServerResponse;
 import net.luminis.quic.run.KwikVersion;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -64,8 +66,9 @@ public class FileServer implements HttpRequestHandler {
             File fileInWwwDir = getFileInWwwDir(path);
             if (fileInWwwDir != null && fileInWwwDir.exists() && fileInWwwDir.isFile() && fileInWwwDir.canRead()) {
                 response.setStatus(200);
-                response.getOutputStream().write(Files.readAllBytes(fileInWwwDir.toPath()));
-                response.getOutputStream().close();
+                try (FileInputStream fileIn = new FileInputStream(fileInWwwDir); OutputStream out = response.getOutputStream()) {
+                    fileIn.transferTo(out);
+                }
             }
             else {
                 response.setStatus(404);
