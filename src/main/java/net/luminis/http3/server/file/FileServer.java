@@ -31,6 +31,8 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 
 /**
@@ -38,6 +40,7 @@ import java.time.format.DateTimeFormatter;
  */
 public class FileServer implements HttpRequestHandler {
 
+    private static final int MAX_DOWNLOAD_SIZE = 100 * 1024 * 1024;
     private final DateTimeFormatter timeFormatter;
     private final File wwwDir;
 
@@ -71,13 +74,42 @@ public class FileServer implements HttpRequestHandler {
                 }
             }
             else {
-                response.setStatus(404);
+                Matcher sizeNameMacher = Pattern.compile("/{0,1}(\\d+)([kmKM])").matcher(path);
+                if (sizeNameMacher.matches()) {
+                    int size = Integer.parseInt(sizeNameMacher.group(1));
+                    String unit = sizeNameMacher.group(2).toLowerCase();
+                    long sizeInBytes = size * (unit.equals("k")? 1024: unit.equals("m")? 1024 * 1024: 1);
+                    if (sizeInBytes > MAX_DOWNLOAD_SIZE) {
+                        response.setStatus(509); // Bandwidth Limit Exceeded
+                        return;
+                    }
+                    transferFileOfSize(sizeInBytes, response.getOutputStream());
+                }
+                else {
+                    response.setStatus(404);
+                }
             }
         }
         else {
             response.setStatus(405);
         }
         log(request, response);
+    }
+
+    private void transferFileOfSize(long size, OutputStream outputStream) throws IOException {
+        long remaining = size;
+        int blockSize = 1000;
+        byte[] dummmyData = new byte[blockSize];
+        try {
+            while (remaining >= blockSize) {
+                outputStream.write(dummmyData);
+                remaining -= blockSize;
+            }
+            outputStream.write(new byte[(int) remaining]);
+        }
+        finally {
+            outputStream.close();
+        }
     }
 
     private void log(HttpServerRequest request, HttpServerResponse response) {
