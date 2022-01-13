@@ -1,17 +1,21 @@
 ![Flupke](https://bitbucket.org/pjtr/flupke/raw/master/docs/Logo%20Flupke%20rectangle.png)
 
-## HTTP3 Java Client
+## HTTP3 Java
 
-Flupke is a Java HTTP3 Client.
+Flupke is a Java HTTP3 Client and also provides a server-plugin that makes Kwik server support HTTP3.
 
 HTTP3 is a new standard that is being developed
 by the Internet Engineering Task Force (IETF) and that is still "work in progress", 
-see https://tools.ietf.org/html/draft-ietf-quic-http-29.
+see https://quicwg.org/base-drafts/draft-ietf-quic-http.html, although it's already widely implemented.
 
 HTTP3 uses QUIC as transport protocol. Flupke builds on [Kwik](http://kwik.tech), a Java implementation of QUIC. 
-Currently, Flupke supports the [HTTP3 draft-29](https://tools.ietf.org/html/draft-ietf-quic-http-29) version 
-and uses [QPACK version draft-16](https://tools.ietf.org/html/draft-ietf-quic-qpack-16) 
-and [QUIC version draft-29](https://tools.ietf.org/html/draft-ietf-quic-transport-29).
+Currently, Flupke supports the latest [HTTP3 draft-34](https://tools.ietf.org/html/draft-ietf-quic-http-34) version,
+which is expected to be become the offical HTTP3 standard in near future.
+The sample holds for QPACK, where the used version is [QPACK version draft-21](https://tools.ietf.org/html/draft-ietf-quic-qpack-21). 
+The QUIC version used is the official QUIC v1 ([RFC 9000](https://www.rfc-editor.org/rfc/rfc9000.html)).
+
+Initially, Flupke was only a HTTP3 Client, but since Juni 2021 it also provides a plugin that, when used with Kwik,
+acts as a (simple) HTTP3 webserver server.
 
 Flupke is created and maintained by Peter Doornbosch. The latest greatest can always be found on [BitBucket](https://bitbucket.org/pjtr/flupke/).
 
@@ -81,6 +85,12 @@ still use on older draft version (draft-29). To let Flupke use a different QUIC 
 For example, on linux based OS:
 
     QUIC_VERSION=29 ./flupke.sh https://www.facebook.com
+
+To generate the Kwik server plugin:
+
+    gradle flupkePlugin
+
+which will create a jar file named 'flupke-plugin.jar' in `build/libs`.
 
 The project requires Java 11.
 
