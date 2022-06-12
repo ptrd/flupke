@@ -2,19 +2,15 @@
 
 ## HTTP3 Java
 
-Flupke is a Java HTTP3 Client and also provides a server-plugin that makes Kwik server support HTTP3.
+Flupke is a Java HTTP3 implementation that runs on top of [Kwik](http://kwik.tech).
 
-HTTP3 is a new standard that is being developed
-by the Internet Engineering Task Force (IETF) and that is still "work in progress", 
-see https://quicwg.org/base-drafts/draft-ietf-quic-http.html, although it's already widely implemented.
+HTTP3 is a new standard that has been developed by the Internet Engineering Task Force (IETF) and is specified by 
+[RFC 9114](https://www.rfc-editor.org/rfc/rfc9114.html).
+HTTP3 uses QUIC as transport protocol and QPACK for header compression. 
+Flupke builds on [Kwik](http://kwik.tech), a Java implementation of QUIC;
+header compression is supported by the [QPACK](https://bitbucket.org/pjtr/qpack/) library.
 
-HTTP3 uses QUIC as transport protocol. Flupke builds on [Kwik](http://kwik.tech), a Java implementation of QUIC. 
-Currently, Flupke supports the latest [HTTP3 draft-34](https://tools.ietf.org/html/draft-ietf-quic-http-34) version,
-which is expected to be become the offical HTTP3 standard in near future.
-The sample holds for QPACK, where the used version is [QPACK version draft-21](https://tools.ietf.org/html/draft-ietf-quic-qpack-21). 
-The QUIC version used is the official QUIC v1 ([RFC 9000](https://www.rfc-editor.org/rfc/rfc9000.html)).
-
-Initially, Flupke was only a HTTP3 Client, but since Juni 2021 it also provides a plugin that, when used with Kwik,
+Initially, Flupke was only a HTTP3 Client, but since June 2021 it also provides a plugin that, when used with Kwik,
 acts as a (simple) HTTP3 webserver server.
 
 Flupke is created and maintained by Peter Doornbosch. The latest greatest can always be found on [BitBucket](https://bitbucket.org/pjtr/flupke/).
