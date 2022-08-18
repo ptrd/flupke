@@ -32,7 +32,9 @@ import java.nio.ByteBuffer;
 import java.util.AbstractMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -295,6 +297,26 @@ public class HeadersFrameTest {
                 .contains(":method")
                 .contains(":scheme")
                 .contains(":path");
+    }
+
+    @Test
+    public void pathAndQueryPartsOfUriShouldBeAddedToPathPseudoHeader() throws Exception {
+        // Given
+        RequestHeadersFrame headersFrame = new RequestHeadersFrame();
+
+        // When
+        headersFrame.setUri(new URI("https://www.example.com/path/element?query=value&key=value"));
+
+        // Then
+        Encoder encoder = mockEncoder();
+        headersFrame.toBytes(encoder);
+        ArgumentCaptor<List<Map.Entry<String, String>>> listCaptor = ArgumentCaptor.forClass(List.class);
+        verify(encoder, times(1)).compressHeaders(listCaptor.capture());
+
+        Optional<String> pathValue = listCaptor.getValue().stream().filter(e -> e.getKey().equals(":path")).map(e -> e.getValue()).findFirst();
+
+        assertThat(pathValue.isPresent()).isTrue();
+        assertThat(pathValue.get()).isEqualTo("/path/element?query=value&key=value");
     }
 
     private Encoder mockEncoder() {

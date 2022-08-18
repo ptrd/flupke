@@ -60,6 +60,9 @@ public class RequestHeadersFrame extends HeadersFrame {
         if (path.isBlank()) {
             path = "/";
         }
+        if (uri.getQuery() != null && !uri.getQuery().isEmpty()) {
+            path = path + "?" + uri.getQuery();
+        }
         pseudoHeaders.put(":path", path);
         int port = uri.getPort();
         if (port <= 0) {
