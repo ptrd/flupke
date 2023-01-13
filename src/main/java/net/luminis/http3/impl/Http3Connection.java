@@ -350,12 +350,7 @@ public class Http3Connection {
                 try {
                     int draftNumber = Integer.parseInt(quicVersionEnvVar.substring("draft-".length(), quicVersionEnvVar.length()));
                     if (draftNumber >= 29 && draftNumber <= 32) {
-                        try {
-                            return Version.parse(0xff000000 + draftNumber);
-                        } catch (UnknownVersionException e) {
-                            // Impossible
-                            throw new RuntimeException();
-                        }
+                        return Version.parse(0xff000000 + draftNumber);
                     }
                 } catch (NumberFormatException e) {}
             }

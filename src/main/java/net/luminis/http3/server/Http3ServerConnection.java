@@ -41,7 +41,7 @@ import java.util.function.Consumer;
 /**
  * Http connection serving GET requests by returning the file from specified www dir.
  */
-public class Http3ServerConnection extends ApplicationProtocolConnection implements Consumer<QuicStream> {
+public class Http3ServerConnection implements ApplicationProtocolConnection {
 
     public static int MAX_HEADER_SIZE = 10 * 1024;
     public static int MAX_DATA_SIZE = 10 * 1024 * 1024;
@@ -62,14 +62,13 @@ public class Http3ServerConnection extends ApplicationProtocolConnection impleme
     public Http3ServerConnection(QuicConnection quicConnection, HttpRequestHandler requestHandler) {
         this.quicConnection = quicConnection;
         this.requestHandler = requestHandler;
-        quicConnection.setPeerInitiatedStreamCallback(this);
         qpackDecoder = new Decoder();
         clientAddress = ((ServerConnection) quicConnection).getInitialClientAddress();
         startControlStream();
     }
 
     @Override
-    public void accept(QuicStream quicStream) {
+    public void acceptPeerInitiatedStream(QuicStream quicStream) {
         Thread thread = new Thread(() -> handle(quicStream));
         thread.setName("http-" + threadCount.getAndIncrement());
         thread.start();
