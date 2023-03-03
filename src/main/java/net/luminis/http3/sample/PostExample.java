@@ -19,6 +19,7 @@
 package net.luminis.http3.sample;
 
 import net.luminis.http3.Http3Client;
+import net.luminis.http3.Http3ClientBuilder;
 
 import java.io.File;
 import java.io.IOException;
@@ -37,6 +38,7 @@ import java.time.Duration;
 public class PostExample {
 
     public static void main(String[] args) throws IOException, InterruptedException {
+        boolean ignoreInvalidServerCertificate = false;
 
         try {
             if (args.length != 2) {
@@ -61,7 +63,13 @@ public class PostExample {
                     .timeout(Duration.ofSeconds(10))
                     .build();
 
-            HttpClient client = Http3Client.newHttpClient();
+            HttpClient client;
+            if (ignoreInvalidServerCertificate) {
+                client = ((Http3ClientBuilder) Http3Client.newBuilder()).disableCertificateCheck().build();
+            }
+            else {
+                client = Http3Client.newHttpClient();
+            }
             HttpResponse<String> httpResponse = client.send(request, HttpResponse.BodyHandlers.ofString());
             System.out.println("Got HTTP response " + httpResponse);
             System.out.println("-   HTTP headers: " + httpResponse.headers());
