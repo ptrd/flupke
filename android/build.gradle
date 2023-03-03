@@ -1,0 +1,71 @@
+plugins {
+    id "java-library"
+    id "idea"
+}
+
+sourceCompatibility = 11
+targetCompatibility = 11
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+
+    // https://mvnrepository.com/artifact/at.favre.lib/hkdf
+    implementation group: "at.favre.lib", name: "hkdf", version: "1.0.1"
+
+    // https://mvnrepository.com/artifact/commons-cli/commons-cli
+    implementation group: "commons-cli", name: "commons-cli", version: "1.4"
+
+    implementation "org.glassfish:javax.json:1.1.4"
+
+    // Use JUnit test framework
+    testImplementation "junit:junit:4.12"
+
+    testImplementation("org.assertj:assertj-core:3.11.1")
+    testImplementation("org.mockito:mockito-core:2.+")
+}
+
+task generateAndroidSources(type: Copy) {
+    from ("../src/main/java") {
+        exclude "**/server/**"
+    }
+    into "${buildDir}/generated/main/java"
+    filter { line -> line.replaceAll("import java.net.http.", "import net.luminis.httpclient.") }
+}
+
+tasks.named("assemble") {
+    dependsOn(generateAndroidSources)
+}
+tasks.named("compileJava") {
+    dependsOn(generateAndroidSources)
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir("../agent15/src")
+            srcDir("../kwik/src/main/java")
+            srcDir("../qpack/src/main/java")
+            srcDir("httpclient/src/main/java")
+            srcDir "${buildDir}/generated/main/java"
+        }
+        resources {
+            srcDir "../qpack/src/main/resources"
+        }
+    }
+
+    test {
+        java {
+            srcDir("httpclient/src/test/java")
+        }
+    }
+}
+
+jar {
+    include "net/luminis/httpclient/**"
+    include "net/luminis/http3/**"
+    exclude "net/luminis/http3/server/**"
+    include "net/luminis/qpack/**"
+}
