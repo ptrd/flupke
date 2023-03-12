@@ -4,6 +4,3 @@
 [submodule "qpack"]
 	path = qpack
 	url = git@bitbucket.org:pjtr/qpack.git
-[submodule "agent15"]
-	path = agent15
-	url = https://bitbucket.org/pjtr/agent15.git
