@@ -51,13 +51,14 @@ public class Sample {
         HttpResponse<String> httpResponse = client.send(request, HttpResponse.BodyHandlers.ofString());
         long end = System.currentTimeMillis();
         System.out.println("Got HTTP response " + httpResponse);
-        System.out.println("-   HTTP headers: " + httpResponse.headers());
+        System.out.println("-   HTTP headers: ");
+        httpResponse.headers().map().forEach((k, v) -> System.out.println("--  " + k + "\t" + v));
         long downloadSpeed = httpResponse.body().length() / (end - start);
         System.out.println("-   HTTP body (" + httpResponse.body().length() + " bytes, " + downloadSpeed + " B/s):");
         if (httpResponse.body().length() > 10 * 1024) {
             String outputFile = "http3-response.txt";
             Files.write(Paths.get(outputFile), httpResponse.body().getBytes());
-            System.out.println("Response written to file: " + outputFile);
+            System.out.println("Response body written to file: " + outputFile);
         }
         else {
             System.out.println(httpResponse.body());

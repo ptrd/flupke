@@ -319,6 +319,20 @@ public class HeadersFrameTest {
         assertThat(pathValue.get()).isEqualTo("/path/element?query=value&key=value");
     }
 
+    @Test
+    public void multiValueHeadersShouldBeParsedCorrectly() throws Exception {
+        Decoder qpackDecoder = mock(Decoder.class);
+        when(qpackDecoder.decodeStream(any(InputStream.class))).thenReturn(List.of(
+                new AbstractMap.SimpleEntry<>(":status", "200"),
+                new AbstractMap.SimpleEntry<>("content-type", "text/plain"),
+                new AbstractMap.SimpleEntry<>("set-cookie", "sample=foo"),
+                new AbstractMap.SimpleEntry<>("set-cookie", "sample=bar")
+        ));
+        HeadersFrame headersFrame = new ResponseHeadersFrame().parsePayload(new byte[0], qpackDecoder);
+
+        assertThat(headersFrame.headers().map()).containsEntry("set-cookie", List.of("sample=foo", "sample=bar"));
+    }
+
     private Encoder mockEncoder() {
         Encoder qpackEncoder = mock(Encoder.class);
         when(qpackEncoder.compressHeaders(anyList())).thenReturn(ByteBuffer.allocate(1));

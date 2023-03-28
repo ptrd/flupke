@@ -64,8 +64,9 @@ public abstract class HeadersFrame extends Http3Frame {
 
     public HeadersFrame parsePayload(byte[] headerBlock, Decoder decoder) throws IOException {
         List<Map.Entry<String, String>> headersList = decoder.decodeStream(new ByteArrayInputStream(headerBlock));
-        Map<String, List<String>> headersMap = headersList.stream().collect(Collectors.toMap(Map.Entry::getKey, this::mapValue));
-        // https://tools.ietf.org/html/draft-ietf-quic-http-34#section-4.1.1.1
+        Map<String, List<String>> headersMap = headersList.stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, this::mapValue, this::mergeValues));
+        // https://www.rfc-editor.org/rfc/rfc9114#name-http-control-data
         // "Pseudo-header fields are not HTTP fields."
         extractPseudoHeaders(headersMap);
         httpHeaders = HttpHeaders.of(headersMap, (key, value) -> ! key.startsWith(":"));
@@ -95,5 +96,12 @@ public abstract class HeadersFrame extends Http3Frame {
 
     private List<String> mapValue(Map.Entry<String, String> entry) {
         return List.of(entry.getValue());
+    }
+
+    private List<String> mergeValues(List<String> value1, List<String> value2) {
+        List<String> result = new ArrayList<>();
+        result.addAll(value1);
+        result.addAll(value2);
+        return result;
     }
 }
