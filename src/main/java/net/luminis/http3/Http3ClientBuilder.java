@@ -18,6 +18,8 @@
  */
 package net.luminis.http3;
 
+import net.luminis.quic.log.Logger;
+
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
 import java.net.Authenticator;
@@ -32,6 +34,7 @@ public class Http3ClientBuilder implements HttpClient.Builder {
     private Duration connectTimeout;
     private Long receiveBufferSize;
     private boolean disableCertificateCheck;
+    private Logger logger;
 
     public HttpClient.Builder receiveBufferSize(long bufferSize) {
         receiveBufferSize = bufferSize;
@@ -97,8 +100,13 @@ public class Http3ClientBuilder implements HttpClient.Builder {
         return this;
     }
 
+    public HttpClient.Builder logger(Logger logger) {
+        this.logger = logger;
+        return this;
+    }
+
     @Override
     public HttpClient build() {
-        return new Http3Client(connectTimeout, receiveBufferSize, disableCertificateCheck);
+        return new Http3Client(connectTimeout, receiveBufferSize, disableCertificateCheck, logger);
     }
 }

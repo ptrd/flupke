@@ -22,6 +22,7 @@ import net.luminis.http3.impl.Http3Connection;
 import net.luminis.http3.impl.Http3ConnectionFactory;
 import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.Statistics;
+import net.luminis.quic.log.Logger;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
@@ -47,14 +48,16 @@ public class Http3Client extends HttpClient {
     private final Duration connectTimeout;
     private final Long receiveBufferSize;
     private final boolean disableCertificateCheck;
+    private final Logger logger;
     private Http3Connection http3Connection;
     protected Http3ConnectionFactory http3ConnectionFactory;
     private final ExecutorService executorService;
 
-    Http3Client(Duration connectTimeout, Long receiveBufferSize, boolean disableCertificateCheck) {
+    Http3Client(Duration connectTimeout, Long receiveBufferSize, boolean disableCertificateCheck, Logger logger) {
         this.connectTimeout = connectTimeout;
         this.receiveBufferSize = receiveBufferSize;
         this.disableCertificateCheck = disableCertificateCheck;
+        this.logger = logger;
         this.http3ConnectionFactory = new Http3ConnectionFactory(this);
 
         executorService = Executors.newCachedThreadPool(new DaemonThreadFactory("http3"));
@@ -64,7 +67,7 @@ public class Http3Client extends HttpClient {
         return new Http3ClientBuilder().build();
     }
 
-    public static Builder newBuilder() {
+    public static Http3ClientBuilder newBuilder() {
         return new Http3ClientBuilder();
     }
 
@@ -119,6 +122,10 @@ public class Http3Client extends HttpClient {
 
     public boolean isDisableCertificateCheck() {
         return disableCertificateCheck;
+    }
+
+    public Logger getLogger() {
+        return logger;
     }
 
     @Override

@@ -21,6 +21,8 @@ package net.luminis.http3.impl;
 import net.luminis.qpack.Decoder;
 import net.luminis.qpack.Encoder;
 import net.luminis.quic.*;
+import net.luminis.quic.log.Logger;
+import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.QuicStream;
 
@@ -56,11 +58,11 @@ public class Http3Connection {
     private boolean initialized;
 
     public Http3Connection(String host, int port) throws IOException {
-        this(host, port, false);
+        this(host, port, false, null);
     }
 
-    public Http3Connection(String host, int port, boolean disableCertificateCheck) throws IOException {
-        this(createQuicConnection(host, port, disableCertificateCheck));
+    public Http3Connection(String host, int port, boolean disableCertificateCheck, Logger logger) throws IOException {
+        this(createQuicConnection(host, port, disableCertificateCheck, logger));
     }
 
     public Http3Connection(QuicConnection quicConnection) {
@@ -121,15 +123,7 @@ public class Http3Connection {
         return http3Response;
     }
 
-    private static QuicConnection createQuicConnection(String host, int port, boolean disableCertificateCheck) throws SocketException, UnknownHostException {
-        SysOutLogger logger = new SysOutLogger();
-        logger.logInfo(true);
-        logger.logPackets(true);
-        logger.useRelativeTime(true);
-        logger.logRecovery(true);
-        logger.logCongestionControl(true);
-        logger.logFlowControl(true);
-
+    private static QuicConnection createQuicConnection(String host, int port, boolean disableCertificateCheck, Logger logger) throws SocketException, UnknownHostException {
         QuicClientConnectionImpl.Builder builder = QuicClientConnectionImpl.newBuilder();
         try {
             builder.uri(new URI("//" + host + ":" + port));
@@ -142,7 +136,7 @@ public class Http3Connection {
         if (disableCertificateCheck) {
             builder.noServerCertificateCheck();
         }
-        builder.logger(logger);
+        builder.logger(logger != null? logger: new NullLogger());
         return builder.build();
     }
 

@@ -19,6 +19,9 @@
 package net.luminis.http3.sample;
 
 import net.luminis.http3.Http3Client;
+import net.luminis.http3.Http3ClientBuilder;
+import net.luminis.quic.log.Logger;
+import net.luminis.quic.log.SysOutLogger;
 
 import java.io.IOException;
 import java.net.URI;
@@ -46,7 +49,19 @@ public class Sample {
                 .timeout(Duration.ofSeconds(10))
                 .build();
 
-        HttpClient client = Http3Client.newHttpClient();
+        // Easiest way to create a client with default configuration
+        HttpClient defaultClient = Http3Client.newHttpClient();
+
+        // For non-default configuration, use the builder
+        Logger stdoutLogger = new SysOutLogger();
+        stdoutLogger.useRelativeTime(true);
+        stdoutLogger.logPackets(true);
+
+        HttpClient client = ((Http3ClientBuilder) Http3Client.newBuilder())
+                .logger(stdoutLogger)
+                .connectTimeout(Duration.ofSeconds(3))
+                .build();
+
         long start = System.currentTimeMillis();
         HttpResponse<String> httpResponse = client.send(request, HttpResponse.BodyHandlers.ofString());
         long end = System.currentTimeMillis();

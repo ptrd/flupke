@@ -58,9 +58,9 @@ public class Http3ConnectionFactory {
     }
 
     private Http3Connection createConnection(UdpAddress address) {
-        Http3Connection http3Connection = null;
+        Http3Connection http3Connection;
         try {
-            http3Connection = new Http3Connection(address.host, address.port, http3Client.isDisableCertificateCheck());
+            http3Connection = new Http3Connection(address.host, address.port, http3Client.isDisableCertificateCheck(), http3Client.getLogger());
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
