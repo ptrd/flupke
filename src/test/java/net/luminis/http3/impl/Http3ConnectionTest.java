@@ -285,23 +285,16 @@ public class Http3ConnectionTest {
     }
 
     @Test
-    public void testReadFrameTypeFromStream() throws Exception {
-        Http3Connection http3Connection = new Http3Connection("localhost", 4433);
-        long frameType = http3Connection.readFrameType(new ByteArrayInputStream(new byte[] { 0x01, 0x02, 0x03 }));
-        assertThat(frameType).isEqualTo(1);
-    }
-
-    @Test
-    public void readFrameTypeFromClosedStreamShouldReturnNegativeValue() throws Exception {
+    public void readFrameFromClosedStreamShouldReturnNull() throws Exception {
         Http3Connection http3Connection = new Http3Connection("localhost", 4433);
         InputStream inputStream = new ByteArrayInputStream(new byte[]{ 0x01, 0x02, 0x03 });
         inputStream.read(new byte[3]);
-        long frameType = http3Connection.readFrameType(inputStream);
-        assertThat(frameType).isEqualTo(-1);
+        Http3Frame frame = http3Connection.readFrame(inputStream);
+        assertThat(frame).isNull();
     }
 
     @Test
-    public void postRequestEndodesRequestBodyInDataFrame() throws Exception {
+    public void postRequestEncodesRequestBodyInDataFrame() throws Exception {
         Http3Connection http3Connection = new Http3Connection("localhost", 4433);
 
         byte[] responseBytes = new byte[]{

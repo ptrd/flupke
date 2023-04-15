@@ -200,51 +200,36 @@ public class Http3Connection {
         HttpResponseInfo responseInfo = null;
         ResponseState responseState = new ResponseState(httpStream);
 
-        long frameType;
-        while ((frameType = readFrameType(responseStream)) >= 0) {
-            int payloadLength = VariableLengthInteger.parse(responseStream);
-            byte[] payload = new byte[payloadLength];
-            readExact(responseStream, payload);
+        Http3Frame frame;
+        while ((frame = readFrame(responseStream)) != null) {
+            if (frame instanceof ResponseHeadersFrame) {
+                responseState.gotHeader();
+                if (responseInfo == null) {
+                    // First frame should contain :status pseudo-header and other headers that the body handler might use to determine what kind of body subscriber to use
+                    responseInfo = new HttpResponseInfo((ResponseHeadersFrame) frame);
 
-            if (frameType > 0x0e) {
-                // https://tools.ietf.org/html/draft-ietf-quic-http-24#section-9
-                // "Implementations MUST discard frames and unidirectional streams that have unknown or unsupported types."
-                continue;
+                    bodySubscriber = responseBodyHandler.apply(responseInfo);
+                    bodySubscriber.onSubscribe(new Flow.Subscription() {
+                        @Override
+                        public void request(long n) {
+                            // Always called with max long, so can be safely ignored.
+                        }
+
+                        @Override
+                        public void cancel() {
+                            System.out.println("BodySubscriber has cancelled the subscription.");
+                        }
+                    });
+                }
+                else {
+                    // Must be trailing header
+                    responseInfo.add((HeadersFrame) frame);
+                }
             }
-
-            switch ((int) frameType) {
-                case 0x01:
-                    responseState.gotHeader();
-                    ResponseHeadersFrame responseHeadersFrame = new ResponseHeadersFrame().parsePayload(payload, qpackDecoder);
-                    if (responseInfo == null) {
-                        // First frame should contain :status pseudo-header and other headers that the body handler might use to determine what kind of body subscriber to use
-                        responseInfo = new HttpResponseInfo(responseHeadersFrame);
-                        bodySubscriber = responseBodyHandler.apply(responseInfo);
-                        bodySubscriber.onSubscribe(new Flow.Subscription() {
-                            @Override
-                            public void request(long n) {
-                                // Always called with max long, so can be safely ignored.
-                            }
-
-                            @Override
-                            public void cancel() {
-                                System.out.println("BodySubscriber has cancelled the subscription.");
-                            }
-                        });
-                    }
-                    else {
-                        // Must be trailing header
-                        responseInfo.add(responseHeadersFrame);
-                    }
-                    break;
-                case 0x00:
-                    responseState.gotData();
-                    DataFrame dataFrame = new DataFrame().parsePayload(payload);
-                    bodySubscriber.onNext(List.of(ByteBuffer.wrap(payload)));
-                    break;
-                default:
-                    // Not necessarily a protocol error, could be a frame we not yet support
-                    throw new RuntimeException("Unexpected frame type " + frameType);
+            else if (frame instanceof DataFrame) {
+                responseState.gotData();
+                ByteBuffer data = ByteBuffer.wrap(((DataFrame) frame).getPayload());
+                bodySubscriber.onNext(List.of(data));
             }
         }
         responseState.done();
@@ -259,13 +244,38 @@ public class Http3Connection {
                 bodySubscriber.getBody());
     }
 
-    long readFrameType(InputStream inputStream) throws IOException {
+    Http3Frame readFrame(InputStream responseStream) throws IOException {
+        long frameType;
         try {
-            return VariableLengthInteger.parseLong(inputStream);
+            frameType = VariableLengthInteger.parseLong(responseStream);
         }
         catch (EOFException endOfStream) {
-            return -1;
+            return null;
         }
+
+        int payloadLength = VariableLengthInteger.parse(responseStream);
+        byte[] payload = new byte[payloadLength];
+        readExact(responseStream, payload);
+
+        if (frameType > 0x0e) {
+            // https://www.rfc-editor.org/rfc/rfc9114.html#name-extensions-to-http-3
+            // "Implementations MUST discard data or abort reading on unidirectional streams that have unknown or unsupported types."
+            return new UnknownFrame();
+        }
+
+        Http3Frame frame;
+        switch ((int) frameType) {
+            case 0x01:
+                frame = new ResponseHeadersFrame().parsePayload(payload, qpackDecoder);
+                break;
+            case 0x00:
+                frame = new DataFrame().parsePayload(payload);
+                break;
+            default:
+                // Not necessarily a protocol error, could be a frame (from RFC-9114) Flupke not yet supports
+                throw new RuntimeException("Unexpected frame type " + frameType);
+        }
+        return frame;
     }
 
     void registerServerInitiatedStream(QuicStream stream) {
