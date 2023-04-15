@@ -36,39 +36,39 @@ public class Http3ClientBuilder implements HttpClient.Builder {
     private boolean disableCertificateCheck;
     private Logger logger;
 
-    public HttpClient.Builder receiveBufferSize(long bufferSize) {
+    public Http3ClientBuilder receiveBufferSize(long bufferSize) {
         receiveBufferSize = bufferSize;
         return this;
     }
 
     @Override
-    public HttpClient.Builder cookieHandler(CookieHandler cookieHandler) {
+    public Http3ClientBuilder cookieHandler(CookieHandler cookieHandler) {
         return this;
     }
 
     @Override
-    public HttpClient.Builder connectTimeout(Duration duration) {
+    public Http3ClientBuilder connectTimeout(Duration duration) {
         connectTimeout = duration;
         return this;
     }
 
     @Override
-    public HttpClient.Builder sslContext(SSLContext sslContext) {
+    public Http3ClientBuilder sslContext(SSLContext sslContext) {
         return this;
     }
 
     @Override
-    public HttpClient.Builder sslParameters(SSLParameters sslParameters) {
+    public Http3ClientBuilder sslParameters(SSLParameters sslParameters) {
         return this;
     }
 
     @Override
-    public HttpClient.Builder executor(Executor executor) {
+    public Http3ClientBuilder executor(Executor executor) {
         return this;
     }
 
     @Override
-    public HttpClient.Builder followRedirects(HttpClient.Redirect policy) {
+    public Http3ClientBuilder followRedirects(HttpClient.Redirect policy) {
         if (policy != HttpClient.Redirect.NEVER) {
             throw new IllegalArgumentException("Follow redirects not supported");
         }
@@ -76,31 +76,31 @@ public class Http3ClientBuilder implements HttpClient.Builder {
     }
 
     @Override
-    public HttpClient.Builder version(HttpClient.Version version) {
+    public Http3ClientBuilder version(HttpClient.Version version) {
         return this;
     }
 
     @Override
-    public HttpClient.Builder priority(int priority) {
+    public Http3ClientBuilder priority(int priority) {
         return this;
     }
 
     @Override
-    public HttpClient.Builder proxy(ProxySelector proxySelector) {
+    public Http3ClientBuilder proxy(ProxySelector proxySelector) {
         return this;
     }
 
     @Override
-    public HttpClient.Builder authenticator(Authenticator authenticator) {
+    public Http3ClientBuilder authenticator(Authenticator authenticator) {
         return this;
     }
 
-    public HttpClient.Builder disableCertificateCheck() {
+    public Http3ClientBuilder disableCertificateCheck() {
         disableCertificateCheck = true;
         return this;
     }
 
-    public HttpClient.Builder logger(Logger logger) {
+    public Http3ClientBuilder logger(Logger logger) {
         this.logger = logger;
         return this;
     }
