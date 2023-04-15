@@ -1,6 +1,6 @@
 [submodule "kwik"]
 	path = kwik
-	url = git@bitbucket.org:pjtr/kwik.git
+	url = ../kwik.git
 [submodule "qpack"]
 	path = qpack
-	url = git@bitbucket.org:pjtr/qpack.git
+	url = ../qpack.git
