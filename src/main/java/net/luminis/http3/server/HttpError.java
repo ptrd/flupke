@@ -24,7 +24,7 @@ public class HttpError extends Exception {
     private int statusCode;
 
     public HttpError(String message, int statusCode) {
-        super(message);
+        super(message + " (" + statusCode + ")");
         this.statusCode = statusCode;
     }
 

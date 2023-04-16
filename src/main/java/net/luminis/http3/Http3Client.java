@@ -20,6 +20,7 @@ package net.luminis.http3;
 
 import net.luminis.http3.impl.Http3Connection;
 import net.luminis.http3.impl.Http3ConnectionFactory;
+import net.luminis.http3.server.HttpError;
 import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.Statistics;
 import net.luminis.quic.log.Logger;
@@ -155,6 +156,24 @@ public class Http3Client extends HttpClient {
     @Override
     public <T> CompletableFuture<HttpResponse<T>> sendAsync(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler, HttpResponse.PushPromiseHandler<T> pushPromiseHandler) {
         throw new UnsupportedOperationException("server push is not (yet) supported");
+    }
+
+    /**
+     * Sends a CONNECT request (that creates a tunnel to a remote host) and returns a HttpStream object that can be used
+     * to send/receive data to/from remote host.
+     *
+     * https://www.rfc-editor.org/rfc/rfc9114.html#name-the-connect-method:
+     * "In HTTP/2 and HTTP/3, the CONNECT method is used to establish a tunnel over a single stream."
+     *
+     * @param request
+     * @return
+     * @throws IOException
+     * @throws HttpError
+     */
+    public Http3Connection.HttpStream sendConnect(HttpRequest request) throws IOException, HttpError {
+        http3Connection = http3ConnectionFactory.getConnection(request);
+        http3Connection.connect((int) connectTimeout().orElse(DEFAULT_CONNECT_TIMEOUT).toMillis());
+        return http3Connection.sendConnect(request);
     }
 
     public Statistics getConnectionStatistics() {

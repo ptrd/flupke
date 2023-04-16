@@ -71,6 +71,15 @@ public class RequestHeadersFrame extends HeadersFrame {
         pseudoHeaders.put(":authority", uri.getHost() + ":" + port);
     }
 
+    public void setPseudoHeader(String header, String value) {
+        if (header.startsWith(":")) {
+            pseudoHeaders.put(header, value);
+        }
+        else {
+            throw new IllegalArgumentException("must be pseudoheader");
+        }
+    }
+
     @Override
     public RequestHeadersFrame parsePayload(byte[] headerBlock, Decoder decoder) throws IOException {
         return (RequestHeadersFrame) super.parsePayload(headerBlock, decoder);

@@ -22,11 +22,10 @@ import net.luminis.http3.server.HttpError;
 import net.luminis.qpack.Decoder;
 import net.luminis.qpack.Encoder;
 import net.luminis.quic.QuicClientConnection;
-import net.luminis.quic.QuicConnection;
 import net.luminis.quic.TransportParameters;
 import net.luminis.quic.QuicStream;
+import net.luminis.tls.util.ByteUtils;
 import org.junit.Test;
-import org.mockito.AdditionalMatchers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.internal.util.reflection.FieldSetter;
 import org.mockito.invocation.InvocationOnMock;
@@ -38,8 +37,8 @@ import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
-import java.util.AbstractMap;
-import java.util.Collections;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -334,6 +333,159 @@ public class Http3ConnectionTest {
         http3Connection.connect(10);
 
         verify(quicConnection, times(1)).connect(anyInt(), anyString(), nullable(TransportParameters.class), anyList());
+    }
+
+    @Test
+    public void sendConnectShouldSendConnect() throws Exception {
+        // Given
+        Http3Connection http3Connection = new Http3Connection("localhost", 4433);
+        mockQuicConnectionWithStreams(http3Connection, new byte[] { 0x01, 0x00});
+        Encoder mockedQPackEncoder = mock(Encoder.class);
+        when(mockedQPackEncoder.compressHeaders(anyList())).thenReturn(ByteBuffer.allocate(0));
+        FieldSetter.setField(http3Connection, Http3Connection.class.getDeclaredField("qpackEncoder"), mockedQPackEncoder);
+
+        // When
+        HttpRequest connectRequest = HttpRequest.newBuilder()
+                .uri(new URI("http://proxy.net:443"))
+                .build();
+        http3Connection.sendConnect(connectRequest);
+
+        // Then
+        ArgumentCaptor<List<Map.Entry<String, String>>> headersCaptor = ArgumentCaptor.forClass(List.class);
+        verify(mockedQPackEncoder).compressHeaders(headersCaptor.capture());
+        Map<String, String> headers = headersCaptor.getValue().stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        assertThat(headers).containsAllEntriesOf(Map.of(":method", "CONNECT", ":authority", "proxy.net:443"));
+    }
+
+    @Test
+    public void sendConnectShouldHandleEmptyResponse() throws Exception {
+        // Given
+        Http3Connection http3Connection = new Http3Connection("localhost", 4433);
+        mockQuicConnectionWithStreams(http3Connection, new byte[0]);
+
+        // When
+        HttpRequest connectRequest = HttpRequest.newBuilder()
+                .uri(new URI("http://proxy.net:443"))
+                .build();
+
+        // Then
+        assertThatThrownBy(() -> http3Connection.sendConnect(connectRequest))
+                .isInstanceOf(ProtocolException.class);
+    }
+
+    @Test
+    public void sendConnectShouldThrowWhenStatusNot2xx() throws Exception {
+        // Given
+        Http3Connection http3Connection = new Http3Connection("localhost", 4433);
+        mockQuicConnectionWithStreams(http3Connection, new byte[] { 0x01, 0x00 }, Map.of(":status", "404"));
+
+        // When
+        HttpRequest connectRequest = HttpRequest.newBuilder()
+                .uri(new URI("http://proxy.net:443"))
+                .build();
+
+        // Then
+        assertThatThrownBy(() -> http3Connection.sendConnect(connectRequest))
+                .isInstanceOf(HttpError.class)
+                .hasMessageContaining("404");
+    }
+
+    @Test
+    public void httpStreamShouldCopyAllBytesIntoDataFrame() throws Exception {
+        // Given
+        Http3Connection http3Connection = new Http3Connection("localhost", 4433);
+        QuicStream quicStream = mockQuicConnectionWithStreams(http3Connection, new byte[]{ 0x01, 0x00 });
+
+        HttpRequest connectRequest = HttpRequest.newBuilder()
+                .uri(new URI("http://proxy.net:443"))
+                .build();
+        Http3Connection.HttpStream httpStream = http3Connection.sendConnect(connectRequest);
+        clearInvocations(quicStream.getOutputStream());
+
+        // When
+        httpStream.getOutputStream().write("hello world".getBytes(StandardCharsets.UTF_8));
+
+        // Then
+        ArgumentCaptor<byte[]> bytesCaptor = ArgumentCaptor.forClass(byte[].class);
+        verify(quicStream.getOutputStream()).write(bytesCaptor.capture());
+        byte[] sentData = bytesCaptor.getValue();
+        assertThat(sentData[0]).isEqualTo((byte) 0x00); // DataFrame Type
+        assertThat(sentData[1]).isEqualTo((byte) 11);   // Length
+        assertThat(new String(Arrays.copyOfRange(sentData, 2, 13))).isEqualTo("hello world");
+    }
+
+    @Test
+    public void httpStreamShouldCopyBytesFromDataFrame() throws Exception {
+        // Given
+        Http3Connection http3Connection = new Http3Connection("localhost", 4433);
+        //                                       Header Frame  Data Frame       Data Frame  Data Frame
+        byte[] inputData = ByteUtils.hexToBytes("01 00         00 05 68656c6c6f 00 01 20    00 05 776f726c64");
+        mockQuicConnectionWithStreams(http3Connection, inputData);
+
+        HttpRequest connectRequest = HttpRequest.newBuilder()
+                .uri(new URI("http://proxy.net:443"))
+                .build();
+        Http3Connection.HttpStream httpStream = http3Connection.sendConnect(connectRequest);
+
+        // When
+        byte[] buffer = new byte[100];
+        ByteBuffer data = ByteBuffer.allocate(100);
+        int c;
+        while ((c = httpStream.getInputStream().read(buffer)) > 0) {
+            data.put(buffer, 0, c);
+        }
+
+        assertThat(data.position()).isEqualTo(11);
+        assertThat(new String(Arrays.copyOfRange(data.array(), 0, 11))).isEqualTo("hello world");
+    }
+
+    @Test
+    public void httpStreamShouldCopyByteArrayRangeFromDataFrame() throws Exception {
+        // Given
+        Http3Connection http3Connection = new Http3Connection("localhost", 4433);
+        //                                       Header Frame  Data Frame       Data Frame  Data Frame
+        byte[] inputData = ByteUtils.hexToBytes("01 00         00 05 68656c6c6f 00 01 20    00 05 776f726c64");
+        mockQuicConnectionWithStreams(http3Connection, inputData);
+
+        HttpRequest connectRequest = HttpRequest.newBuilder()
+                .uri(new URI("http://proxy.net:443"))
+                .build();
+        Http3Connection.HttpStream httpStream = http3Connection.sendConnect(connectRequest);
+
+        // When
+        byte[] data = new byte[100];
+        int read = 0;
+        int total = 0;
+        while ((read = httpStream.getInputStream().read(data, total, data.length)) > 0) {
+            total += read;
+        }
+
+        assertThat(total).isEqualTo(11);
+        assertThat(new String(Arrays.copyOfRange(data, 0, 11))).isEqualTo("hello world");
+    }
+
+    @Test
+    public void httpStreamShouldReadSingleBytesFromDataFrame() throws Exception {
+        // Given
+        Http3Connection http3Connection = new Http3Connection("localhost", 4433);
+        //                                       Header Frame  Data Frame       Data Frame  Data Frame
+        byte[] inputData = ByteUtils.hexToBytes("01 00         00 05 68656c6c6f 00 01 20    00 05 776f726c64");
+        mockQuicConnectionWithStreams(http3Connection, inputData);
+
+        HttpRequest connectRequest = HttpRequest.newBuilder()
+                .uri(new URI("http://proxy.net:443"))
+                .build();
+        Http3Connection.HttpStream httpStream = http3Connection.sendConnect(connectRequest);
+
+        // When
+        ByteBuffer data = ByteBuffer.allocate(100);
+        int b;
+        while ((b = httpStream.getInputStream().read()) != -1) {
+            data.put((byte) b);
+        }
+
+        assertThat(data.position()).isEqualTo(11);
+        assertThat(new String(Arrays.copyOfRange(data.array(), 0, 11))).isEqualTo("hello world");
     }
 
     /**

@@ -18,12 +18,12 @@
  */
 package net.luminis.http3.impl;
 
+import net.luminis.http3.server.HttpError;
 import net.luminis.qpack.Decoder;
 import net.luminis.qpack.Encoder;
 import net.luminis.quic.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
-import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.QuicStream;
 
 import java.io.EOFException;
@@ -56,6 +56,7 @@ public class Http3Connection {
     private final Decoder qpackDecoder;
     private Statistics connectionStats;
     private boolean initialized;
+    private Encoder qpackEncoder;
 
     public Http3Connection(String host, int port) throws IOException {
         this(host, port, false, null);
@@ -81,6 +82,7 @@ public class Http3Connection {
         quicConnection.setMaxAllowedUnidirectionalStreams(3);
 
         qpackDecoder = new Decoder();
+        qpackEncoder = new Encoder();
     }
 
     public void connect(int connectTimeoutInMillis) throws IOException {
@@ -389,6 +391,46 @@ public class Http3Connection {
         return connectionStats;
     }
 
+    /**
+     * Sends a CONNECT method request.
+     * https://www.rfc-editor.org/rfc/rfc9114.html#name-the-connect-method:
+     * "In HTTP/2 and HTTP/3, the CONNECT method is used to establish a tunnel over a single stream."
+     *
+     * @param request the request object; note that the HTTP method specified in this request is ignored
+     * @return
+     */
+    public HttpStream sendConnect(HttpRequest request) throws IOException, HttpError {
+        QuicStream httpStream = quicConnection.createStream(true);
+
+        // https://www.rfc-editor.org/rfc/rfc9114.html#name-the-connect-method
+        // "- The :method pseudo-header field is set to "CONNECT"
+        //  - The :scheme and :path pseudo-header fields are omitted
+        //  - The :authority pseudo-header field contains the host and port to connect to"
+        RequestHeadersFrame headersFrame = new RequestHeadersFrame();
+        headersFrame.setMethod("CONNECT");
+        headersFrame.setPseudoHeader(":authority", request.uri().getHost() + ":" + request.uri().getPort());
+        httpStream.getOutputStream().write(headersFrame.toBytes(qpackEncoder));
+
+        Http3Frame responseFrame = readFrame(httpStream.getInputStream());
+        if (responseFrame instanceof ResponseHeadersFrame) {
+            int statusCode = ((ResponseHeadersFrame) responseFrame).statusCode();
+            if (statusCode >= 200 && statusCode < 300) {
+                return new HttpStream(httpStream);
+            }
+            else {
+                throw new HttpError("CONNECT request failed", statusCode);
+            }
+        }
+        else {
+            if (responseFrame != null) {
+                throw new ProtocolException("Expected headers frame, got " + responseFrame.getClass().getSimpleName());
+            }
+            else {
+                throw new ProtocolException("Got empty response from server");
+            }
+        }
+    }
+
     private static class HttpResponseInfo implements HttpResponse.ResponseInfo {
         private HttpHeaders headers;
         private final int statusCode;
@@ -419,6 +461,128 @@ public class Http3Connection {
             mergedHeadersMap.putAll(headersFrame.headers().map());
             headers = HttpHeaders.of(mergedHeadersMap, (a,b) -> true);
         }
+    }
+
+    public class HttpStream {
+
+        private final QuicStream quicStream;
+        private final OutputStream outputStream;
+        private final InputStream inputStream;
+
+        public HttpStream(QuicStream quicStream) {
+            this.quicStream = quicStream;
+
+            outputStream = new OutputStream() {
+                @Override
+                public void write(int b) throws IOException {
+                    quicStream.getOutputStream().write(new DataFrame(new byte[] { (byte) b }).toBytes());
+                }
+
+                @Override
+                public void write(byte[] b) throws IOException {
+                    quicStream.getOutputStream().write(new DataFrame(b).toBytes());
+                }
+
+                @Override
+                public void write(byte[] b, int off, int len) throws IOException {
+                    ByteBuffer data = ByteBuffer.wrap(b);
+                    data.position(off);
+                    data.limit(len);
+                    quicStream.getOutputStream().write(new DataFrame(data).toBytes());
+                }
+
+                @Override
+                public void flush() throws IOException {
+                    quicStream.getOutputStream().flush();
+                }
+
+                @Override
+                public void close() throws IOException {
+                    quicStream.getOutputStream().close();
+                }
+            };
+
+            inputStream = new InputStream() {
+
+                private ByteBuffer dataBuffer;
+
+                @Override
+                public int available() throws IOException {
+                    if (checkData()) {
+                        return dataBuffer.remaining();
+                    }
+                    else {
+                        return 0;
+                    }
+                }
+
+                @Override
+                public int read() throws IOException {
+                    if (checkData()) {
+                        return dataBuffer.get();
+                    }
+                    else {
+                        return -1;
+                    }
+                }
+
+                @Override
+                public int read(byte[] b) throws IOException {
+                   if (checkData()) {
+                        int count = Integer.min(dataBuffer.remaining(), b.length);
+                        dataBuffer.get(b, 0, count);
+                        return count;
+                    }
+                    else {
+                        return -1;
+                    }
+                }
+
+                @Override
+                public int read(byte[] b, int off, int len) throws IOException {
+                   if (checkData()) {
+                        int count = Integer.min(dataBuffer.remaining(), len - off);
+                        dataBuffer.get(b, off, count);
+                        return count;
+                    }
+                    else {
+                        return -1;
+                    }
+
+                }
+
+                private boolean checkData() throws IOException {
+                    if (dataBuffer == null || dataBuffer.position() == dataBuffer.limit()) {
+                        return readData();
+                    }
+                    else {
+                        return dataBuffer.position() < dataBuffer.limit();
+                    }
+                }
+
+                private boolean readData() throws IOException {
+                    Http3Frame frame = readFrame(quicStream.getInputStream());
+                    if (frame instanceof DataFrame) {
+                        dataBuffer = ByteBuffer.wrap(((DataFrame) frame).getPayload());
+                        return true;
+                    }
+                    else if (frame == null) {
+                        // End of stream
+                        return false;
+                    }
+                    return false;
+                }
+            };
+        }
+
+        public OutputStream getOutputStream() {
+            return outputStream;
+        }
+
+        public InputStream getInputStream() {
+            return inputStream;
+        }
+
     }
 
     private static class ResponseState {
