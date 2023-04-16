@@ -18,7 +18,9 @@
  */
 package net.luminis.http3.impl;
 
+import net.luminis.http3.server.HttpError;
 import net.luminis.qpack.Decoder;
+import net.luminis.qpack.Encoder;
 import net.luminis.quic.QuicClientConnection;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.TransportParameters;
@@ -35,10 +37,14 @@ import java.net.ProtocolException;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.ByteBuffer;
 import java.util.AbstractMap;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
+import static java.util.Collections.emptyMap;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -169,7 +175,7 @@ public class Http3ConnectionTest {
                 0x01, // type Headers Frame
                 0x00, // payload length (payload omitted for the test, is covered by the mock decoder
         };
-        mockQuicConnectionWithStreams(http3Connection, responseBytes);
+        mockQuicConnectionWithStreams(http3Connection, responseBytes, Map.of(":status", "200", "Content-Type", "crap"), Map.of("x-whatever", "true"), Map.of("header-number", "3"));
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(new URI("http://localhost"))
@@ -341,7 +347,7 @@ public class Http3ConnectionTest {
      * @throws IOException
      * @return
      */
-    private QuicStream mockQuicConnectionWithStreams(Http3Connection http3Connection, byte[] response) throws NoSuchFieldException, IOException {
+    private QuicStream mockQuicConnectionWithStreams(Http3Connection http3Connection, byte[] response, Map<String, String>... headerFramesContents) throws NoSuchFieldException, IOException {
         QuicClientConnection quicConnection = mock(QuicClientConnection.class);
         FieldSetter.setField(http3Connection, Http3Connection.class.getDeclaredField("quicConnection"), quicConnection);
 
@@ -359,19 +365,22 @@ public class Http3ConnectionTest {
         FieldSetter.setField(http3Connection, Http3Connection.class.getDeclaredField("qpackDecoder"), mockedQPackDecoder);
         when(mockedQPackDecoder.decodeStream(any(InputStream.class))).thenAnswer(new Answer() {
             private int invocation = 0;
-
             @Override
-            public Object answer(InvocationOnMock invocationOnMock) throws Throwable {
-                invocation++;
-                if (invocation == 1) {
-                    return List.of(new AbstractMap.SimpleEntry<>(":status", "200"), new AbstractMap.SimpleEntry<>("Content-Type", "crap"));
-                }
-                else if (invocation == 2) {
-                    return List.of(new AbstractMap.SimpleEntry<>("x-whatever", "true"));
+            public Object answer(InvocationOnMock invocationOnMock) {
+                Map<String, String> headers;
+                if (headerFramesContents.length == 0) {
+                    if (invocation == 0) {
+                        headers = Map.of(":status", "200");
+                    }
+                    else {
+                        headers = emptyMap();
+                    }
                 }
                 else {
-                    return List.of(new AbstractMap.SimpleEntry<>("header-number", "3"));
+                    headers = headerFramesContents[invocation];
                 }
+                invocation++;
+                return headers.entrySet().stream().collect(Collectors.toList());
             }
         });
 
