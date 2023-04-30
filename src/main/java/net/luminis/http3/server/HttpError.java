@@ -28,6 +28,10 @@ public class HttpError extends Exception {
         this.statusCode = statusCode;
     }
 
+    public HttpError(String message) {
+        super(message);
+    }
+
     public int getStatusCode() {
         return statusCode;
     }

@@ -36,11 +36,14 @@ import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Flow;
+import java.util.concurrent.TimeUnit;
 
 
 public class Http3Connection {
@@ -57,6 +60,8 @@ public class Http3Connection {
     private Statistics connectionStats;
     private boolean initialized;
     private Encoder qpackEncoder;
+    private final CountDownLatch settingsFrameReceived;
+    private boolean settingsEnableConnectProtocol;
 
     public Http3Connection(String host, int port) throws IOException {
         this(host, port, false, null);
@@ -83,6 +88,8 @@ public class Http3Connection {
 
         qpackDecoder = new Decoder();
         qpackEncoder = new Encoder();
+
+        settingsFrameReceived = new CountDownLatch(1);
     }
 
     public void connect(int connectTimeoutInMillis) throws IOException {
@@ -326,6 +333,9 @@ public class Http3Connection {
         SettingsFrame settingsFrame = new SettingsFrame().parsePayload(ByteBuffer.wrap(payload));
         serverQpackMaxTableCapacity = settingsFrame.getQpackMaxTableCapacity();
         serverQpackBlockedStreams = settingsFrame.getQpackBlockedStreams();
+        settingsEnableConnectProtocol = settingsFrame.isSettingsEnableConnectProtocol();
+
+        settingsFrameReceived.countDown();
     }
 
     private void readExact(InputStream inputStream, byte[] payload) throws IOException {
@@ -400,8 +410,6 @@ public class Http3Connection {
      * @return
      */
     public HttpStream sendConnect(HttpRequest request) throws IOException, HttpError {
-        QuicStream httpStream = quicConnection.createStream(true);
-
         // https://www.rfc-editor.org/rfc/rfc9114.html#name-the-connect-method
         // "- The :method pseudo-header field is set to "CONNECT"
         //  - The :scheme and :path pseudo-header fields are omitted
@@ -409,6 +417,51 @@ public class Http3Connection {
         RequestHeadersFrame headersFrame = new RequestHeadersFrame();
         headersFrame.setMethod("CONNECT");
         headersFrame.setPseudoHeader(":authority", request.uri().getHost() + ":" + request.uri().getPort());
+
+        return createHttpStream(headersFrame);
+    }
+
+    /**
+     * Sends an Extended CONNECT request (that can be used for tunneling other protocols like websocket and webtransport).
+     * See https://www.rfc-editor.org/rfc/rfc9220.html and  https://www.rfc-editor.org/rfc/rfc8441.html.
+     * Note that this method is only supported by servers that support Extended Connect (RFC 9220). If the server does
+     * not support it, a HttpError is thrown. In any case, the client has to wait for the SETTINGS frame to be received
+     * (to determine whether the server supports Extended Connect), so this method may block for a while or throw a
+     * HttpError if the SETTINGS frame is not received in time.
+     * @param request
+     * @param protocol  the protocol to use over the tunneled connection (e.g. "websocket" or "webtransport")
+     * @param scheme    "http" or "https"
+     * @param settingsFrameTimeout  max time to wait for the SETTINGS frame to be received
+     * @return
+     * @throws IOException
+     * @throws HttpError
+     * @throws InterruptedException
+     */
+    public HttpStream sendExtendedConnect(HttpRequest request, String protocol, String scheme, Duration settingsFrameTimeout) throws InterruptedException, HttpError, IOException {
+        if (! settingsFrameReceived.await(settingsFrameTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
+            throw new HttpError("No SETTINGS frame received in time.");
+        }
+        if (! settingsEnableConnectProtocol) {
+            throw new HttpError("Server does not support Extended Connect (RFC 9220).");
+        }
+
+        RequestHeadersFrame headersFrame = new ConnectRequestHeadersFrame();
+        headersFrame.setHeaders(request.headers());
+        headersFrame.setMethod("CONNECT");
+        headersFrame.setPseudoHeader(":authority", request.uri().getHost() + ":" + request.uri().getPort());
+        headersFrame.setPseudoHeader(":protocol", protocol);
+        headersFrame.setPseudoHeader(":scheme", scheme);
+        String path = request.uri().getPath();
+        if (request.uri().getQuery() != null && !request.uri().getQuery().isBlank()) {
+            path += "?" + request.uri().getQuery();
+        }
+        headersFrame.setPseudoHeader(":path", path);
+
+        return createHttpStream(headersFrame);
+    }
+
+    private HttpStream createHttpStream(HeadersFrame headersFrame) throws IOException, HttpError {
+        QuicStream httpStream = quicConnection.createStream(true);
         httpStream.getOutputStream().write(headersFrame.toBytes(qpackEncoder));
 
         Http3Frame responseFrame = readFrame(httpStream.getInputStream());

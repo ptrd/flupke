@@ -26,8 +26,12 @@ import java.nio.ByteBuffer;
 // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-4.2.5
 public class SettingsFrame {
 
+    // https://www.rfc-editor.org/rfc/rfc9220#name-iana-considerations
+    public static final int SETTINGS_ENABLE_CONNECT_PROTOCOL = 0x08;
+
     private int qpackMaxTableCapacity;
     private int qpackBlockedStreams;
+    private boolean settingsEnableConnectProtocol;
 
     public SettingsFrame(int qpackMaxTableCapacity, int qpackBlockedStreams) {
         this.qpackMaxTableCapacity = qpackMaxTableCapacity;
@@ -39,10 +43,9 @@ public class SettingsFrame {
 
     public SettingsFrame parsePayload(ByteBuffer buffer) {
         while (buffer.remaining() > 0) {
-            // https://tools.ietf.org/html/draft-ietf-quic-http-19#section-4.2.5
-            // "The payload of a SETTINGS frame consists of zero or more parameters.
-            //   Each parameter consists of a setting identifier and a value, both
-            //   encoded as QUIC variable-length integers."
+            // https://www.rfc-editor.org/rfc/rfc9114.html#name-settings
+            // "The payload of a SETTINGS frame consists of zero or more parameters. Each parameter consists of
+            //  a setting identifier and a value, both encoded as QUIC variable-length integers."
             int identifier = 0;
             long value = 0;
             try {
@@ -59,9 +62,21 @@ public class SettingsFrame {
                 case 0x07:
                     qpackBlockedStreams = (int) value;
                     break;
+                // https://www.rfc-editor.org/rfc/rfc9220#name-iana-considerations
+                // "Value: 0x08
+                //  Setting Name: SETTINGS_ENABLE_CONNECT_PROTOCOL"
+                case SETTINGS_ENABLE_CONNECT_PROTOCOL:
+                    if (value == 1L) {
+                        // https://www.rfc-editor.org/rfc/rfc8441#section-3
+                        // "The value of the parameter MUST be 0 or 1."
+                        // "Upon receipt of SETTINGS_ENABLE_CONNECT_PROTOCOL with a value of 1, a client MAY use the
+                        //  Extended CONNECT as defined in this document when creating new streams."
+                        settingsEnableConnectProtocol = true;
+                    }
+                    break;
                 default:
-                    // "An implementation MUST ignore the contents for any SETTINGS
-                    //   identifier it does not understand."
+                    // https://www.rfc-editor.org/rfc/rfc9114.html#name-settings
+                    // "An implementation MUST ignore any parameter with an identifier it does not understand."
             }
         }
         return this;
@@ -90,5 +105,9 @@ public class SettingsFrame {
 
     public int getQpackBlockedStreams() {
         return qpackBlockedStreams;
+    }
+
+    public boolean isSettingsEnableConnectProtocol() {
+        return settingsEnableConnectProtocol;
     }
 }

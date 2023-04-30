@@ -176,6 +176,24 @@ public class Http3Client extends HttpClient {
         return http3Connection.sendConnect(request);
     }
 
+    /**
+     * Sends an Extended CONNECT request (that can be used for tunneling other protocols like websocket and webtransport).
+     * See https://www.rfc-editor.org/rfc/rfc9220.html and  https://www.rfc-editor.org/rfc/rfc8441.html.
+     *
+     * @param request
+     * @param protocol
+     * @param scheme
+     * @return
+     * @throws IOException
+     * @throws HttpError
+     * @throws InterruptedException
+     */
+    public Http3Connection.HttpStream sendExtendedConnect(HttpRequest request, String protocol, String scheme) throws IOException, HttpError, InterruptedException {
+        http3Connection = http3ConnectionFactory.getConnection(request);
+        http3Connection.connect((int) connectTimeout().orElse(DEFAULT_CONNECT_TIMEOUT).toMillis());
+        return http3Connection.sendExtendedConnect(request, protocol, scheme, Duration.ofSeconds(10));
+    }
+
     public Statistics getConnectionStatistics() {
         if (http3Connection != null) {
             return http3Connection.getConnectionStats();

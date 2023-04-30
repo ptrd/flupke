@@ -38,12 +38,14 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.emptyMap;
+import static net.luminis.http3.impl.SettingsFrame.SETTINGS_ENABLE_CONNECT_PROTOCOL;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -486,6 +488,137 @@ public class Http3ConnectionTest {
 
         assertThat(data.position()).isEqualTo(11);
         assertThat(new String(Arrays.copyOfRange(data.array(), 0, 11))).isEqualTo("hello world");
+    }
+
+    @Test
+    public void sendExtendedConnectShouldFailWhenServerDoesNotSendSettingsFrame() throws Exception {
+        // Given
+        Http3Connection http3Connection = new Http3Connection("localhost", 4433);
+        HttpRequest connectRequest = HttpRequest.newBuilder()
+                .uri(new URI("http://proxy.net:443"))
+                .build();
+
+        // Then
+        assertThatThrownBy(() ->
+                // When
+                http3Connection.sendExtendedConnect(connectRequest, "websocket", "https", Duration.ofMillis(10))
+        ).isInstanceOf(HttpError.class);
+    }
+
+    @Test
+    public void sendExtendedConnectShouldFailWhenServerDoesNotSupportIt() throws Exception {
+        // Given
+        Http3Connection http3Connection = new Http3Connection("localhost", 4433);
+        // Do _not_ send SETTINGS_ENABLE_CONNECT_PROTOCOL setting on control stream
+        http3Connection.registerServerInitiatedStream(createControlStream());
+        HttpRequest connectRequest = HttpRequest.newBuilder()
+                .uri(new URI("http://proxy.net:443"))
+                .build();
+
+        // Then
+        assertThatThrownBy(() ->
+                // When
+                http3Connection.sendExtendedConnect(connectRequest, "websocket", "https", Duration.ofMillis(100))
+        ).isInstanceOf(HttpError.class);
+    }
+
+    @Test
+    public void sendExtendedConnectShouldSendProtocolPseudoHeader() throws Exception {
+        // Given
+        Http3Connection http3Connection = new Http3Connection("localhost", 4433);
+        mockQuicConnectionWithStreams(http3Connection, new byte[] { 0x01, 0x00 });
+        Encoder mockedQPackEncoder = mock(Encoder.class);
+        when(mockedQPackEncoder.compressHeaders(anyList())).thenReturn(ByteBuffer.allocate(0));
+        FieldSetter.setField(http3Connection, Http3Connection.class.getDeclaredField("qpackEncoder"), mockedQPackEncoder);
+
+        http3Connection.registerServerInitiatedStream(createControlStream(SETTINGS_ENABLE_CONNECT_PROTOCOL, 1));
+
+        // When
+        HttpRequest connectRequest = HttpRequest.newBuilder()
+                .uri(new URI("http://proxy.net:443"))
+                .build();
+        http3Connection.sendExtendedConnect(connectRequest, "websocket", "https", Duration.ofMillis(100));
+
+        // Then
+        ArgumentCaptor<List<Map.Entry<String, String>>> headersCaptor = ArgumentCaptor.forClass(List.class);
+        verify(mockedQPackEncoder).compressHeaders(headersCaptor.capture());
+        Map<String, String> headers = headersCaptor.getValue().stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        assertThat(headers).containsAllEntriesOf(Map.of(
+                ":method", "CONNECT",
+                ":authority", "proxy.net:443",
+                ":protocol", "websocket",
+                ":scheme", "https"
+        ));
+    }
+
+    @Test
+    public void sendExtendedConnectShouldSendPathPseudoHeader() throws Exception {
+        // Given
+        Http3Connection http3Connection = new Http3Connection("localhost", 4433);
+        mockQuicConnectionWithStreams(http3Connection, new byte[] { 0x01, 0x00});
+        Encoder mockedQPackEncoder = mock(Encoder.class);
+        when(mockedQPackEncoder.compressHeaders(anyList())).thenReturn(ByteBuffer.allocate(0));
+        FieldSetter.setField(http3Connection, Http3Connection.class.getDeclaredField("qpackEncoder"), mockedQPackEncoder);
+
+        http3Connection.registerServerInitiatedStream(createControlStream(SETTINGS_ENABLE_CONNECT_PROTOCOL, 1));
+
+        // When
+        HttpRequest connectRequest = HttpRequest.newBuilder()
+                .uri(new URI("http://proxy.net:443/ws/echo?apiKey=de67fa"))
+                .build();
+        http3Connection.sendExtendedConnect(connectRequest, "websocket", "https", Duration.ofMillis(100));
+
+        // Then
+        ArgumentCaptor<List<Map.Entry<String, String>>> headersCaptor = ArgumentCaptor.forClass(List.class);
+        verify(mockedQPackEncoder).compressHeaders(headersCaptor.capture());
+        Map<String, String> headers = headersCaptor.getValue().stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        assertThat(headers).containsKeys(":path");
+        String pathValue = headers.get(":path");
+        assertThat(pathValue).isEqualTo("/ws/echo?apiKey=de67fa");
+    }
+
+    @Test
+    public void sendExtendedConnectShouldSendHeaders() throws Exception {
+        // Given
+        Http3Connection http3Connection = new Http3Connection("localhost", 4433);
+        mockQuicConnectionWithStreams(http3Connection, new byte[] { 0x01, 0x00});
+        // Must use mocked encoder to be able to capture headers in validate step.
+        Encoder mockedQPackEncoder = mock(Encoder.class);
+        when(mockedQPackEncoder.compressHeaders(anyList())).thenReturn(ByteBuffer.allocate(0));
+        FieldSetter.setField(http3Connection, Http3Connection.class.getDeclaredField("qpackEncoder"), mockedQPackEncoder);
+
+        // Server must send SETTINGS_ENABLE_CONNECT_PROTOCOL setting on control stream in order to let client use extended CONNECT.
+        http3Connection.registerServerInitiatedStream(createControlStream(SETTINGS_ENABLE_CONNECT_PROTOCOL, 1));
+
+        // When
+        HttpRequest connectRequest = HttpRequest.newBuilder()
+                .uri(new URI("http://proxy.net:443/ws/echo?apiKey=de67fa"))
+                .header("x-test", "testValue")
+                .build();
+        http3Connection.sendExtendedConnect(connectRequest, "websocket", "https", Duration.ofMillis(100));
+
+        // Then
+        ArgumentCaptor<List<Map.Entry<String, String>>> headersCaptor = ArgumentCaptor.forClass(List.class);
+        verify(mockedQPackEncoder).compressHeaders(headersCaptor.capture());
+        Map<String, String> headersSent = headersCaptor.getValue().stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        assertThat(headersSent).containsKeys("x-test");
+        assertThat(headersSent.get("x-test")).isEqualTo("testValue");
+    }
+
+    private QuicStream createControlStream(Integer... additionalBytes) {
+        QuicStream quicStream = mock(QuicStream.class);
+        //                                  stream type stream frame type
+        byte[] data = ByteUtils.hexToBytes("00          04"
+                // length (settings frame with 2 vars (01, 07) and additional data)
+                + String.format("%02x", 4 + additionalBytes.length)
+                // settings frame with at least 2 vars (01, 07) and whatever additional data is supplied
+                + "01 00 07 0a");
+        data = Arrays.copyOf(data, data.length + additionalBytes.length);
+        for (int i = 0; i < additionalBytes.length; i++) {
+            data[data.length - additionalBytes.length + i] = additionalBytes[i].byteValue();
+        }
+        when(quicStream.getInputStream()).thenReturn(new ByteArrayInputStream(data));
+        return quicStream;
     }
 
     /**
