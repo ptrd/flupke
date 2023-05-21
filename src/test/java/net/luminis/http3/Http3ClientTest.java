@@ -18,7 +18,7 @@
  */
 package net.luminis.http3;
 
-import net.luminis.http3.impl.Http3Connection;
+import net.luminis.http3.impl.Http3ClientConnectionImpl;
 import net.luminis.http3.impl.Http3ConnectionFactory;
 import org.junit.Test;
 import org.mockito.internal.util.reflection.FieldSetter;
@@ -94,7 +94,7 @@ public class Http3ClientTest {
     @Test
     public void sendAsyncShouldThrowWhenGettingFutureResultIfSendFails() throws Exception {
         Http3Client httpClient = (Http3Client) new Http3ClientBuilder().build();
-        Http3Connection http3Connection = createMockHttp3Connection(httpClient);
+        Http3ClientConnectionImpl http3Connection = createMockHttp3Connection(httpClient);
         when(http3Connection.send(any(), any())).thenThrow(new IOException("something went wrong during request/response"));
 
         HttpRequest request = HttpRequest.newBuilder()
@@ -112,7 +112,7 @@ public class Http3ClientTest {
     @Test
     public void sendAsyncShouldThrowWhenGettingFutureResultIfRuntimeExceptionOccurs() throws Exception {
         Http3Client httpClient = (Http3Client) new Http3ClientBuilder().build();
-        Http3Connection http3Connection = createMockHttp3Connection(httpClient);
+        Http3ClientConnectionImpl http3Connection = createMockHttp3Connection(httpClient);
         when(http3Connection.send(any(), any())).thenThrow(new RuntimeException("something went wrong during request/response"));
 
         HttpRequest request = HttpRequest.newBuilder()
@@ -127,9 +127,9 @@ public class Http3ClientTest {
                 .hasMessageContaining("something went wrong during request/response");
     }
 
-    private Http3Connection createMockHttp3Connection(Http3Client httpClient) throws Exception {
+    private Http3ClientConnectionImpl createMockHttp3Connection(Http3Client httpClient) throws Exception {
         Http3ConnectionFactory http3ConnectionFactory = mock(Http3ConnectionFactory.class);
-        Http3Connection http3Connection = mock(Http3Connection.class);
+        Http3ClientConnectionImpl http3Connection = mock(Http3ClientConnectionImpl.class);
         when(http3ConnectionFactory.getConnection(any(HttpRequest.class))).thenReturn(http3Connection);
         FieldSetter.setField(httpClient, Http3Client.class.getDeclaredField("http3ConnectionFactory"), http3ConnectionFactory);
         return http3Connection;

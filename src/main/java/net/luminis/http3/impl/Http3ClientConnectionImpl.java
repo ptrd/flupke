@@ -18,6 +18,7 @@
  */
 package net.luminis.http3.impl;
 
+import net.luminis.http3.core.Http3ClientConnection;
 import net.luminis.http3.server.HttpError;
 import net.luminis.qpack.Decoder;
 import net.luminis.qpack.Encoder;
@@ -46,9 +47,7 @@ import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
 
 
-public class Http3Connection {
-
-    public static final int DEFAULT_PORT = 443;
+public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Http3ClientConnection {
 
     private final QuicClientConnection quicConnection;
     private InputStream serverControlStream;
@@ -63,15 +62,15 @@ public class Http3Connection {
     private final CountDownLatch settingsFrameReceived;
     private boolean settingsEnableConnectProtocol;
 
-    public Http3Connection(String host, int port) throws IOException {
+    public Http3ClientConnectionImpl(String host, int port) throws IOException {
         this(host, port, false, null);
     }
 
-    public Http3Connection(String host, int port, boolean disableCertificateCheck, Logger logger) throws IOException {
+    public Http3ClientConnectionImpl(String host, int port, boolean disableCertificateCheck, Logger logger) throws IOException {
         this(createQuicConnection(host, port, disableCertificateCheck, logger));
     }
 
-    public Http3Connection(QuicConnection quicConnection) {
+    public Http3ClientConnectionImpl(QuicConnection quicConnection) {
         this.quicConnection = (QuicClientConnection) quicConnection;
 
         quicConnection.setPeerInitiatedStreamCallback(stream -> doAsync(() -> registerServerInitiatedStream(stream)));
@@ -92,6 +91,7 @@ public class Http3Connection {
         settingsFrameReceived = new CountDownLatch(1);
     }
 
+    @Override
     public void connect(int connectTimeoutInMillis) throws IOException {
         synchronized (this) {
             if (!quicConnection.isConnected()) {
@@ -125,6 +125,7 @@ public class Http3Connection {
         }
     }
 
+    @Override
     public <T> HttpResponse<T> send(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler) throws IOException {
         QuicStream httpStream = quicConnection.createStream(true);
         sendRequest(request, httpStream);
@@ -397,19 +398,13 @@ public class Http3Connection {
         quicConnection.setDefaultStreamReceiveBufferSize(receiveBufferSize);
     }
 
+    @Override
     public Statistics getConnectionStats() {
         return connectionStats;
     }
 
-    /**
-     * Sends a CONNECT method request.
-     * https://www.rfc-editor.org/rfc/rfc9114.html#name-the-connect-method:
-     * "In HTTP/2 and HTTP/3, the CONNECT method is used to establish a tunnel over a single stream."
-     *
-     * @param request the request object; note that the HTTP method specified in this request is ignored
-     * @return
-     */
-    public HttpStream sendConnect(HttpRequest request) throws IOException, HttpError {
+    @Override
+    public HttpStreamImpl sendConnect(HttpRequest request) throws IOException, HttpError {
         // https://www.rfc-editor.org/rfc/rfc9114.html#name-the-connect-method
         // "- The :method pseudo-header field is set to "CONNECT"
         //  - The :scheme and :path pseudo-header fields are omitted
@@ -421,23 +416,8 @@ public class Http3Connection {
         return createHttpStream(headersFrame);
     }
 
-    /**
-     * Sends an Extended CONNECT request (that can be used for tunneling other protocols like websocket and webtransport).
-     * See https://www.rfc-editor.org/rfc/rfc9220.html and  https://www.rfc-editor.org/rfc/rfc8441.html.
-     * Note that this method is only supported by servers that support Extended Connect (RFC 9220). If the server does
-     * not support it, a HttpError is thrown. In any case, the client has to wait for the SETTINGS frame to be received
-     * (to determine whether the server supports Extended Connect), so this method may block for a while or throw a
-     * HttpError if the SETTINGS frame is not received in time.
-     * @param request
-     * @param protocol  the protocol to use over the tunneled connection (e.g. "websocket" or "webtransport")
-     * @param scheme    "http" or "https"
-     * @param settingsFrameTimeout  max time to wait for the SETTINGS frame to be received
-     * @return
-     * @throws IOException
-     * @throws HttpError
-     * @throws InterruptedException
-     */
-    public HttpStream sendExtendedConnect(HttpRequest request, String protocol, String scheme, Duration settingsFrameTimeout) throws InterruptedException, HttpError, IOException {
+    @Override
+    public HttpStreamImpl sendExtendedConnect(HttpRequest request, String protocol, String scheme, Duration settingsFrameTimeout) throws InterruptedException, HttpError, IOException {
         if (! settingsFrameReceived.await(settingsFrameTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
             throw new HttpError("No SETTINGS frame received in time.");
         }
@@ -460,7 +440,7 @@ public class Http3Connection {
         return createHttpStream(headersFrame);
     }
 
-    private HttpStream createHttpStream(HeadersFrame headersFrame) throws IOException, HttpError {
+    private HttpStreamImpl createHttpStream(HeadersFrame headersFrame) throws IOException, HttpError {
         QuicStream httpStream = quicConnection.createStream(true);
         httpStream.getOutputStream().write(headersFrame.toBytes(qpackEncoder));
 
@@ -468,7 +448,7 @@ public class Http3Connection {
         if (responseFrame instanceof ResponseHeadersFrame) {
             int statusCode = ((ResponseHeadersFrame) responseFrame).statusCode();
             if (statusCode >= 200 && statusCode < 300) {
-                return new HttpStream(httpStream);
+                return new HttpStreamImpl(httpStream);
             }
             else {
                 throw new HttpError("CONNECT request failed", statusCode);
@@ -516,13 +496,13 @@ public class Http3Connection {
         }
     }
 
-    public class HttpStream {
+    public class HttpStreamImpl implements HttpStream {
 
         private final QuicStream quicStream;
         private final OutputStream outputStream;
         private final InputStream inputStream;
 
-        public HttpStream(QuicStream quicStream) {
+        public HttpStreamImpl(QuicStream quicStream) {
             this.quicStream = quicStream;
 
             outputStream = new OutputStream() {

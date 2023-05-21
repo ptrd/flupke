@@ -19,6 +19,7 @@
 package net.luminis.http3.impl;
 
 import net.luminis.http3.Http3Client;
+import net.luminis.http3.core.Http3ClientConnection;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -37,8 +38,8 @@ public class Http3ConnectionFactoryTest {
 
         Http3ConnectionFactory connectionFactory = new Http3ConnectionFactory((Http3Client) Http3Client.newHttpClient());
 
-        Http3Connection connection1 = connectionFactory.getConnection(request1);
-        Http3Connection connection2 = connectionFactory.getConnection(request2);
+        Http3ClientConnection connection1 = connectionFactory.getConnection(request1);
+        Http3ClientConnection connection2 = connectionFactory.getConnection(request2);
 
         assertThat(connection1).isSameAs(connection2);
     }
@@ -50,8 +51,8 @@ public class Http3ConnectionFactoryTest {
 
         Http3ConnectionFactory connectionFactory = new Http3ConnectionFactory((Http3Client) Http3Client.newHttpClient());
 
-        Http3Connection connection1 = connectionFactory.getConnection(request1);
-        Http3Connection connection2 = connectionFactory.getConnection(request2);
+        Http3ClientConnection connection1 = connectionFactory.getConnection(request1);
+        Http3ClientConnection connection2 = connectionFactory.getConnection(request2);
 
         assertThat(connection1).isNotSameAs(connection2);
     }
@@ -63,8 +64,8 @@ public class Http3ConnectionFactoryTest {
 
         Http3ConnectionFactory connectionFactory = new Http3ConnectionFactory((Http3Client) Http3Client.newHttpClient());
 
-        Http3Connection connection1 = connectionFactory.getConnection(request1);
-        Http3Connection connection2 = connectionFactory.getConnection(request2);
+        Http3ClientConnection connection1 = connectionFactory.getConnection(request1);
+        Http3ClientConnection connection2 = connectionFactory.getConnection(request2);
 
         assertThat(connection1).isNotSameAs(connection2);
     }

@@ -41,7 +41,7 @@ import java.util.function.Consumer;
 /**
  * Http connection serving GET requests by returning the file from specified www dir.
  */
-public class Http3ServerConnection implements ApplicationProtocolConnection {
+public class Http3ServerConnection extends Http3ConnectionImpl implements ApplicationProtocolConnection {
 
     public static int MAX_HEADER_SIZE = 10 * 1024;
     public static int MAX_DATA_SIZE = 10 * 1024 * 1024;
