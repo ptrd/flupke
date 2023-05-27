@@ -49,11 +49,8 @@ import java.util.concurrent.TimeUnit;
 
 public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Http3ClientConnection {
 
-    private InputStream serverControlStream;
     private InputStream serverEncoderStream;
     private InputStream serverPushStream;
-    private int serverQpackMaxTableCapacity;
-    private int serverQpackBlockedStreams;
     private final Decoder qpackDecoder;
     private Statistics connectionStats;
     private boolean initialized;
@@ -274,8 +271,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
             if (streamType == 0x00) {
                 // https://tools.ietf.org/html/draft-ietf-quic-http-19#section-3.2.1
                 // "A control stream is indicated by a stream type of "0x00"."
-                serverControlStream = stream.getInputStream();
-                processControlStream();
+                processControlStream(stream.getInputStream());
             }
             else if (streamType == 0x01) {
                 // https://tools.ietf.org/html/draft-ietf-quic-http-19#section-3.2.2
@@ -296,27 +292,18 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         }
     }
 
-    private void processControlStream() throws IOException {
-        int frameType = VariableLengthInteger.parse(serverControlStream);
-        // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.2.1
-        // "Each side MUST initiate a single control stream at the beginning of
-        //   the connection and send its SETTINGS frame as the first frame on this
-        //   stream. "
-        // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-4.2.5
-        // "The SETTINGS frame (type=0x4)..."
-        if (frameType != 0x04) {
-            throw new RuntimeException("Invalid frame on control stream");
+    @Override
+    protected SettingsFrame processControlStream(InputStream controlStream) throws IOException {
+        SettingsFrame settingsFrame = super.processControlStream(controlStream);
+        if (settingsFrame != null) {
+            // Read settings that only apply to client role.
+            settingsEnableConnectProtocol = settingsFrame.isSettingsEnableConnectProtocol();
         }
-        int frameLength = VariableLengthInteger.parse(serverControlStream);
-        byte[] payload = new byte[frameLength];
-        readExact(serverControlStream, payload);
 
-        SettingsFrame settingsFrame = new SettingsFrame().parsePayload(ByteBuffer.wrap(payload));
-        serverQpackMaxTableCapacity = settingsFrame.getQpackMaxTableCapacity();
-        serverQpackBlockedStreams = settingsFrame.getQpackBlockedStreams();
-        settingsEnableConnectProtocol = settingsFrame.isSettingsEnableConnectProtocol();
-
+        // Unblock who is waiting for settings frame to be received.
         settingsFrameReceived.countDown();
+
+        return settingsFrame;
     }
 
     private void readExact(InputStream inputStream, byte[] payload) throws IOException {
@@ -367,11 +354,11 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     }
 
     public int getServerQpackMaxTableCapacity() {
-        return serverQpackMaxTableCapacity;
+        return peerQpackMaxTableCapacity;
     }
 
     public int getServerQpackBlockedStreams() {
-        return serverQpackBlockedStreams;
+        return peerQpackBlockedStreams;
     }
 
     public void setReceiveBufferSize(long receiveBufferSize) {

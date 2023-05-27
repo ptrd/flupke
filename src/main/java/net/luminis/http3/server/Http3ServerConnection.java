@@ -52,8 +52,6 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
     private final QuicConnection quicConnection;
     private final HttpRequestHandler requestHandler;
     private InputStream controlStream;
-    private int peerQpackBlockedStreams;
-    private int peerQpackMaxTableCapacity;
     private InputStream clientEncoderStream;
     private final Decoder qpackDecoder;
     private final InetAddress clientAddress;
@@ -240,39 +238,5 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
         catch (IOException eof) {
             return -1;
         }
-    }
-    
-    private void processControlStream(InputStream controlStream) throws IOException {
-        int frameType = VariableLengthInteger.parse(controlStream);
-        // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.2.1
-        // "Each side MUST initiate a single control stream at the beginning of
-        //   the connection and send its SETTINGS frame as the first frame on this
-        //   stream. "
-        // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-4.2.5
-        // "The SETTINGS frame (type=0x4)..."
-        if (frameType != 0x04) {
-            throw new RuntimeException("Invalid frame on control stream");
-        }
-        int frameLength = VariableLengthInteger.parse(controlStream);
-        byte[] payload = readExact(controlStream, frameLength);
-
-        SettingsFrame settingsFrame = new SettingsFrame().parsePayload(ByteBuffer.wrap(payload));
-        peerQpackMaxTableCapacity = settingsFrame.getQpackMaxTableCapacity();
-        peerQpackBlockedStreams = settingsFrame.getQpackBlockedStreams();
-    }
-
-    private byte[] readExact(InputStream inputStream, int length) throws IOException {
-        byte[] data = new byte[length];
-        int offset = 0;
-        while (offset < length) {
-            int read = inputStream.read(data, offset, length - offset);
-            if (read > 0) {
-                offset += read;
-            }
-            else {
-                throw new EOFException("Stream closed by peer");
-            }
-        }
-        return data;
     }
 }

@@ -21,8 +21,11 @@ package net.luminis.http3.impl;
 import net.luminis.http3.core.Http3Connection;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
+import net.luminis.quic.VariableLengthInteger;
 
+import java.io.EOFException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
@@ -69,7 +72,20 @@ public class Http3ConnectionImpl implements Http3Connection {
     // The requested operation cannot be served over HTTP/3. The peer should retry over HTTP/1.1."
     public static final int H3_VERSION_FALLBACK = 0x0110;
 
+    // https://www.rfc-editor.org/rfc/rfc9114.html#name-frame-types
+    public static final int FRAME_TYPE_DATA = 0x00;
+    public static final int FRAME_TYPE_HEADERS = 0x01;
+    public static final int FRAME_TYPE_CANCEL_PUSH = 0x03;
+    public static final int FRAME_TYPE_SETTINGS = 0x04;
+    public static final int FRAME_TYPE_PUSH_PROMISE = 0x05;
+    public static final int FRAME_TYPE_GOAWAY = 0x07;
+    public static final int FRAME_TYPE_MAX_PUSH_ID = 0x0d;
+
+
     protected final QuicConnection quicConnection;
+    protected int peerQpackBlockedStreams;
+    protected int peerQpackMaxTableCapacity;
+
 
     public Http3ConnectionImpl(QuicConnection quicConnection) {
         this.quicConnection = quicConnection;
@@ -99,7 +115,36 @@ public class Http3ConnectionImpl implements Http3Connection {
         }
     }
 
+    protected SettingsFrame processControlStream(InputStream controlStream) throws IOException {
+        // https://www.rfc-editor.org/rfc/rfc9114.html#name-control-streams
+        // "Each side MUST initiate a single control stream at the beginning of the connection and send its SETTINGS
+        //  frame as the first frame on this stream."
+        long frameType = VariableLengthInteger.parseLong(controlStream);
+        // "If the first frame of the control stream is any other frame type, this MUST be treated as a connection error
+        //  of type H3_MISSING_SETTINGS."
+        if (frameType != (long) FRAME_TYPE_SETTINGS) {
+            connectionError(H3_MISSING_SETTINGS);
+            return null;
+        }
+        int frameLength = VariableLengthInteger.parse(controlStream);
+        byte[] payload = readExact(controlStream, frameLength);
+
+        SettingsFrame settingsFrame = new SettingsFrame().parsePayload(ByteBuffer.wrap(payload));
+        peerQpackMaxTableCapacity = settingsFrame.getQpackMaxTableCapacity();
+        peerQpackBlockedStreams = settingsFrame.getQpackBlockedStreams();
+        return settingsFrame;
+    }
+
+
     // https://www.rfc-editor.org/rfc/rfc9114.html#name-error-handling
     protected void connectionError(int http3ErrorCode) {
+    }
+
+    protected byte[] readExact(InputStream inputStream, int length) throws IOException {
+        byte[] data = inputStream.readNBytes(length);
+        if (data.length != length) {
+            throw new EOFException("Stream closed by peer");
+        }
+        return data;
     }
 }
