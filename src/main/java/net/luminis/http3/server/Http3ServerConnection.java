@@ -60,6 +60,7 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
 
 
     public Http3ServerConnection(QuicConnection quicConnection, HttpRequestHandler requestHandler) {
+        super(quicConnection);
         this.quicConnection = quicConnection;
         this.requestHandler = requestHandler;
         qpackDecoder = new Decoder();
@@ -241,33 +242,6 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
         }
     }
     
-    void startControlStream() {
-        try {
-            // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.2.1
-            // "Each side MUST initiate a single control stream at the beginning of
-            //   the connection and send its SETTINGS frame as the first frame on this
-            //   stream."
-            QuicStream clientControlStream = quicConnection.createStream(false);
-            OutputStream clientControlOutput = clientControlStream.getOutputStream();
-            // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.2.1
-            // "A control stream is indicated by a stream type of "0x00"."
-            clientControlOutput.write(0x00);
-
-            // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-2.3
-            // "After the QUIC connection is
-            //   established, a SETTINGS frame (Section 4.2.5) MUST be sent by each
-            //   endpoint as the initial frame of their respective HTTP control stream
-            //   (see Section 3.2.1)."
-            ByteBuffer settingsFrame = new SettingsFrame(0, 0).getBytes();
-            clientControlStream.getOutputStream().write(settingsFrame.array(), 0, settingsFrame.limit());
-            // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.2.1
-            // " The sender MUST NOT close the control stream."
-        }
-        catch (IOException e) {
-            // QuicStream's output stream will never throw an IOException, unless stream is already closed.
-        }
-    }
-
     private void processControlStream(InputStream controlStream) throws IOException {
         int frameType = VariableLengthInteger.parse(controlStream);
         // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.2.1

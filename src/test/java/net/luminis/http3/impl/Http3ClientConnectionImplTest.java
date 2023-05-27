@@ -83,7 +83,7 @@ public class Http3ClientConnectionImplTest {
     public void testClientSendsSettingsFrameOnControlStream() throws Exception {
         Http3ClientConnection http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
         QuicClientConnection quicConnection = mock(QuicClientConnection.class);
-        FieldSetter.setField(http3Connection, Http3ClientConnectionImpl.class.getDeclaredField("quicConnection"), quicConnection);
+        FieldSetter.setField(http3Connection, Http3ConnectionImpl.class.getDeclaredField("quicConnection"), quicConnection);
 
         QuicStream quicStreamMock = mock(QuicStream.class);
         ByteArrayOutputStream controlStreamOutput = new ByteArrayOutputStream();
@@ -635,7 +635,7 @@ public class Http3ClientConnectionImplTest {
      */
     private QuicStream mockQuicConnectionWithStreams(Http3ClientConnection http3Connection, byte[] response, Map<String, String>... headerFramesContents) throws NoSuchFieldException, IOException {
         QuicClientConnection quicConnection = mock(QuicClientConnection.class);
-        FieldSetter.setField(http3Connection, Http3ClientConnectionImpl.class.getDeclaredField("quicConnection"), quicConnection);
+        FieldSetter.setField(http3Connection, Http3ConnectionImpl.class.getDeclaredField("quicConnection"), quicConnection);
 
         QuicStream http3StreamMock = mock(QuicStream.class);
         when(quicConnection.createStream(anyBoolean())).thenReturn(http3StreamMock);
@@ -675,7 +675,7 @@ public class Http3ClientConnectionImplTest {
 
     private QuicClientConnection mockQuicConnection(Http3ClientConnection http3Connection) throws NoSuchFieldException, IOException {
         QuicClientConnection quicConnection = mock(QuicClientConnection.class);
-        FieldSetter.setField(http3Connection, Http3ClientConnectionImpl.class.getDeclaredField("quicConnection"), quicConnection);
+        FieldSetter.setField(http3Connection, Http3ConnectionImpl.class.getDeclaredField("quicConnection"), quicConnection);
 
         QuicStream http3StreamMock = mock(QuicStream.class);
         when(quicConnection.createStream(anyBoolean())).thenReturn(http3StreamMock);
