@@ -49,7 +49,6 @@ import java.util.concurrent.TimeUnit;
 
 public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Http3ClientConnection {
 
-    private InputStream serverEncoderStream;
     private InputStream serverPushStream;
     private final Decoder qpackDecoder;
     private Statistics connectionStats;
@@ -266,30 +265,17 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     }
 
     void registerServerInitiatedStream(QuicStream stream) {
-        try {
-            int streamType = stream.getInputStream().read();
-            if (streamType == 0x00) {
-                // https://tools.ietf.org/html/draft-ietf-quic-http-19#section-3.2.1
-                // "A control stream is indicated by a stream type of "0x00"."
-                processControlStream(stream.getInputStream());
-            }
-            else if (streamType == 0x01) {
-                // https://tools.ietf.org/html/draft-ietf-quic-http-19#section-3.2.2
-                // "A push stream is indicated by a stream type of "0x01","
-                serverPushStream = stream.getInputStream();
-            }
-            else if (streamType == 0x02) {
-                // https://tools.ietf.org/html/draft-ietf-quic-qpack-07#section-4.2.1
-                // "An encoder stream is a unidirectional stream of type "0x02"."
-                serverEncoderStream = stream.getInputStream();;
-            }
-            else {
+        handleUnidirectionalStream(stream);
+    }
 
-            }
-        } catch (IOException e) {
-            // TODO: if this happens, we can close/abort this connection
-            System.err.println("ERROR while reading server initiated stream: " + e);
-        }
+    @Override
+    protected void registerStreamHandlers() {
+        super.registerStreamHandlers();
+        unidirectionalStreamHandler.put((long) STREAM_TYPE_PUSH_STREAM, this::setServerPushStream);
+    }
+
+    private void setServerPushStream(InputStream stream) {
+        serverPushStream = stream;
     }
 
     @Override

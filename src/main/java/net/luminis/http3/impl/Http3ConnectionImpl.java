@@ -28,12 +28,18 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
 
 public class Http3ConnectionImpl implements Http3Connection {
 
     // https://www.rfc-editor.org/rfc/rfc9114.html#name-stream-types
     public static final int STREAM_TYPE_CONTROL_STREAM = 0x00;
     public static final int STREAM_TYPE_PUSH_STREAM = 0x01;
+
+    // https://www.rfc-editor.org/rfc/rfc9204.html#name-stream-type-registration
+    public static final int STREAM_TYPE_QPACK_ENCODER = 0x02;
+    public static final int STREAM_TYPE_QPACK_DECODER = 0x03;
 
     // https://www.rfc-editor.org/rfc/rfc9114.html#name-http-3-error-codes
     // "No error. This is used when the connection or stream needs to be closed, but there is no error to signal.
@@ -83,12 +89,47 @@ public class Http3ConnectionImpl implements Http3Connection {
 
 
     protected final QuicConnection quicConnection;
+    protected InputStream peerEncoderStream;
     protected int peerQpackBlockedStreams;
     protected int peerQpackMaxTableCapacity;
+    protected Map<Long, IOConsumer<InputStream>> unidirectionalStreamHandler = new HashMap<>();
 
 
     public Http3ConnectionImpl(QuicConnection quicConnection) {
         this.quicConnection = quicConnection;
+
+        registerStreamHandlers();
+    }
+
+    protected void registerStreamHandlers() {
+        // https://www.rfc-editor.org/rfc/rfc9114.html#name-unidirectional-streams
+        // "Two stream types are defined in this document: control streams (Section 6.2.1) and push streams (Section 6.2.2).
+        // https://www.rfc-editor.org/rfc/rfc9114.html#name-control-streams
+        // "A control stream is indicated by a stream type of 0x00."
+        unidirectionalStreamHandler.put((long) STREAM_TYPE_CONTROL_STREAM, this::processControlStream);
+        // "[QPACK] defines two additional stream types. Other stream types can be defined by extensions to HTTP/3;..."
+        // https://www.rfc-editor.org/rfc/rfc9204.html#name-encoder-and-decoder-streams
+        // "An encoder stream is a unidirectional stream of type 0x02."
+        unidirectionalStreamHandler.put((long) STREAM_TYPE_QPACK_ENCODER, this::setPeerEncoderStream);
+    }
+
+    protected void handleUnidirectionalStream(QuicStream quicStream) {
+        // https://www.rfc-editor.org/rfc/rfc9114.html#name-unidirectional-streams
+        // "Unidirectional streams, in either direction, are used for a range of purposes. The purpose is indicated by
+        //  a stream type, which is sent as a variable-length integer at the start of the stream."
+        try {
+            InputStream stream = quicStream.getInputStream();
+            long streamType = VariableLengthInteger.parseLong(stream);
+            IOConsumer<InputStream> streamHandler = unidirectionalStreamHandler.get(streamType);
+            if (streamHandler != null) {
+                streamHandler.accept(stream);
+            }
+        } catch (IOException ioError) {
+            // https://www.rfc-editor.org/rfc/rfc9114.html#name-control-streams
+            // "If either control stream is closed at any point, this MUST be treated as a connection error of type
+            //  H3_CLOSED_CRITICAL_STREAM."
+            connectionError(H3_CLOSED_CRITICAL_STREAM);
+        }
     }
 
     protected void startControlStream() {
@@ -135,6 +176,9 @@ public class Http3ConnectionImpl implements Http3Connection {
         return settingsFrame;
     }
 
+    void setPeerEncoderStream(InputStream stream) {
+        peerEncoderStream = stream;
+    }
 
     // https://www.rfc-editor.org/rfc/rfc9114.html#name-error-handling
     protected void connectionError(int http3ErrorCode) {

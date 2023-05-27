@@ -49,17 +49,13 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
 
     private static AtomicInteger threadCount = new AtomicInteger();
 
-    private final QuicConnection quicConnection;
     private final HttpRequestHandler requestHandler;
-    private InputStream controlStream;
-    private InputStream clientEncoderStream;
     private final Decoder qpackDecoder;
     private final InetAddress clientAddress;
 
 
     public Http3ServerConnection(QuicConnection quicConnection, HttpRequestHandler requestHandler) {
         super(quicConnection);
-        this.quicConnection = quicConnection;
         this.requestHandler = requestHandler;
         qpackDecoder = new Decoder();
         clientAddress = ((ServerConnection) quicConnection).getInitialClientAddress();
@@ -75,45 +71,28 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
 
     void handle(QuicStream quicStream) {
         if (quicStream.isUnidirectional()) {
-            // https://tools.ietf.org/html/draft-ietf-quic-http-34#section-6.2
-            // "Unidirectional streams, in either direction, are used for a range of purposes. The purpose is
-            //  indicated by a stream type, which is sent as a variable-length integer at the start of the stream. "
-            try {
-                int streamType = quicStream.getInputStream().read();
-                if (streamType == 0x00) {
-                    // https://tools.ietf.org/html/draft-ietf-quic-http-34#section-6.2.1
-                    // "A control stream is indicated by a stream type of "0x00"."
-                    controlStream = quicStream.getInputStream();
-                    processControlStream(controlStream);
-                } else if (streamType == 0x02) {
-                    // https://tools.ietf.org/html/draft-ietf-quic-qpack-21#section-4.2
-                    // "An encoder stream is a unidirectional stream of type "0x02"."
-                    clientEncoderStream = quicStream.getInputStream();
-                }
-            }
-            catch (IOException ioError) {
-                // "If either control stream is closed at any point, this MUST be treated as a connection error of
-                //  type H3_CLOSED_CRITICAL_STREAM."
-                quicConnection.close(); // TODO: with application error
-            }
+            handleUnidirectionalStream(quicStream);
+        } else {
+            handleBidirectionalStream(quicStream);
         }
-        else {
-            // https://tools.ietf.org/html/draft-ietf-quic-http-34#section-6.1
-            // "All client-initiated bidirectional streams are used for HTTP requests and responses."
-            // https://tools.ietf.org/html/draft-ietf-quic-http-34#section-4.1
-            // "A client sends an HTTP request on a request stream, which is a client-initiated bidirectional QUIC
-            //  stream; see Section 6.1. A client MUST send only a single request on a given stream."
-            InputStream requestStream = quicStream.getInputStream();
-            try {
-                List<Http3Frame> receivedFrames = parseHttp3Frames(requestStream);
-                handleHttpRequest(receivedFrames, quicStream, new Encoder());
-            }
-            catch (IOException ioError) {
-                sendHttpErrorResponse(500, "", quicStream);
-            }
-            catch (HttpError httpError) {
-                sendHttpErrorResponse(httpError.getStatusCode(), httpError.getMessage(), quicStream);
-            }
+    }
+
+    void handleBidirectionalStream(QuicStream quicStream) {
+        // https://tools.ietf.org/html/draft-ietf-quic-http-34#section-6.1
+        // "All client-initiated bidirectional streams are used for HTTP requests and responses."
+        // https://tools.ietf.org/html/draft-ietf-quic-http-34#section-4.1
+        // "A client sends an HTTP request on a request stream, which is a client-initiated bidirectional QUIC
+        //  stream; see Section 6.1. A client MUST send only a single request on a given stream."
+        InputStream requestStream = quicStream.getInputStream();
+        try {
+            List<Http3Frame> receivedFrames = parseHttp3Frames(requestStream);
+            handleHttpRequest(receivedFrames, quicStream, new Encoder());
+        }
+        catch (IOException ioError) {
+            sendHttpErrorResponse(500, "", quicStream);
+        }
+        catch (HttpError httpError) {
+            sendHttpErrorResponse(httpError.getStatusCode(), httpError.getMessage(), quicStream);
         }
     }
 
