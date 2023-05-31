@@ -24,20 +24,15 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.io.InputStream;
-import java.net.ProtocolException;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.http.HttpHeaders;
 import java.nio.ByteBuffer;
 import java.util.AbstractMap;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
@@ -53,7 +48,7 @@ public class HeadersFrameTest {
                 new AbstractMap.SimpleEntry<>(":status", "200"),
                 new AbstractMap.SimpleEntry<>("content-type", "text/plain")
         ));
-        HeadersFrame headersFrame = new ResponseHeadersFrame().parsePayload(new byte[0], qpackDecoder);
+        HeadersFrame headersFrame = new HeadersFrame().parsePayload(new byte[0], qpackDecoder);
 
         assertThat(headersFrame.headers().map()).containsEntry("content-type", List.of("text/plain"));
     }
@@ -66,20 +61,9 @@ public class HeadersFrameTest {
                 new AbstractMap.SimpleEntry<>(":status", "200"),
                 new AbstractMap.SimpleEntry<>("content-type", "text/plain")
         ));
-        HeadersFrame headersFrame = new ResponseHeadersFrame().parsePayload(new byte[0], qpackDecoder);
+        HeadersFrame headersFrame = new HeadersFrame().parsePayload(new byte[0], qpackDecoder);
 
         assertThat(headersFrame.headers().map()).doesNotContainKey(":status");
-    }
-
-    @Test
-    public void decodedResponseWitInvalidStatusPseudoHeaderThrows() throws Exception {
-
-        Decoder qpackDecoder = mock(Decoder.class);
-        when(qpackDecoder.decodeStream(any(InputStream.class))).thenReturn(List.of(new AbstractMap.SimpleEntry<>(":status", "invalid")));
-
-        assertThatThrownBy(
-                () -> new ResponseHeadersFrame().parsePayload(new byte[0], qpackDecoder))
-                .isInstanceOf(ProtocolException.class);
     }
 
     @Test
@@ -87,20 +71,19 @@ public class HeadersFrameTest {
         Encoder qpackEncoder = mock(Encoder.class);
         when(qpackEncoder.compressHeaders(anyList())).thenReturn(ByteBuffer.wrap(new byte[0]));
 
-        byte[] bytes = new RequestHeadersFrame().toBytes(qpackEncoder);
+        byte[] bytes = new HeadersFrame().toBytes(qpackEncoder);
 
-        https://tools.ietf.org/html/draft-ietf-quic-http-20#section-4.2.2: The HEADERS frame (type=0x1)...
-        assertThat(bytes).startsWith(0x01);  // Headers frame
+        assertThat(bytes).startsWith(0x01);  // Headers frame type
     }
 
     @Test
     public void headersFrameSizeIsEncodedAsVarInt() {
         Encoder qpackEncoder = mock(Encoder.class);
-        ByteBuffer payload = ByteBuffer.allocate(67);
+        ByteBuffer payload = ByteBuffer.allocate(67);  // 67 bytes does not fit in 1 byte variable length integer
         payload.put(new byte[67]);  // Put ByteByffer in "write" mode
         when(qpackEncoder.compressHeaders(anyList())).thenReturn(payload);
 
-        byte[] bytes = new RequestHeadersFrame().toBytes(qpackEncoder);
+        byte[] bytes = new HeadersFrame().toBytes(qpackEncoder);
 
         assertThat(bytes).startsWith(0x01, 0x40, 67);
     }
@@ -114,96 +97,17 @@ public class HeadersFrameTest {
 
         when(qpackEncoder.compressHeaders(anyList())).thenReturn(payloadBuffer);
 
-        byte[] bytes = new RequestHeadersFrame().toBytes(qpackEncoder);
+        byte[] bytes = new HeadersFrame().toBytes(qpackEncoder);
 
         assertThat(bytes).startsWith(0x01, 0x08, 0x33, 0x10, 0x5f, 0x6e, 0x00, 0x3c, 0x77, 0x7f);
     }
 
     @Test
-    public void headersFrameShouldContainCompulsaryPseudoHeaders() throws URISyntaxException {
-        RequestHeadersFrame headersFrame = new RequestHeadersFrame();
-        headersFrame.setMethod("GET");
-        headersFrame.setUri(new URI("/index.html"));
-
-        Encoder qpackEncoder = mock(Encoder.class);
-        when(qpackEncoder.compressHeaders(anyList())).thenReturn(ByteBuffer.allocate(1));
-
-        headersFrame.toBytes(qpackEncoder);
-
-        ArgumentCaptor<List<Map.Entry<String, String>>> listCaptor = ArgumentCaptor.forClass(List.class);
-        verify(qpackEncoder, times(1)).compressHeaders(listCaptor.capture());
-
-        List<String> headerNames = listCaptor.getValue().stream().map(entry -> entry.getKey()).collect(Collectors.toList());
-
-        // https://tools.ietf.org/html/rfc7540#section-8.1.2.3
-        // "All HTTP/2 requests MUST include exactly one valid value for the
-        //   ":method", ":scheme", and ":path" pseudo-header fields"
-        assertThat(headerNames).contains(":method");
-        assertThat(headerNames).contains(":scheme");
-        assertThat(headerNames).contains(":path");
-    }
-
-    @Test
-    public void headersFrameShouldContainAuthorityHeader() throws URISyntaxException {
-        RequestHeadersFrame headersFrame = new RequestHeadersFrame();
-        headersFrame.setMethod("GET");
-        headersFrame.setUri(new URI("http://example.com:4433/index.html"));
-
-        Encoder qpackEncoder = mock(Encoder.class);
-        when(qpackEncoder.compressHeaders(anyList())).thenReturn(ByteBuffer.allocate(1));
-
-        headersFrame.toBytes(qpackEncoder);
-
-        ArgumentCaptor<List<Map.Entry<String, String>>> listCaptor = ArgumentCaptor.forClass(List.class);
-        verify(qpackEncoder, times(1)).compressHeaders(listCaptor.capture());
-
-        List<String> headerNames = listCaptor.getValue().stream().map(entry -> entry.getKey()).collect(Collectors.toList());
-
-        // https://tools.ietf.org/html/rfc7540#section-8.1.2.3
-        // "Clients that generate HTTP/2 requests directly SHOULD use the ":authority"
-        //  pseudo-header field instead of the Host header field."
-        assertThat(headerNames).contains(":authority");
-        assertThat(listCaptor.getValue().stream()
-                .filter(entry -> entry.getKey().equals(":authority"))
-                .map(entry -> entry.getValue())
-                .findFirst().get())
-                .isEqualTo("example.com:4433");
-    }
-
-    @Test
-    public void headersFrameAuthorityHeaderShouldExludeUserInfo() throws URISyntaxException {
-        RequestHeadersFrame headersFrame = new RequestHeadersFrame();
-        headersFrame.setMethod("GET");
-        headersFrame.setUri(new URI("http://username:password@example.com:4433/index.html"));
-
-        Encoder qpackEncoder = mock(Encoder.class);
-        when(qpackEncoder.compressHeaders(anyList())).thenReturn(ByteBuffer.allocate(1));
-
-        headersFrame.toBytes(qpackEncoder);
-
-        ArgumentCaptor<List<Map.Entry<String, String>>> listCaptor = ArgumentCaptor.forClass(List.class);
-        verify(qpackEncoder, times(1)).compressHeaders(listCaptor.capture());
-
-        List<String> headerNames = listCaptor.getValue().stream().map(entry -> entry.getKey()).collect(Collectors.toList());
-
-        // https://tools.ietf.org/html/rfc7540#section-8.1.2.3
-        // "The authority MUST NOT include the deprecated "userinfo" subcomponent for "http"
-        // or "https" schemed URIs."
-        assertThat(headerNames).contains(":authority");
-        assertThat(listCaptor.getValue().stream()
-                .filter(entry -> entry.getKey().equals(":authority"))
-                .map(entry -> entry.getValue())
-                .findFirst().get())
-                .isEqualTo("example.com:4433");
-    }
-
-    @Test
     public void httpHeadersAreMappedToQpack() {
-        HeadersFrame headersFrame = new RequestHeadersFrame();
         HttpHeaders httpHeaders = HttpHeaders.of(
                 Map.of("headername1", List.of("value1"),
                         "headername2", List.of("value2")), (a, b) -> true);
-        headersFrame.setHeaders(httpHeaders);
+        HeadersFrame headersFrame = new HeadersFrame(httpHeaders, Collections.emptyMap());
 
         Encoder qpackEncoder = mock(Encoder.class);
         when(qpackEncoder.compressHeaders(anyList())).thenReturn(ByteBuffer.allocate(1));
@@ -220,10 +124,9 @@ public class HeadersFrameTest {
 
     @Test
     public void httpHeaderNamesAreConvertedToLowercaseBeforeEncoding() {
-        HeadersFrame headersFrame = new RequestHeadersFrame();
         HttpHeaders httpHeaders = HttpHeaders.of(
                 Map.of("HeaderName", List.of("CamelCasedValue")), (a, b) -> true);
-        headersFrame.setHeaders(httpHeaders);
+        HeadersFrame headersFrame = new HeadersFrame(httpHeaders, Collections.emptyMap());
 
         Encoder qpackEncoder = mock(Encoder.class);
         when(qpackEncoder.compressHeaders(anyList())).thenReturn(ByteBuffer.allocate(1));
@@ -239,11 +142,10 @@ public class HeadersFrameTest {
 
     @Test
     public void multiValuedHttpHeadersAreCompressedAsSingleValue() {
-        HeadersFrame headersFrame = new RequestHeadersFrame();
         HttpHeaders httpHeaders = HttpHeaders.of(
                 Map.of("headername1", List.of("value1", "value2", "value3"),
                         "headername2", List.of("value20")), (a, b) -> true);
-        headersFrame.setHeaders(httpHeaders);
+        HeadersFrame headersFrame = new HeadersFrame(httpHeaders, Collections.emptyMap());
 
         Encoder qpackEncoder = mock(Encoder.class);
         when(qpackEncoder.compressHeaders(anyList())).thenReturn(ByteBuffer.allocate(1));
@@ -259,13 +161,12 @@ public class HeadersFrameTest {
     }
 
     @Test
-    public void whenHeadersAreSetFirstPseudoHeadersMustStillBeEncodedFirst() throws Exception {
-        // Given
-        RequestHeadersFrame headersFrame = new RequestHeadersFrame();
-
+    public void pseudoHeadersMustBeEncodedFirst() throws Exception {
         // When
-        headersFrame.setHeaders(HttpHeaders.of(Map.of("Example-Field", List.of("value")), (a, b) -> true));
-        headersFrame.setUri(new URI("https://www.example.com"));
+        HeadersFrame headersFrame = new HeadersFrame(
+                HttpHeaders.of(Map.of("Example-Field", List.of("value")), (a, b) -> true),
+                Map.of(":method", "GET", ":scheme", "https", ":path", "/", ":authority", "www.example.com")
+        );
 
         // Then
         Encoder encoder = mockEncoder();
@@ -279,47 +180,6 @@ public class HeadersFrameTest {
     }
 
     @Test
-    public void anyRequestMustContainPseudoHeaders()  throws Exception {
-        // Given
-        RequestHeadersFrame headersFrame = new RequestHeadersFrame();
-
-        // When
-        headersFrame.setUri(new URI("https://www.example.com"));
-
-        // Then
-        Encoder encoder = mockEncoder();
-        headersFrame.toBytes(encoder);
-        ArgumentCaptor<List<Map.Entry<String, String>>> listCaptor = ArgumentCaptor.forClass(List.class);
-        verify(encoder, times(1)).compressHeaders(listCaptor.capture());
-
-        List<String> headerNames = listCaptor.getValue().stream().map(e -> e.getKey()).collect(Collectors.toList());
-        assertThat(headerNames)
-                .contains(":method")
-                .contains(":scheme")
-                .contains(":path");
-    }
-
-    @Test
-    public void pathAndQueryPartsOfUriShouldBeAddedToPathPseudoHeader() throws Exception {
-        // Given
-        RequestHeadersFrame headersFrame = new RequestHeadersFrame();
-
-        // When
-        headersFrame.setUri(new URI("https://www.example.com/path/element?query=value&key=value"));
-
-        // Then
-        Encoder encoder = mockEncoder();
-        headersFrame.toBytes(encoder);
-        ArgumentCaptor<List<Map.Entry<String, String>>> listCaptor = ArgumentCaptor.forClass(List.class);
-        verify(encoder, times(1)).compressHeaders(listCaptor.capture());
-
-        Optional<String> pathValue = listCaptor.getValue().stream().filter(e -> e.getKey().equals(":path")).map(e -> e.getValue()).findFirst();
-
-        assertThat(pathValue.isPresent()).isTrue();
-        assertThat(pathValue.get()).isEqualTo("/path/element?query=value&key=value");
-    }
-
-    @Test
     public void multiValueHeadersShouldBeParsedCorrectly() throws Exception {
         Decoder qpackDecoder = mock(Decoder.class);
         when(qpackDecoder.decodeStream(any(InputStream.class))).thenReturn(List.of(
@@ -328,9 +188,18 @@ public class HeadersFrameTest {
                 new AbstractMap.SimpleEntry<>("set-cookie", "sample=foo"),
                 new AbstractMap.SimpleEntry<>("set-cookie", "sample=bar")
         ));
-        HeadersFrame headersFrame = new ResponseHeadersFrame().parsePayload(new byte[0], qpackDecoder);
+        HeadersFrame headersFrame = new HeadersFrame().parsePayload(new byte[0], qpackDecoder);
 
         assertThat(headersFrame.headers().map()).containsEntry("set-cookie", List.of("sample=foo", "sample=bar"));
+    }
+
+    private HeadersFrame createHeadersFrame(String method, URI uri) {
+        HeadersFrame headersFrame = new HeadersFrame(null, Map.of(
+                ":method", method,
+                ":authority", uri.getHost() + ":" + uri.getPort(),
+                ":path", uri.getPath()
+        ));
+        return headersFrame;
     }
 
     private Encoder mockEncoder() {

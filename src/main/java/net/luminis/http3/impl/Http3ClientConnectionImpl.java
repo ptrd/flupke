@@ -25,7 +25,6 @@ import net.luminis.qpack.Encoder;
 import net.luminis.quic.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
-import net.luminis.quic.QuicStream;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -86,6 +85,11 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         settingsFrameReceived = new CountDownLatch(1);
     }
 
+    public Http3ClientConnectionImpl(String host, int port, Encoder encoder) throws IOException {
+        this(host, port, false, null);
+        qpackEncoder = encoder;
+    }
+
     @Override
     public void connect(int connectTimeoutInMillis) throws IOException {
         synchronized (this) {
@@ -105,8 +109,15 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     public <T> HttpResponse<T> send(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler) throws IOException {
         QuicStream httpStream = quicConnection.createStream(true);
         sendRequest(request, httpStream);
-        Http3Response<T> http3Response = receiveResponse(request, responseBodyHandler, httpStream);
-        return http3Response;
+        try {
+            Http3Response<T> http3Response = receiveResponse(request, responseBodyHandler, httpStream);
+            return http3Response;
+        }
+        catch (MalformedResponseException e) {
+            // https://www.rfc-editor.org/rfc/rfc9114.html#name-malformed-requests-and-resp
+            // "Malformed requests or responses that are detected MUST be treated as a stream error of type H3_MESSAGE_ERROR."
+            throw new ProtocolException(e.getMessage());  // TODO: generate stream error
+        }
     }
 
     private static QuicConnection createQuicConnection(String host, int port, boolean disableCertificateCheck, Logger logger) throws SocketException, UnknownHostException {
@@ -129,11 +140,19 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     private void sendRequest(HttpRequest request, QuicStream httpStream) throws IOException {
         OutputStream requestStream = httpStream.getOutputStream();
 
-        RequestHeadersFrame headersFrame = new RequestHeadersFrame();
-        headersFrame.setMethod(request.method());
-        headersFrame.setUri(request.uri());
-        headersFrame.setHeaders(request.headers());
-        requestStream.write(headersFrame.toBytes(new Encoder()));
+        // https://www.rfc-editor.org/rfc/rfc9114.html#name-request-pseudo-header-field
+        // "All HTTP/3 requests MUST include exactly one value for the :method, :scheme, and :path pseudo-header fields,
+        //  unless the request is a CONNECT request;"
+        // "If the :scheme pseudo-header field identifies a scheme that has a mandatory authority component (including
+        //  "http" and "https"), the request MUST contain either an :authority pseudo-header field or a Host header field."
+        Map pseudoHeaders = Map.of(
+                ":method", request.method(),
+                ":scheme", "https",
+                ":authority", extractAuthority(request.uri()),
+                ":path", extractPath(request.uri())
+        );
+        HeadersFrame headersFrame = new HeadersFrame(request.headers(), pseudoHeaders);
+        requestStream.write(headersFrame.toBytes(qpackEncoder));
 
         if (request.bodyPublisher().isPresent()) {
             Flow.Subscriber<ByteBuffer> subscriber = new Flow.Subscriber<>() {
@@ -179,7 +198,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         requestStream.close();
     }
 
-    private <T> Http3Response<T> receiveResponse(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler, QuicStream httpStream) throws IOException {
+    private <T> Http3Response<T> receiveResponse(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler, QuicStream httpStream) throws IOException, MalformedResponseException {
         InputStream responseStream = httpStream.getInputStream();
 
         HttpResponse.BodySubscriber<T> bodySubscriber = null;
@@ -188,11 +207,11 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
 
         Http3Frame frame;
         while ((frame = readFrame(responseStream)) != null) {
-            if (frame instanceof ResponseHeadersFrame) {
+            if (frame instanceof HeadersFrame) {
                 responseState.gotHeader();
                 if (responseInfo == null) {
                     // First frame should contain :status pseudo-header and other headers that the body handler might use to determine what kind of body subscriber to use
-                    responseInfo = new HttpResponseInfo((ResponseHeadersFrame) frame);
+                    responseInfo = new HttpResponseInfo((HeadersFrame) frame);
 
                     bodySubscriber = responseBodyHandler.apply(responseInfo);
                     bodySubscriber.onSubscribe(new Flow.Subscription() {
@@ -252,7 +271,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         Http3Frame frame;
         switch ((int) frameType) {
             case 0x01:
-                frame = new ResponseHeadersFrame().parsePayload(payload, qpackDecoder);
+                frame = new HeadersFrame().parsePayload(payload, qpackDecoder);
                 break;
             case 0x00:
                 frame = new DataFrame().parsePayload(payload);
@@ -359,12 +378,13 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     @Override
     public HttpStreamImpl sendConnect(HttpRequest request) throws IOException, HttpError {
         // https://www.rfc-editor.org/rfc/rfc9114.html#name-the-connect-method
-        // "- The :method pseudo-header field is set to "CONNECT"
+        // "A CONNECT request MUST be constructed as follows:
+        //  - The :method pseudo-header field is set to "CONNECT"
         //  - The :scheme and :path pseudo-header fields are omitted
-        //  - The :authority pseudo-header field contains the host and port to connect to"
-        RequestHeadersFrame headersFrame = new RequestHeadersFrame();
-        headersFrame.setMethod("CONNECT");
-        headersFrame.setPseudoHeader(":authority", request.uri().getHost() + ":" + request.uri().getPort());
+        //  - The :authority pseudo-header field contains the host and port to connect to (equivalent to the authority-form of the request-target of CONNECT requests; see Section 7.1 of [HTTP])."
+        HeadersFrame headersFrame = new HeadersFrame(request.headers(), Map.of(
+                ":authority", extractAuthority(request.uri()),
+                ":method", "CONNECT"));
 
         return createHttpStream(headersFrame);
     }
@@ -378,17 +398,18 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
             throw new HttpError("Server does not support Extended Connect (RFC 9220).");
         }
 
-        RequestHeadersFrame headersFrame = new ConnectRequestHeadersFrame();
-        headersFrame.setHeaders(request.headers());
-        headersFrame.setMethod("CONNECT");
-        headersFrame.setPseudoHeader(":authority", request.uri().getHost() + ":" + request.uri().getPort());
-        headersFrame.setPseudoHeader(":protocol", protocol);
-        headersFrame.setPseudoHeader(":scheme", scheme);
-        String path = request.uri().getPath();
-        if (request.uri().getQuery() != null && !request.uri().getQuery().isBlank()) {
-            path += "?" + request.uri().getQuery();
-        }
-        headersFrame.setPseudoHeader(":path", path);
+        // https://www.rfc-editor.org/rfc/rfc8441#section-4
+        // "A new pseudo-header field :protocol MAY be included on request HEADERS indicating the desired protocol to be
+        //  spoken on the tunnel created by CONNECT. The pseudo-header field is single valued and contains a value from
+        //  the "Hypertext Transfer Protocol (HTTP) Upgrade Token Registry located at <https://www.iana.org/assignments/http-upgrade-tokens/>"
+        // "On requests that contain the :protocol pseudo-header field, the :scheme and :path pseudo-header fields of
+        //  the target URI (see Section 5) MUST also be included."
+        HeadersFrame headersFrame = new HeadersFrame(request.headers(), Map.of(
+                ":authority", extractAuthority(request.uri()),
+                ":method", "CONNECT",
+                ":protocol", protocol,
+                ":scheme", scheme,
+                ":path", extractPath(request.uri())));
 
         return createHttpStream(headersFrame);
     }
@@ -398,8 +419,15 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         httpStream.getOutputStream().write(headersFrame.toBytes(qpackEncoder));
 
         Http3Frame responseFrame = readFrame(httpStream.getInputStream());
-        if (responseFrame instanceof ResponseHeadersFrame) {
-            int statusCode = ((ResponseHeadersFrame) responseFrame).statusCode();
+        if (responseFrame instanceof HeadersFrame) {
+            HttpResponseInfo responseInfo = null;
+            try {
+                responseInfo = new HttpResponseInfo((HeadersFrame) responseFrame);
+            }
+            catch (MalformedResponseException e) {
+                throw new ProtocolException("Malformed response from server: missing status code");
+            }
+            int statusCode = responseInfo.statusCode();
             if (statusCode >= 200 && statusCode < 300) {
                 return new HttpStreamImpl(httpStream);
             }
@@ -417,13 +445,38 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         }
     }
 
+    static String extractPath(URI uri) {
+        String path = uri.getPath();
+        if (path.isBlank()) {
+            path = "/";
+        }
+        if (uri.getQuery() != null && !uri.getQuery().isEmpty()) {
+            path = path + "?" + uri.getQuery();
+        }
+        return path;
+    }
+
+    static String extractAuthority(URI uri) {
+        int port = uri.getPort();
+        if (port <= 0) {
+            port = Http3ClientConnectionImpl.DEFAULT_HTTP3_PORT;
+        }
+        return uri.getHost() + ":" + port;
+    }
+
     private static class HttpResponseInfo implements HttpResponse.ResponseInfo {
         private HttpHeaders headers;
         private final int statusCode;
 
-        public HttpResponseInfo(ResponseHeadersFrame headersFrame) throws ProtocolException {
+        public HttpResponseInfo(HeadersFrame headersFrame) throws MalformedResponseException {
             headers = headersFrame.headers();
-            statusCode = headersFrame.statusCode();
+            String statusCodeHeader = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_STATUS);
+            if (statusCodeHeader != null && isNumeric(statusCodeHeader)) {
+                statusCode = Integer.parseInt(statusCodeHeader);
+            }
+            else {
+                throw new MalformedResponseException("missing or invalid status code");
+            }
         }
 
         @Override
@@ -446,6 +499,15 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
             mergedHeadersMap.putAll(headers.map());
             mergedHeadersMap.putAll(headersFrame.headers().map());
             headers = HttpHeaders.of(mergedHeadersMap, (a,b) -> true);
+        }
+
+        private boolean isNumeric(String value) {
+            try {
+                Integer.parseInt(value);
+                return true;
+            } catch (NumberFormatException e) {
+                return false;
+            }
         }
     }
 

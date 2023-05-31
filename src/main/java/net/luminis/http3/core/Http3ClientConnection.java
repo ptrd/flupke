@@ -53,7 +53,7 @@ public interface Http3ClientConnection extends Http3Connection {
      * Sends an Extended CONNECT request (that can be used for tunneling other protocols like websocket and webtransport).
      * See https://www.rfc-editor.org/rfc/rfc9220.html and  https://www.rfc-editor.org/rfc/rfc8441.html.
      * Note that this method is only supported by servers that support Extended Connect (RFC 9220). If the server does
-     * not support it, a HttpError is thrown. In any case, the client has to wait for the SETTINGS frame to be received
+     * not support it, an HttpError is thrown. In any case, the client has to wait for the SETTINGS frame to be received
      * (to determine whether the server supports Extended Connect), so this method may block for a while or throw a
      * HttpError if the SETTINGS frame is not received in time.
      * @param request

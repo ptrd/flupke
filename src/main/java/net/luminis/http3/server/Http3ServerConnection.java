@@ -39,7 +39,7 @@ import java.util.function.Consumer;
 
 
 /**
- * Http connection serving GET requests by returning the file from specified www dir.
+ * Http connection serving HTTP requests using a given HttpRequestHandler.
  */
 public class Http3ServerConnection extends Http3ConnectionImpl implements ApplicationProtocolConnection {
 
@@ -131,7 +131,7 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
                     }
                     byte[] payload = readExact(requestStream, payloadLength);
                     headerSize += payloadLength;
-                    HeadersFrame responseHeadersFrame = new RequestHeadersFrame().parsePayload(payload, qpackDecoder);
+                    HeadersFrame responseHeadersFrame = new HeadersFrame().parsePayload(payload, qpackDecoder);
                     receivedFrames.add(responseHeadersFrame);
                     break;
                 case 0x00:
@@ -157,12 +157,14 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
     }
 
     void handleHttpRequest(List<Http3Frame> receivedFrames, QuicStream quicStream, Encoder qpackEncoder) throws HttpError {
-        RequestHeadersFrame headersFrame = (RequestHeadersFrame) receivedFrames.stream()
+        HeadersFrame headersFrame = (HeadersFrame) receivedFrames.stream()
                 .filter(f -> f instanceof HeadersFrame)
                 .findFirst()
                 .orElseThrow(() -> new HttpError("", 400));  // TODO
 
-        HttpServerRequest request = new HttpServerRequest(headersFrame.getMethod(), headersFrame.getPath(), null, clientAddress);
+        String method = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_METHOD);
+        String path = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PATH);
+        HttpServerRequest request = new HttpServerRequest(method, path, null, clientAddress);
         HttpServerResponse response = new HttpServerResponse() {
             private boolean outputStarted;
             private DataFrameWriter dataFrameWriter;
@@ -170,8 +172,7 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
             @Override
             public OutputStream getOutputStream() {
                 if (!outputStarted) {
-                    ResponseHeadersFrame headersFrame = new ResponseHeadersFrame();
-                    headersFrame.setStatus(status());
+                    HeadersFrame headersFrame = new HeadersFrame(HeadersFrame.PSEUDO_HEADER_STATUS, Integer.toString(status()));
                     OutputStream outputStream = quicStream.getOutputStream();
                     try {
                         outputStream.write(headersFrame.toBytes(qpackEncoder));
@@ -205,8 +206,7 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
     }
 
     private void sendStatus(int statusCode, OutputStream outputStream) throws IOException {
-        ResponseHeadersFrame headersFrame = new ResponseHeadersFrame();
-        headersFrame.setStatus(statusCode);
+        HeadersFrame headersFrame = new HeadersFrame(HeadersFrame.PSEUDO_HEADER_STATUS, Integer.toString(statusCode));
         outputStream.write(headersFrame.toBytes(new Encoder()));
     }
 

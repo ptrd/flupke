@@ -23,8 +23,8 @@ import net.luminis.http3.server.HttpError;
 import net.luminis.qpack.Decoder;
 import net.luminis.qpack.Encoder;
 import net.luminis.quic.QuicClientConnection;
-import net.luminis.quic.TransportParameters;
 import net.luminis.quic.QuicStream;
+import net.luminis.quic.TransportParameters;
 import net.luminis.tls.util.ByteUtils;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -40,6 +40,7 @@ import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -51,10 +52,63 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.*;
-import static org.mockito.AdditionalMatchers.or;
 
 
 public class Http3ClientConnectionImplTest {
+
+    private List<Map.Entry<String, String>> mockEncoderCompressedHeaders = new ArrayList<>();
+
+    // An empty headers that is used in combination with the mockQuicConnectionWithStreams method.
+    private byte[] MOCK_HEADER = new byte[] {
+            // Partial response for Headers frame, to model aborted stream
+            0x01, // type Headers Frame
+            0x00, // payload length
+    };
+
+    @Test
+    public void requestShouldContainCompulsaryPseudoHeaders() throws Exception {
+        // Given
+        Http3ClientConnectionImpl http3Connection = new Http3ClientConnectionImpl("localhost",4433, new NoOpEncoder());
+        mockQuicConnectionWithStreams(http3Connection, MOCK_HEADER);
+
+        HttpRequest request = HttpRequest.newBuilder().uri(new URI("https://www.example.com")).build();
+        http3Connection.send(request, HttpResponse.BodyHandlers.ofString());
+
+        // Then
+        assertThat(mockEncoderCompressedHeaders)
+                .contains(entry(":method", "GET"))
+                .contains(entry(":scheme", "https"))
+                .contains(entry(":path", "/"))
+                .contains(entry(":authority", "www.example.com:443"));
+    }
+
+    @Test
+    public void pathAndQueryPartsOfUriShouldBeAddedToPathPseudoHeader() throws Exception {
+        // Given
+        Http3ClientConnectionImpl http3Connection = new Http3ClientConnectionImpl("localhost",4433, new NoOpEncoder());
+        mockQuicConnectionWithStreams(http3Connection, MOCK_HEADER);
+
+        // When
+        HttpRequest request = HttpRequest.newBuilder().uri(new URI("https://www.example.com/path/element?query=value&key=value")).build();
+        http3Connection.send(request, HttpResponse.BodyHandlers.ofString());
+
+        // Then
+        assertThat(mockEncoderCompressedHeaders).contains(entry(":path", "/path/element?query=value&key=value"));
+    }
+
+    @Test
+    public void headersFrameAuthorityHeaderShouldExludeUserInfo() throws Exception {
+        // Given
+        Http3ClientConnectionImpl http3Connection = new Http3ClientConnectionImpl("localhost",4433, new NoOpEncoder());
+        mockQuicConnectionWithStreams(http3Connection, MOCK_HEADER);
+
+        // When
+        HttpRequest request = HttpRequest.newBuilder().uri(new URI("http://username:password@example.com:4433/index.html")).build();
+        http3Connection.send(request, HttpResponse.BodyHandlers.ofString());
+
+        // Then
+        assertThat(mockEncoderCompressedHeaders).contains(entry(":authority", "example.com:4433"));
+    }
 
     @Test
     public void testServerSettingsFrameIsProcessed() throws IOException {
@@ -110,7 +164,7 @@ public class Http3ClientConnectionImplTest {
         byte[] responseBytes = new byte[] {
                 // Partial response for Headers frame, the rest is covered by the mock decoder
                 0x01, // type Headers Frame
-                0x00, // payload length (payload omitted for the test, is covered by the mock decoder
+                0x00, // payload length (payload omitted for the test, is covered by the mock decoder)
                 // Complete response for Data frame
                 0x00, // type Data Frame
                 0x05, // payload length
@@ -624,11 +678,15 @@ public class Http3ClientConnectionImplTest {
 
     /**
      * Inserts a mock QuicConnection into the given Http3Connection object.
-     * The mocked QuicConnection will return the given response bytes as output on the (first) QuicStream that is
-     * created on it.
+     * The mocked QuicConnection will return the given response bytes as output on the first bidirectional QuicStream
+     * that is created on it (which is usually the request-response stream). The QPack decoder that is used to read
+     * response headers will be mocked to return the given header frames contents. This reliefs the caller from duty to
+     * assemble a complete and correct (QPack) header payload. As a consequence, the bytes specificied in the response
+     * parameter can contain an empty header, provided the header frames contents contain the mandatory headers.
      *
      * @param http3Connection
      * @param response
+     * @param headerFramesContents
      * @throws NoSuchFieldException
      * @throws IOException
      * @return
@@ -685,4 +743,18 @@ public class Http3ClientConnectionImplTest {
         return quicConnection;
     }
 
+    private class NoOpEncoder extends Encoder {
+        @Override
+        public ByteBuffer compressHeaders(List<Map.Entry<String, String>> headers) {
+            mockEncoderCompressedHeaders = headers;
+            return mock(ByteBuffer.class);
+        }
+    }
+
+    private class NoOpDecoder extends Decoder {
+        @Override
+        public List<Map.Entry<String, String>> decodeStream(InputStream inputStream) throws IOException {
+            return mockEncoderCompressedHeaders;
+        }
+    }
 }

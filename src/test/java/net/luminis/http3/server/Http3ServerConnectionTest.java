@@ -18,9 +18,7 @@
  */
 package net.luminis.http3.server;
 
-import net.luminis.http3.impl.DataFrame;
-import net.luminis.http3.impl.RequestHeadersFrame;
-import net.luminis.http3.impl.ResponseHeadersFrame;
+import net.luminis.http3.impl.*;
 import net.luminis.qpack.Decoder;
 import net.luminis.qpack.Encoder;
 import net.luminis.quic.QuicConnection;
@@ -32,7 +30,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
-import java.net.http.HttpHeaders;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -54,9 +51,7 @@ public class Http3ServerConnectionTest {
         HttpRequestHandler handler = mock(HttpRequestHandler.class);
         Http3ServerConnection http3Connection = new Http3ServerConnection(createMockQuicConnection(), handler);
 
-        RequestHeadersFrame headersFrame = new RequestHeadersFrame();
-        headersFrame.setMethod("GET");
-        headersFrame.setUri(new URI("https://www.example.com/index.html"));
+        HeadersFrame headersFrame = createHeadersFrame("GET", new URI("https://www.example.com/index.html"));
         http3Connection.handleHttpRequest(List.of(headersFrame), createMockQuicStream(null), new NoOpEncoder());
 
         verify(handler).handleRequest(argThat(req ->
@@ -77,17 +72,15 @@ public class Http3ServerConnectionTest {
         Http3ServerConnection http3Connection = new Http3ServerConnection(createMockQuicConnection(), handler);
 
         // When
-        RequestHeadersFrame requestHeadersFrame = new RequestHeadersFrame();
-        requestHeadersFrame.setMethod("GET");
-        requestHeadersFrame.setUri(new URI("https://www.example.com/index.html"));
+        HeadersFrame requestHeadersFrame = createHeadersFrame("GET", new URI("https://www.example.com/index.html"));
 
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         QuicStream stream = createMockQuicStream(output);
         http3Connection.handleHttpRequest(List.of(requestHeadersFrame), stream, new NoOpEncoder());
 
         // Then
-        ResponseHeadersFrame responseHeadersFrame = new ResponseHeadersFrame().parsePayload(output.toByteArray(), new NoOpDecoder());
-        assertThat(responseHeadersFrame.statusCode()).isEqualTo(201);
+        HeadersFrame responseHeadersFrame = new HeadersFrame().parsePayload(output.toByteArray(), new NoOpDecoder());
+        assertThat(responseHeadersFrame.getPseudoHeader(":status")).isEqualTo("201");
     }
 
     @Test
@@ -104,7 +97,7 @@ public class Http3ServerConnectionTest {
         Http3ServerConnection http3Connection = new Http3ServerConnection(createMockQuicConnection(), handler);
 
         // When
-        RequestHeadersFrame requestHeadersFrame = new RequestHeadersFrame();
+        HeadersFrame requestHeadersFrame = new HeadersFrame();
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         QuicStream stream = createMockQuicStream(output);
         http3Connection.handleHttpRequest(List.of(requestHeadersFrame), stream, new NoOpEncoder());
@@ -114,6 +107,15 @@ public class Http3ServerConnectionTest {
         byte[] dataBytes = Arrays.copyOfRange(output.toByteArray(), 2, output.toByteArray().length);
         DataFrame dataFrame = new DataFrame().parse(dataBytes);
         assertThat(dataFrame.getPayload()).isEqualTo("Hello World!".getBytes());
+    }
+
+    HeadersFrame createHeadersFrame(String method, URI uri) {
+        HeadersFrame headersFrame = new HeadersFrame(null, Map.of(
+                ":method", method,
+                ":authority", uri.getHost() + ":" + uri.getPort(),
+                ":path", uri.getPath()
+        ));
+        return headersFrame;
     }
 
     private QuicConnection createMockQuicConnection() {
