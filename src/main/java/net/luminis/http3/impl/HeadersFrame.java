@@ -137,4 +137,17 @@ public class HeadersFrame extends Http3Frame {
     public HttpHeaders headers() {
         return httpHeaders;
     }
+
+    /**
+     * Returns the size of the uncompressed headers.
+     * @return
+     */
+    public long getHeadersSize() {
+        return pseudoHeaders.entrySet().stream()
+                .mapToLong(entry -> entry.getKey().length() + entry.getValue().length())
+                .sum() +
+                httpHeaders.map().entrySet().stream()
+                        .mapToLong(entry -> entry.getKey().length() + entry.getValue().stream().mapToLong(String::length).sum())
+                        .sum();
+    }
 }

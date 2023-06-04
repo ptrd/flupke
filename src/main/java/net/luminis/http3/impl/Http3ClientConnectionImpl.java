@@ -20,13 +20,11 @@ package net.luminis.http3.impl;
 
 import net.luminis.http3.core.Http3ClientConnection;
 import net.luminis.http3.server.HttpError;
-import net.luminis.qpack.Decoder;
 import net.luminis.qpack.Encoder;
 import net.luminis.quic.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 
-import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -49,7 +47,6 @@ import java.util.concurrent.TimeUnit;
 public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Http3ClientConnection {
 
     private InputStream serverPushStream;
-    private final Decoder qpackDecoder;
     private Statistics connectionStats;
     private boolean initialized;
     private Encoder qpackEncoder;
@@ -79,7 +76,6 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         //   the QUIC transport parameter "initial_max_uni_streams","
         quicConnection.setMaxAllowedUnidirectionalStreams(3);
 
-        qpackDecoder = new Decoder();
         qpackEncoder = new Encoder();
 
         settingsFrameReceived = new CountDownLatch(1);
@@ -117,6 +113,8 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
             // https://www.rfc-editor.org/rfc/rfc9114.html#name-malformed-requests-and-resp
             // "Malformed requests or responses that are detected MUST be treated as a stream error of type H3_MESSAGE_ERROR."
             throw new ProtocolException(e.getMessage());  // TODO: generate stream error
+        } catch (HttpError e) {
+            throw new ProtocolException(e.getMessage());
         }
     }
 
@@ -145,7 +143,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         //  unless the request is a CONNECT request;"
         // "If the :scheme pseudo-header field identifies a scheme that has a mandatory authority component (including
         //  "http" and "https"), the request MUST contain either an :authority pseudo-header field or a Host header field."
-        Map pseudoHeaders = Map.of(
+        Map<String, String> pseudoHeaders = Map.of(
                 ":method", request.method(),
                 ":scheme", "https",
                 ":authority", extractAuthority(request.uri()),
@@ -198,7 +196,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         requestStream.close();
     }
 
-    private <T> Http3Response<T> receiveResponse(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler, QuicStream httpStream) throws IOException, MalformedResponseException {
+    private <T> Http3Response<T> receiveResponse(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler, QuicStream httpStream) throws IOException, MalformedResponseException, HttpError {
         InputStream responseStream = httpStream.getInputStream();
 
         HttpResponse.BodySubscriber<T> bodySubscriber = null;
@@ -242,45 +240,11 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
 
         connectionStats = quicConnection.getStats();
 
-        return new Http3Response<T>(
+        return new Http3Response<>(
                 request,
                 responseInfo.statusCode(),
                 responseInfo.headers(),
                 bodySubscriber.getBody());
-    }
-
-    Http3Frame readFrame(InputStream responseStream) throws IOException {
-        long frameType;
-        try {
-            frameType = VariableLengthInteger.parseLong(responseStream);
-        }
-        catch (EOFException endOfStream) {
-            return null;
-        }
-
-        int payloadLength = VariableLengthInteger.parse(responseStream);
-        byte[] payload = new byte[payloadLength];
-        readExact(responseStream, payload);
-
-        if (frameType > 0x0e) {
-            // https://www.rfc-editor.org/rfc/rfc9114.html#name-extensions-to-http-3
-            // "Implementations MUST discard data or abort reading on unidirectional streams that have unknown or unsupported types."
-            return new UnknownFrame();
-        }
-
-        Http3Frame frame;
-        switch ((int) frameType) {
-            case 0x01:
-                frame = new HeadersFrame().parsePayload(payload, qpackDecoder);
-                break;
-            case 0x00:
-                frame = new DataFrame().parsePayload(payload);
-                break;
-            default:
-                // Not necessarily a protocol error, could be a frame (from RFC-9114) Flupke not yet supports
-                throw new RuntimeException("Unexpected frame type " + frameType);
-        }
-        return frame;
     }
 
     void registerServerInitiatedStream(QuicStream stream) {
@@ -309,19 +273,6 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         settingsFrameReceived.countDown();
 
         return settingsFrame;
-    }
-
-    private void readExact(InputStream inputStream, byte[] payload) throws IOException {
-        int offset = 0;
-        while (offset < payload.length) {
-            int read = inputStream.read(payload, offset, payload.length - offset);
-            if (read > 0) {
-                offset += read;
-            }
-            else {
-                throw new EOFException("Stream closed by peer");
-            }
-        }
     }
 
     private void doAsync(Runnable task) {
@@ -420,7 +371,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
 
         Http3Frame responseFrame = readFrame(httpStream.getInputStream());
         if (responseFrame instanceof HeadersFrame) {
-            HttpResponseInfo responseInfo = null;
+            HttpResponseInfo responseInfo;
             try {
                 responseInfo = new HttpResponseInfo((HeadersFrame) responseFrame);
             }
@@ -609,7 +560,12 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
                 }
 
                 private boolean readData() throws IOException {
-                    Http3Frame frame = readFrame(quicStream.getInputStream());
+                    Http3Frame frame = null;
+                    try {
+                        frame = readFrame(quicStream.getInputStream());
+                    } catch (HttpError e) {
+                        throw new IOException(e);
+                    }
                     if (frame instanceof DataFrame) {
                         dataBuffer = ByteBuffer.wrap(((DataFrame) frame).getPayload());
                         return true;

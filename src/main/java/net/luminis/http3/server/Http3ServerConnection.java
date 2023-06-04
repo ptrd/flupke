@@ -18,24 +18,23 @@
  */
 package net.luminis.http3.server;
 
-import net.luminis.http3.impl.*;
-import net.luminis.qpack.Decoder;
+import net.luminis.http3.impl.DataFrame;
+import net.luminis.http3.impl.HeadersFrame;
+import net.luminis.http3.impl.Http3ConnectionImpl;
+import net.luminis.http3.impl.Http3Frame;
 import net.luminis.qpack.Encoder;
 import net.luminis.quic.QuicConnection;
-import net.luminis.quic.VariableLengthInteger;
+import net.luminis.quic.QuicStream;
 import net.luminis.quic.server.ApplicationProtocolConnection;
 import net.luminis.quic.server.ServerConnection;
-import net.luminis.quic.QuicStream;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.InetAddress;
-import java.net.http.HttpHeaders;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Consumer;
 
 
 /**
@@ -43,21 +42,27 @@ import java.util.function.Consumer;
  */
 public class Http3ServerConnection extends Http3ConnectionImpl implements ApplicationProtocolConnection {
 
-    public static int MAX_HEADER_SIZE = 10 * 1024;
-    public static int MAX_DATA_SIZE = 10 * 1024 * 1024;
-    public static int MAX_FRAME_SIZE = 10 * 1024 * 1024;
+    public static int DEFAULT_MAX_HEADER_SIZE = 10 * 1024;
+    public static int DEFAULT_MAX_DATA_SIZE = 10 * 1024 * 1024;
 
-    private static AtomicInteger threadCount = new AtomicInteger();
+    private static final AtomicInteger threadCount = new AtomicInteger();
 
     private final HttpRequestHandler requestHandler;
-    private final Decoder qpackDecoder;
     private final InetAddress clientAddress;
+    private final long maxHeaderSize;
+    private final long maxDataSize;
 
 
     public Http3ServerConnection(QuicConnection quicConnection, HttpRequestHandler requestHandler) {
+        this(quicConnection, requestHandler, DEFAULT_MAX_HEADER_SIZE, DEFAULT_MAX_DATA_SIZE);
+    }
+
+    public Http3ServerConnection(QuicConnection quicConnection, HttpRequestHandler requestHandler, long maxHeaderSize, long maxDataSize) {
         super(quicConnection);
         this.requestHandler = requestHandler;
-        qpackDecoder = new Decoder();
+        this.maxHeaderSize = maxHeaderSize;
+        this.maxDataSize = maxDataSize;
+
         clientAddress = ((ServerConnection) quicConnection).getInitialClientAddress();
         startControlStream();
     }
@@ -120,39 +125,17 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
         int headerSize = 0;
         int dataSize = 0;
 
-        long frameType;
-        while ((frameType = readFrameType(requestStream)) >= 0) {
-            int payloadLength = VariableLengthInteger.parse(requestStream);
-
-            switch ((int) frameType) {
-                case 0x01:
-                    if (headerSize + payloadLength > MAX_HEADER_SIZE) {
-                        throw new HttpError("max frame size exceeded", 414);
-                    }
-                    byte[] payload = readExact(requestStream, payloadLength);
-                    headerSize += payloadLength;
-                    HeadersFrame responseHeadersFrame = new HeadersFrame().parsePayload(payload, qpackDecoder);
-                    receivedFrames.add(responseHeadersFrame);
-                    break;
-                case 0x00:
-                    if (dataSize + payloadLength > MAX_DATA_SIZE) {
-                        throw new HttpError("max frame size exceeded", 400);
-                    }
-                    payload = readExact(requestStream, payloadLength);
-                    dataSize += payloadLength;
-                    DataFrame dataFrame = new DataFrame().parsePayload(payload);
-                    receivedFrames.add(dataFrame);
-                    break;
-                default:
-                    // https://tools.ietf.org/html/draft-ietf-quic-http-34#section-4.1
-                    // "Frames of unknown types (Section 9), including reserved frames (Section 7.2.8) MAY be sent on a
-                    //  request or push stream before, after, or interleaved with other frames described in this section."
-                    if (payloadLength > MAX_FRAME_SIZE) {
-                        throw new HttpError("max frame size exceeded", 400);
-                    }
-                    readExact(requestStream, payloadLength);
+        Http3Frame frame;
+        while ((frame = readFrame(requestStream, maxHeaderSize - headerSize, maxDataSize - dataSize)) != null) {
+            receivedFrames.add(frame);
+            if (frame instanceof HeadersFrame) {
+                headerSize += ((HeadersFrame) frame).getHeadersSize();
+            }
+            else if (frame instanceof DataFrame) {
+                dataSize += ((DataFrame) frame).getDataLength();
             }
         }
+
         return receivedFrames;
     }
 
@@ -210,12 +193,4 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
         outputStream.write(headersFrame.toBytes(new Encoder()));
     }
 
-    long readFrameType(InputStream inputStream) {
-        try {
-            return VariableLengthInteger.parseLong(inputStream);
-        }
-        catch (IOException eof) {
-            return -1;
-        }
-    }
 }

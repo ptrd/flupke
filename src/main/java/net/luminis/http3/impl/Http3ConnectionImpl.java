@@ -19,14 +19,14 @@
 package net.luminis.http3.impl;
 
 import net.luminis.http3.core.Http3Connection;
+import net.luminis.http3.server.HttpError;
+import net.luminis.qpack.Decoder;
+import net.luminis.quic.NotYetImplementedException;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.VariableLengthInteger;
 
-import java.io.EOFException;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
@@ -93,10 +93,12 @@ public class Http3ConnectionImpl implements Http3Connection {
     protected int peerQpackBlockedStreams;
     protected int peerQpackMaxTableCapacity;
     protected Map<Long, IOConsumer<InputStream>> unidirectionalStreamHandler = new HashMap<>();
+    protected final Decoder qpackDecoder;
 
 
     public Http3ConnectionImpl(QuicConnection quicConnection) {
         this.quicConnection = quicConnection;
+        qpackDecoder = new Decoder();
 
         registerStreamHandlers();
     }
@@ -180,8 +182,66 @@ public class Http3ConnectionImpl implements Http3Connection {
         peerEncoderStream = stream;
     }
 
+    protected Http3Frame readFrame(InputStream input) throws IOException, HttpError {
+        return readFrame(input, Long.MAX_VALUE, Long.MAX_VALUE);
+    }
+
+    /**
+     * Reads one HTTP3 frame from the given input stream (if any).
+     * @param input the input stream to read from.
+     * @param maxHeadersSize the maximum allowed size for a headers frame; if a headers frame is read and its size exceeds this value, a HttpError is thrown
+     * @param maxDataSize the maximum allowed size for a data frame; if a data frame is read and its size exceeds this value, a HttpError is thrown
+     * @return the frame read, or null if no frame is available.
+     * @throws IOException
+     */
+    protected Http3Frame readFrame(InputStream input, long maxHeadersSize, long maxDataSize) throws IOException, HttpError {
+        // PushbackInputStream only buffers the unread bytes, so it's safe to use it as a temporary wrapper for the input stream.
+        PushbackInputStream inputStream = new PushbackInputStream(input, 1);
+        int firstByte = inputStream.read();
+        if (firstByte == -1) {
+            return null;
+        }
+        inputStream.unread(firstByte);
+
+        long frameType = VariableLengthInteger.parseLong(inputStream);
+        int payloadLength = VariableLengthInteger.parse(inputStream);
+
+        Http3Frame frame;
+        switch ((int) frameType) {
+            case FRAME_TYPE_HEADERS:
+                if (payloadLength > maxHeadersSize) {
+                    throw new HttpError("max header size exceeded", 414);
+                }
+                frame = new HeadersFrame().parsePayload(readExact(inputStream, payloadLength), qpackDecoder);
+                break;
+            case FRAME_TYPE_DATA:
+                if (payloadLength > maxDataSize) {
+                    throw new HttpError("max data size exceeded", 400);
+                }
+                frame = new DataFrame().parsePayload(readExact(inputStream, payloadLength));
+                break;
+            case FRAME_TYPE_SETTINGS:
+                frame = new SettingsFrame().parsePayload(ByteBuffer.wrap(readExact(inputStream, payloadLength)));
+                break;
+            case FRAME_TYPE_GOAWAY:
+            case FRAME_TYPE_CANCEL_PUSH:
+            case FRAME_TYPE_MAX_PUSH_ID:
+            case FRAME_TYPE_PUSH_PROMISE:
+                throw new NotYetImplementedException("Frame type " + frameType + " not yet implemented");
+            default:
+                // https://www.rfc-editor.org/rfc/rfc9114.html#extensions
+                // "Extensions are permitted to use new frame types (Section 7.2), ...."
+                // "Implementations MUST ignore unknown or unsupported values in all extensible protocol elements."
+                inputStream.skip(payloadLength);
+                frame = new UnknownFrame();
+        }
+        return frame;
+    }
+
     // https://www.rfc-editor.org/rfc/rfc9114.html#name-error-handling
     protected void connectionError(int http3ErrorCode) {
+        System.out.println("ERROR: connection error " + http3ErrorCode);
+        // TODO
     }
 
     protected byte[] readExact(InputStream inputStream, int length) throws IOException {

@@ -706,7 +706,7 @@ public class Http3ClientConnectionImplTest {
         // To relief caller from duty to assemble a complete and correct (QPack) header payload, the qpackDecoder is
         // mocked to return decent headers.
         Decoder mockedQPackDecoder = mock(Decoder.class);
-        FieldSetter.setField(http3Connection, Http3ClientConnectionImpl.class.getDeclaredField("qpackDecoder"), mockedQPackDecoder);
+        FieldSetter.setField(http3Connection, Http3ConnectionImpl.class.getDeclaredField("qpackDecoder"), mockedQPackDecoder);
         when(mockedQPackDecoder.decodeStream(any(InputStream.class))).thenAnswer(new Answer() {
             private int invocation = 0;
             @Override

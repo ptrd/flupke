@@ -193,6 +193,23 @@ public class HeadersFrameTest {
         assertThat(headersFrame.headers().map()).containsEntry("set-cookie", List.of("sample=foo", "sample=bar"));
     }
 
+    @Test
+    public void testHeadersSize() {
+        // Given
+        HeadersFrame headersFrame = new HeadersFrame(
+                HttpHeaders.of(Map.of("Example-Field", List.of("value")), (a, b) -> true),
+                Map.of(":method", "GET", ":scheme", "https", ":path", "/", ":authority", "www.example.com")
+        );
+
+        // When
+        long headersSize = headersFrame.getHeadersSize();
+
+        // Then
+        List<String> allValues = List.of("Example-Field", "value", ":method", "GET", ":scheme", "https", ":path", "/", ":authority", "www.example.com");
+        long allValuesSize = allValues.stream().mapToLong(String::length).sum();
+        assertThat(headersSize).isEqualTo(allValuesSize);
+    }
+
     private HeadersFrame createHeadersFrame(String method, URI uri) {
         HeadersFrame headersFrame = new HeadersFrame(null, Map.of(
                 ":method", method,

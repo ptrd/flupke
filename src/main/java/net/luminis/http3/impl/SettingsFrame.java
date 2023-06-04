@@ -24,7 +24,7 @@ import net.luminis.quic.VariableLengthInteger;
 import java.nio.ByteBuffer;
 
 // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-4.2.5
-public class SettingsFrame {
+public class SettingsFrame extends Http3Frame {
 
     // https://www.rfc-editor.org/rfc/rfc9220#name-iana-considerations
     public static final int SETTINGS_ENABLE_CONNECT_PROTOCOL = 0x08;
