@@ -100,10 +100,34 @@ public class Http3ConnectionImpl implements Http3Connection {
         this.quicConnection = quicConnection;
         qpackDecoder = new Decoder();
 
-        registerStreamHandlers();
+        registerStandardStreamHandlers();
     }
 
-    protected void registerStreamHandlers() {
+    /**
+     * Allow registration of a new unidirectional stream type.
+     * https://www.rfc-editor.org/rfc/rfc9114.html#name-extensions-to-http-3
+     * "Extensions are permitted to use (...) new unidirectional stream types (Section 6.2)."
+     * @param streamType
+     * @param handler
+     */
+    public void registerUnidirectionalStreamType(long streamType, IOConsumer<InputStream> handler) {
+        // ensure the stream type is not one of the standard types
+        if (streamType >= 0x00 && streamType <= 0x03) {
+            throw new IllegalArgumentException("Cannot register standard stream type");
+        }
+        if (isReservedStreamType(streamType)) {
+            throw new IllegalArgumentException("Cannot register reserved stream type");
+        }
+        unidirectionalStreamHandler.put(streamType, handler);
+    }
+
+    private boolean isReservedStreamType(long streamType) {
+        // https://www.rfc-editor.org/rfc/rfc9114.html#stream-grease
+        // Stream types of the format 0x1f * N + 0x21 for non-negative integer values of N are reserved
+        return (streamType - 0x21) % 0x1f == 0;
+    }
+
+    protected void registerStandardStreamHandlers() {
         // https://www.rfc-editor.org/rfc/rfc9114.html#name-unidirectional-streams
         // "Two stream types are defined in this document: control streams (Section 6.2.1) and push streams (Section 6.2.2).
         // https://www.rfc-editor.org/rfc/rfc9114.html#name-control-streams

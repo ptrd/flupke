@@ -252,8 +252,8 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     }
 
     @Override
-    protected void registerStreamHandlers() {
-        super.registerStreamHandlers();
+    protected void registerStandardStreamHandlers() {
+        super.registerStandardStreamHandlers();
         unidirectionalStreamHandler.put((long) STREAM_TYPE_PUSH_STREAM, this::setServerPushStream);
     }
 

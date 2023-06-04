@@ -20,14 +20,18 @@ package net.luminis.http3.impl;
 
 import net.luminis.http3.server.HttpError;
 import net.luminis.quic.QuicConnection;
+import net.luminis.quic.QuicStream;
 import org.junit.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 
+import static net.luminis.http3.impl.Http3ConnectionImpl.STREAM_TYPE_PUSH_STREAM;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class Http3ConnectionImplTest {
 
@@ -65,5 +69,50 @@ public class Http3ConnectionImplTest {
         // Then
         assertThat(frame).isInstanceOf(UnknownFrame.class);
         assertThat(inputStream.available()).isEqualTo(89);
+    }
+
+    @Test
+    public void attemptToRegisterDefaultStreamTypeShouldFail() {
+        // Given
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(mock(QuicConnection.class));
+
+        // When
+        assertThatThrownBy(() -> connection.registerUnidirectionalStreamType(STREAM_TYPE_PUSH_STREAM, mock(IOConsumer.class)))
+                // Then
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("standard");
+    }
+
+    @Test
+    public void attemptToRegisterReservedStreamTypeShouldFail() {
+        // Given
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(mock(QuicConnection.class));
+
+        // When
+        long reservedType = 0x1f * 3 + 0x21;  // 0x1f * N + 0x21 for non-negative integer values of N
+        assertThatThrownBy(() -> connection.registerUnidirectionalStreamType(reservedType, mock(IOConsumer.class)))
+                // Then
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("reserved");
+    }
+
+    @Test
+    public void registeredHandlerShouldBeCalled() {
+        // Given
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(mock(QuicConnection.class));
+        ByteBuffer buffer = ByteBuffer.allocate(11);
+        connection.registerUnidirectionalStreamType(0x22, stream -> buffer.put(stream.readNBytes(11)));
+
+        // When
+        byte[] streamData = new byte[12];
+        streamData[0] = 0x22; // Type: 0x22
+        System.arraycopy("Hello World".getBytes(), 0, streamData, 1, 11);
+        QuicStream quicStream = mock(QuicStream.class);
+        when(quicStream.getInputStream()).thenReturn(new ByteArrayInputStream(streamData));
+
+        connection.handleUnidirectionalStream(quicStream);
+
+        // Then
+        assertThat(new String(buffer.array())).isEqualTo("Hello World");
     }
 }
