@@ -18,6 +18,7 @@
  */
 package net.luminis.http3.core;
 
+import java.io.IOException;
 import java.util.function.Consumer;
 
 public interface Http3Connection {
@@ -30,4 +31,17 @@ public interface Http3Connection {
      * @param handler
      */
     void registerUnidirectionalStreamType(long streamType, Consumer<HttpStream> handler);
+
+    /**
+     * HTTP/3 extension method: create a new unidirectional stream for the given stream type.
+     * The data that is sent on this stream is not framed in HTTP/3 frames. The stream type is sent in conformance with
+     * the HTTP/3 specification.
+     * https://www.rfc-editor.org/rfc/rfc9114.html#name-extensions-to-http-3
+     * "Extensions are permitted to use (...) new unidirectional stream types (Section 6.2)."
+     * @param streamType  the stream type to use for the new unidirectional stream, must not be one of the standard types or a reserved type.
+     * @return  HTTP stream that does not use HTTP/3 framing, has the stream type already sent and for which only the
+     * outputstream is valid.
+     * @throws IOException
+     */
+    HttpStream createUnidirectionalStream(long streamType) throws IOException;
 }

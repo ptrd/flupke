@@ -117,6 +117,30 @@ public class Http3ConnectionImpl implements Http3Connection {
         unidirectionalStreamHandler.put(streamType, handler);
     }
 
+    @Override
+    public HttpStream createUnidirectionalStream(long streamType) throws IOException {
+        // ensure the stream type is not one of the standard types
+        if (streamType >= 0x00 && streamType <= 0x03) {
+            throw new IllegalArgumentException("Cannot create standard stream type");
+        }
+        if (isReservedStreamType(streamType)) {
+            throw new IllegalArgumentException("Cannot create reserved stream type");
+        }
+        QuicStream quicStream = quicConnection.createStream(false);
+        VariableLengthIntegerUtil.write(streamType, quicStream.getOutputStream());
+        return new HttpStream() {
+            @Override
+            public OutputStream getOutputStream() {
+                return quicStream.getOutputStream();
+            }
+
+            @Override
+            public InputStream getInputStream() {
+                throw new IllegalStateException("Cannot read from unidirectional stream");
+            }
+        };
+    }
+
     private boolean isReservedStreamType(long streamType) {
         // https://www.rfc-editor.org/rfc/rfc9114.html#stream-grease
         // Stream types of the format 0x1f * N + 0x21 for non-negative integer values of N are reserved

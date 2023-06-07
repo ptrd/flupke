@@ -19,14 +19,17 @@
 package net.luminis.http3.impl;
 
 import net.luminis.http3.server.HttpError;
+import net.luminis.http3.test.Http3ConnectionBuilder;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.function.Consumer;
 
 import static net.luminis.http3.impl.Http3ConnectionImpl.*;
@@ -202,5 +205,21 @@ public class Http3ConnectionImplTest {
         ArgumentCaptor<Long> errorCodeCaptor = ArgumentCaptor.forClass(Long.class);
         verify(quicStream).closeInput(errorCodeCaptor.capture());
         assertThat(errorCodeCaptor.getValue()).isEqualTo(H3_STREAM_CREATION_ERROR);
+    }
+
+    @Test
+    public void creatingUnidirectionalStreamShouldSendStreamType() throws IOException {
+        // Given
+        ByteArrayOutputStream output = new ByteArrayOutputStream(100);
+        Http3ConnectionImpl connection = new Http3ConnectionBuilder()
+                .withUnidirectionalQuicStream(output)
+                .build();
+
+        // When
+        connection.createUnidirectionalStream(0x23).getOutputStream().write("Hello World".getBytes());
+
+        // Then
+        assertThat(output.toByteArray()[0]).isEqualTo((byte) 0x23);
+        assertThat(output.toByteArray()[1]).isEqualTo("H".getBytes(StandardCharsets.US_ASCII)[0]);
     }
 }
