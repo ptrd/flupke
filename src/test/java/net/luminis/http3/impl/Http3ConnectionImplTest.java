@@ -22,17 +22,18 @@ import net.luminis.http3.server.HttpError;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.function.Consumer;
 
+import static net.luminis.http3.impl.Http3ConnectionImpl.H3_CLOSED_CRITICAL_STREAM;
 import static net.luminis.http3.impl.Http3ConnectionImpl.STREAM_TYPE_PUSH_STREAM;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 public class Http3ConnectionImplTest {
 
@@ -121,5 +122,52 @@ public class Http3ConnectionImplTest {
 
         // Then
         assertThat(new String(buffer.array())).isEqualTo("Hello World");
+    }
+
+    @Test
+    public void closingProcessControlStreamShouldLeadToConnectionError() {
+        // Given
+        QuicConnection quicConnection = mock(QuicConnection.class);
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection);
+
+        // When
+        connection.processControlStream(new ByteArrayInputStream(new byte[0]));
+
+        // Then
+        ArgumentCaptor<Long> errorCaptor = ArgumentCaptor.forClass(Long.class);
+        verify(quicConnection).close(errorCaptor.capture(), any());
+        assertThat(errorCaptor.getValue()).isEqualTo(H3_CLOSED_CRITICAL_STREAM);
+    }
+
+    @Test
+    public void closingExtensionControlStreamShouldNotLeadToConnectionError() {
+        // Given
+        QuicConnection quicConnection = mock(QuicConnection.class);
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection);
+        connection.registerUnidirectionalStreamType(0x22, stream -> {});
+
+        // When
+        QuicStream quicStream = mock(QuicStream.class);
+        when(quicStream.getInputStream()).thenReturn(new ByteArrayInputStream(new byte[] { 0x40 }));
+        connection.handleUnidirectionalStream(quicStream);
+
+        // Then
+        verify(quicConnection, never()).close(anyLong(), any());
+    }
+
+    @Test
+    public void unknownExtensionControlStreamLeadsToQuicStreamClose() {
+        // Given
+        QuicConnection quicConnection = mock(QuicConnection.class);
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection);
+
+        // When
+        QuicStream quicStream = mock(QuicStream.class);
+        when(quicStream.getInputStream()).thenReturn(new ByteArrayInputStream(new byte[] { 0x22 }));
+        connection.handleUnidirectionalStream(quicStream);
+
+        // Then
+        verify(quicConnection, never()).close(anyLong(), any());
+        verify(quicStream).closeInput(anyLong());
     }
 }

@@ -282,8 +282,7 @@ public class Http3ConnectionImpl implements Http3Connection {
 
     // https://www.rfc-editor.org/rfc/rfc9114.html#name-error-handling
     protected void connectionError(int http3ErrorCode) {
-        System.out.println("ERROR: connection error " + http3ErrorCode);
-        // TODO
+        quicConnection.close(http3ErrorCode, null);
     }
 
     protected byte[] readExact(InputStream inputStream, int length) throws IOException {
