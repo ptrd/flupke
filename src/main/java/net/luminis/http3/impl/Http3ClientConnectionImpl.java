@@ -262,7 +262,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     }
 
     @Override
-    protected SettingsFrame processControlStream(InputStream controlStream) throws IOException {
+    protected SettingsFrame processControlStream(InputStream controlStream) {
         SettingsFrame settingsFrame = super.processControlStream(controlStream);
         if (settingsFrame != null) {
             // Read settings that only apply to client role.

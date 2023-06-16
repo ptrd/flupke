@@ -26,6 +26,7 @@ import org.junit.Test;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.function.Consumer;
 
 import static net.luminis.http3.impl.Http3ConnectionImpl.STREAM_TYPE_PUSH_STREAM;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -77,7 +78,7 @@ public class Http3ConnectionImplTest {
         Http3ConnectionImpl connection = new Http3ConnectionImpl(mock(QuicConnection.class));
 
         // When
-        assertThatThrownBy(() -> connection.registerUnidirectionalStreamType(STREAM_TYPE_PUSH_STREAM, mock(IOConsumer.class)))
+        assertThatThrownBy(() -> connection.registerUnidirectionalStreamType(STREAM_TYPE_PUSH_STREAM, mock(Consumer.class)))
                 // Then
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("standard");
@@ -90,7 +91,7 @@ public class Http3ConnectionImplTest {
 
         // When
         long reservedType = 0x1f * 3 + 0x21;  // 0x1f * N + 0x21 for non-negative integer values of N
-        assertThatThrownBy(() -> connection.registerUnidirectionalStreamType(reservedType, mock(IOConsumer.class)))
+        assertThatThrownBy(() -> connection.registerUnidirectionalStreamType(reservedType, mock(Consumer.class)))
                 // Then
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("reserved");
@@ -101,7 +102,13 @@ public class Http3ConnectionImplTest {
         // Given
         Http3ConnectionImpl connection = new Http3ConnectionImpl(mock(QuicConnection.class));
         ByteBuffer buffer = ByteBuffer.allocate(11);
-        connection.registerUnidirectionalStreamType(0x22, stream -> buffer.put(stream.readNBytes(11)));
+        connection.registerUnidirectionalStreamType(0x22, stream -> {
+            try {
+                buffer.put(stream.readNBytes(11));
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
 
         // When
         byte[] streamData = new byte[12];

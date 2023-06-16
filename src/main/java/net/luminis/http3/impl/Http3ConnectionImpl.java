@@ -30,6 +30,7 @@ import java.io.*;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Consumer;
 
 public class Http3ConnectionImpl implements Http3Connection {
 
@@ -92,7 +93,7 @@ public class Http3ConnectionImpl implements Http3Connection {
     protected InputStream peerEncoderStream;
     protected int peerQpackBlockedStreams;
     protected int peerQpackMaxTableCapacity;
-    protected Map<Long, IOConsumer<InputStream>> unidirectionalStreamHandler = new HashMap<>();
+    protected Map<Long, Consumer<InputStream>> unidirectionalStreamHandler = new HashMap<>();
     protected final Decoder qpackDecoder;
 
 
@@ -110,7 +111,7 @@ public class Http3ConnectionImpl implements Http3Connection {
      * @param streamType
      * @param handler
      */
-    public void registerUnidirectionalStreamType(long streamType, IOConsumer<InputStream> handler) {
+    public void registerUnidirectionalStreamType(long streamType, Consumer<InputStream> handler) {
         // ensure the stream type is not one of the standard types
         if (streamType >= 0x00 && streamType <= 0x03) {
             throw new IllegalArgumentException("Cannot register standard stream type");
@@ -140,21 +141,31 @@ public class Http3ConnectionImpl implements Http3Connection {
     }
 
     protected void handleUnidirectionalStream(QuicStream quicStream) {
+        InputStream stream = quicStream.getInputStream();
+        long streamType;
         // https://www.rfc-editor.org/rfc/rfc9114.html#name-unidirectional-streams
         // "Unidirectional streams, in either direction, are used for a range of purposes. The purpose is indicated by
         //  a stream type, which is sent as a variable-length integer at the start of the stream."
         try {
-            InputStream stream = quicStream.getInputStream();
-            long streamType = VariableLengthInteger.parseLong(stream);
-            IOConsumer<InputStream> streamHandler = unidirectionalStreamHandler.get(streamType);
-            if (streamHandler != null) {
-                streamHandler.accept(stream);
-            }
-        } catch (IOException ioError) {
-            // https://www.rfc-editor.org/rfc/rfc9114.html#name-control-streams
-            // "If either control stream is closed at any point, this MUST be treated as a connection error of type
-            //  H3_CLOSED_CRITICAL_STREAM."
-            connectionError(H3_CLOSED_CRITICAL_STREAM);
+            streamType = VariableLengthInteger.parseLong(stream);
+        }
+        catch (IOException ioError) {
+            // https://www.rfc-editor.org/rfc/rfc9114.html#name-unidirectional-streams
+            // "A receiver MUST tolerate unidirectional streams being closed or reset prior to the reception of the
+            //  unidirectional stream header."
+            return;
+        }
+        Consumer<InputStream> streamHandler = unidirectionalStreamHandler.get(streamType);
+        if (streamHandler != null) {
+            streamHandler.accept(quicStream.getInputStream());
+        }
+        else {
+            // https://www.rfc-editor.org/rfc/rfc9114.html#name-unidirectional-streams
+            // "If the stream header indicates a stream type that is not supported by the recipient, the remainder
+            //  of the stream cannot be consumed as the semantics are unknown. Recipients of unknown stream types MUST
+            //  either abort reading of the stream or discard incoming data without further processing. If reading is
+            //  aborted, the recipient SHOULD use the H3_STREAM_CREATION_ERROR error code "
+            quicStream.closeInput(H3_STREAM_CREATION_ERROR);
         }
     }
 
@@ -182,24 +193,31 @@ public class Http3ConnectionImpl implements Http3Connection {
         }
     }
 
-    protected SettingsFrame processControlStream(InputStream controlStream) throws IOException {
-        // https://www.rfc-editor.org/rfc/rfc9114.html#name-control-streams
-        // "Each side MUST initiate a single control stream at the beginning of the connection and send its SETTINGS
-        //  frame as the first frame on this stream."
-        long frameType = VariableLengthInteger.parseLong(controlStream);
-        // "If the first frame of the control stream is any other frame type, this MUST be treated as a connection error
-        //  of type H3_MISSING_SETTINGS."
-        if (frameType != (long) FRAME_TYPE_SETTINGS) {
-            connectionError(H3_MISSING_SETTINGS);
+    protected SettingsFrame processControlStream(InputStream controlStream) {
+        try {
+            // https://www.rfc-editor.org/rfc/rfc9114.html#name-control-streams
+            // "Each side MUST initiate a single control stream at the beginning of the connection and send its SETTINGS
+            //  frame as the first frame on this stream."
+            long frameType = VariableLengthInteger.parseLong(controlStream);
+            // "If the first frame of the control stream is any other frame type, this MUST be treated as a connection error
+            //  of type H3_MISSING_SETTINGS."
+            if (frameType != (long) FRAME_TYPE_SETTINGS) {
+                connectionError(H3_MISSING_SETTINGS);
+                return null;
+            }
+            int frameLength = VariableLengthInteger.parse(controlStream);
+            byte[] payload = readExact(controlStream, frameLength);
+
+            SettingsFrame settingsFrame = new SettingsFrame().parsePayload(ByteBuffer.wrap(payload));
+            peerQpackMaxTableCapacity = settingsFrame.getQpackMaxTableCapacity();
+            peerQpackBlockedStreams = settingsFrame.getQpackBlockedStreams();
+            return settingsFrame;
+        } catch (IOException e) {
+            // "If either control stream is closed at any point, this MUST be treated as a connection error of type
+            //  H3_CLOSED_CRITICAL_STREAM."
+            connectionError(H3_CLOSED_CRITICAL_STREAM);
             return null;
         }
-        int frameLength = VariableLengthInteger.parse(controlStream);
-        byte[] payload = readExact(controlStream, frameLength);
-
-        SettingsFrame settingsFrame = new SettingsFrame().parsePayload(ByteBuffer.wrap(payload));
-        peerQpackMaxTableCapacity = settingsFrame.getQpackMaxTableCapacity();
-        peerQpackBlockedStreams = settingsFrame.getQpackBlockedStreams();
-        return settingsFrame;
     }
 
     void setPeerEncoderStream(InputStream stream) {
