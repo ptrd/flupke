@@ -19,6 +19,7 @@
 package net.luminis.http3.impl;
 
 import net.luminis.http3.core.Http3ClientConnection;
+import net.luminis.http3.core.HttpStream;
 import net.luminis.http3.server.HttpError;
 import net.luminis.qpack.Decoder;
 import net.luminis.qpack.Encoder;
@@ -456,7 +457,7 @@ public class Http3ClientConnectionImplTest {
         HttpRequest connectRequest = HttpRequest.newBuilder()
                 .uri(new URI("http://proxy.net:443"))
                 .build();
-        Http3ClientConnectionImpl.HttpStreamImpl httpStream = http3Connection.sendConnect(connectRequest);
+        HttpStream httpStream = http3Connection.sendConnect(connectRequest);
         clearInvocations(quicStream.getOutputStream());
 
         // When
@@ -482,7 +483,7 @@ public class Http3ClientConnectionImplTest {
         HttpRequest connectRequest = HttpRequest.newBuilder()
                 .uri(new URI("http://proxy.net:443"))
                 .build();
-        Http3ClientConnectionImpl.HttpStreamImpl httpStream = http3Connection.sendConnect(connectRequest);
+        HttpStream httpStream = http3Connection.sendConnect(connectRequest);
 
         // When
         byte[] buffer = new byte[100];
@@ -507,7 +508,7 @@ public class Http3ClientConnectionImplTest {
         HttpRequest connectRequest = HttpRequest.newBuilder()
                 .uri(new URI("http://proxy.net:443"))
                 .build();
-        Http3ClientConnectionImpl.HttpStreamImpl httpStream = http3Connection.sendConnect(connectRequest);
+        HttpStream httpStream = http3Connection.sendConnect(connectRequest);
 
         // When
         byte[] data = new byte[100];
@@ -532,7 +533,7 @@ public class Http3ClientConnectionImplTest {
         HttpRequest connectRequest = HttpRequest.newBuilder()
                 .uri(new URI("http://proxy.net:443"))
                 .build();
-        Http3ClientConnectionImpl.HttpStreamImpl httpStream = http3Connection.sendConnect(connectRequest);
+        HttpStream httpStream = http3Connection.sendConnect(connectRequest);
 
         // When
         ByteBuffer data = ByteBuffer.allocate(100);

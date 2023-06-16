@@ -18,13 +18,10 @@
  */
 package net.luminis.http3.core;
 
-import net.luminis.http3.impl.Http3ClientConnectionImpl;
 import net.luminis.http3.server.HttpError;
 import net.luminis.quic.Statistics;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
@@ -47,7 +44,7 @@ public interface Http3ClientConnection extends Http3Connection {
      * @param request the request object; note that the HTTP method specified in this request is ignored
      * @return
      */
-    Http3ClientConnectionImpl.HttpStreamImpl sendConnect(HttpRequest request) throws IOException, HttpError;
+    HttpStream sendConnect(HttpRequest request) throws IOException, HttpError;
 
     /**
      * Sends an Extended CONNECT request (that can be used for tunneling other protocols like websocket and webtransport).
@@ -69,10 +66,4 @@ public interface Http3ClientConnection extends Http3Connection {
 
     Statistics getConnectionStats();
 
-    interface HttpStream {
-
-        OutputStream getOutputStream();
-
-        InputStream getInputStream();
-    }
 }

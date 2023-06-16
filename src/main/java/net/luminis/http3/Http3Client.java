@@ -19,11 +19,11 @@
 package net.luminis.http3;
 
 import net.luminis.http3.core.Http3ClientConnection;
-import net.luminis.http3.impl.Http3ClientConnectionImpl;
+import net.luminis.http3.core.HttpStream;
 import net.luminis.http3.impl.Http3ConnectionFactory;
 import net.luminis.http3.server.HttpError;
-import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.Statistics;
+import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.log.Logger;
 
 import javax.net.ssl.SSLContext;
@@ -171,7 +171,7 @@ public class Http3Client extends HttpClient {
      * @throws IOException
      * @throws HttpError
      */
-    public Http3ClientConnectionImpl.HttpStreamImpl sendConnect(HttpRequest request) throws IOException, HttpError {
+    public HttpStream sendConnect(HttpRequest request) throws IOException, HttpError {
         http3Connection = http3ConnectionFactory.getConnection(request);
         http3Connection.connect((int) connectTimeout().orElse(DEFAULT_CONNECT_TIMEOUT).toMillis());
         return http3Connection.sendConnect(request);
@@ -189,7 +189,7 @@ public class Http3Client extends HttpClient {
      * @throws HttpError
      * @throws InterruptedException
      */
-    public Http3ClientConnection.HttpStream sendExtendedConnect(HttpRequest request, String protocol, String scheme) throws IOException, HttpError, InterruptedException {
+    public HttpStream sendExtendedConnect(HttpRequest request, String protocol, String scheme) throws IOException, HttpError, InterruptedException {
         http3Connection = http3ConnectionFactory.getConnection(request);
         http3Connection.connect((int) connectTimeout().orElse(DEFAULT_CONNECT_TIMEOUT).toMillis());
         return http3Connection.sendExtendedConnect(request, protocol, scheme, Duration.ofSeconds(10));

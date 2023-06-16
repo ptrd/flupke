@@ -19,6 +19,7 @@
 package net.luminis.http3.impl;
 
 import net.luminis.http3.core.Http3ClientConnection;
+import net.luminis.http3.core.HttpStream;
 import net.luminis.http3.server.HttpError;
 import net.luminis.qpack.Encoder;
 import net.luminis.quic.*;
@@ -327,7 +328,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     }
 
     @Override
-    public HttpStreamImpl sendConnect(HttpRequest request) throws IOException, HttpError {
+    public HttpStream sendConnect(HttpRequest request) throws IOException, HttpError {
         // https://www.rfc-editor.org/rfc/rfc9114.html#name-the-connect-method
         // "A CONNECT request MUST be constructed as follows:
         //  - The :method pseudo-header field is set to "CONNECT"
@@ -341,7 +342,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     }
 
     @Override
-    public HttpStreamImpl sendExtendedConnect(HttpRequest request, String protocol, String scheme, Duration settingsFrameTimeout) throws InterruptedException, HttpError, IOException {
+    public HttpStream sendExtendedConnect(HttpRequest request, String protocol, String scheme, Duration settingsFrameTimeout) throws InterruptedException, HttpError, IOException {
         if (! settingsFrameReceived.await(settingsFrameTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
             throw new HttpError("No SETTINGS frame received in time.");
         }
@@ -365,7 +366,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         return createHttpStream(headersFrame);
     }
 
-    private HttpStreamImpl createHttpStream(HeadersFrame headersFrame) throws IOException, HttpError {
+    private HttpStream createHttpStream(HeadersFrame headersFrame) throws IOException, HttpError {
         QuicStream httpStream = quicConnection.createStream(true);
         httpStream.getOutputStream().write(headersFrame.toBytes(qpackEncoder));
 
@@ -462,6 +463,9 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         }
     }
 
+    /**
+     * Implementation of HttpStream that sends and receives data encapsulated in HTTP3 (data) frames.
+     */
     public class HttpStreamImpl implements HttpStream {
 
         private final QuicStream quicStream;
