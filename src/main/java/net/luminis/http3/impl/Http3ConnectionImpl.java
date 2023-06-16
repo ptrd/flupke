@@ -138,6 +138,8 @@ public class Http3ConnectionImpl implements Http3Connection {
         // https://www.rfc-editor.org/rfc/rfc9204.html#name-encoder-and-decoder-streams
         // "An encoder stream is a unidirectional stream of type 0x02."
         unidirectionalStreamHandler.put((long) STREAM_TYPE_QPACK_ENCODER, this::setPeerEncoderStream);
+
+        unidirectionalStreamHandler.put((long) STREAM_TYPE_QPACK_DECODER, httpStream -> {});
     }
 
     protected void handleUnidirectionalStream(QuicStream quicStream) {

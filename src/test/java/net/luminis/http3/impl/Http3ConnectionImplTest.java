@@ -29,8 +29,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.function.Consumer;
 
-import static net.luminis.http3.impl.Http3ConnectionImpl.H3_CLOSED_CRITICAL_STREAM;
-import static net.luminis.http3.impl.Http3ConnectionImpl.STREAM_TYPE_PUSH_STREAM;
+import static net.luminis.http3.impl.Http3ConnectionImpl.*;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
@@ -169,5 +168,21 @@ public class Http3ConnectionImplTest {
         // Then
         verify(quicConnection, never()).close(anyLong(), any());
         verify(quicStream).closeInput(anyLong());
+    }
+
+    @Test
+    public void qpackDecoderStreamShouldNotBeClosed() {
+        // Given
+        QuicConnection quicConnection = mock(QuicConnection.class);
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection);
+
+        // When
+        QuicStream quicStream = mock(QuicStream.class);
+        when(quicStream.getInputStream()).thenReturn(new ByteArrayInputStream(new byte[] { STREAM_TYPE_QPACK_DECODER }));
+        connection.handleUnidirectionalStream(quicStream);
+
+        // Then
+        verify(quicConnection, never()).close(anyLong(), any());
+        verify(quicStream, never()).closeInput(anyLong());
     }
 }
