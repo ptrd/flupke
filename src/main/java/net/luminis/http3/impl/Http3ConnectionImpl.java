@@ -19,6 +19,7 @@
 package net.luminis.http3.impl;
 
 import net.luminis.http3.core.Http3Connection;
+import net.luminis.http3.core.HttpStream;
 import net.luminis.http3.server.HttpError;
 import net.luminis.qpack.Decoder;
 import net.luminis.quic.NotYetImplementedException;
@@ -93,7 +94,7 @@ public class Http3ConnectionImpl implements Http3Connection {
     protected InputStream peerEncoderStream;
     protected int peerQpackBlockedStreams;
     protected int peerQpackMaxTableCapacity;
-    protected Map<Long, Consumer<InputStream>> unidirectionalStreamHandler = new HashMap<>();
+    protected Map<Long, Consumer<HttpStream>> unidirectionalStreamHandler = new HashMap<>();
     protected final Decoder qpackDecoder;
 
 
@@ -104,14 +105,8 @@ public class Http3ConnectionImpl implements Http3Connection {
         registerStandardStreamHandlers();
     }
 
-    /**
-     * Allow registration of a new unidirectional stream type.
-     * https://www.rfc-editor.org/rfc/rfc9114.html#name-extensions-to-http-3
-     * "Extensions are permitted to use (...) new unidirectional stream types (Section 6.2)."
-     * @param streamType
-     * @param handler
-     */
-    public void registerUnidirectionalStreamType(long streamType, Consumer<InputStream> handler) {
+    @Override
+    public void registerUnidirectionalStreamType(long streamType, Consumer<HttpStream> handler) {
         // ensure the stream type is not one of the standard types
         if (streamType >= 0x00 && streamType <= 0x03) {
             throw new IllegalArgumentException("Cannot register standard stream type");
@@ -133,11 +128,11 @@ public class Http3ConnectionImpl implements Http3Connection {
         // "Two stream types are defined in this document: control streams (Section 6.2.1) and push streams (Section 6.2.2).
         // https://www.rfc-editor.org/rfc/rfc9114.html#name-control-streams
         // "A control stream is indicated by a stream type of 0x00."
-        unidirectionalStreamHandler.put((long) STREAM_TYPE_CONTROL_STREAM, this::processControlStream);
+        unidirectionalStreamHandler.put((long) STREAM_TYPE_CONTROL_STREAM, httpStream -> processControlStream(httpStream.getInputStream()));
         // "[QPACK] defines two additional stream types. Other stream types can be defined by extensions to HTTP/3;..."
         // https://www.rfc-editor.org/rfc/rfc9204.html#name-encoder-and-decoder-streams
         // "An encoder stream is a unidirectional stream of type 0x02."
-        unidirectionalStreamHandler.put((long) STREAM_TYPE_QPACK_ENCODER, this::setPeerEncoderStream);
+        unidirectionalStreamHandler.put((long) STREAM_TYPE_QPACK_ENCODER, httpStream -> setPeerEncoderStream(httpStream.getInputStream()));
 
         unidirectionalStreamHandler.put((long) STREAM_TYPE_QPACK_DECODER, httpStream -> {});
     }
@@ -157,9 +152,9 @@ public class Http3ConnectionImpl implements Http3Connection {
             //  unidirectional stream header."
             return;
         }
-        Consumer<InputStream> streamHandler = unidirectionalStreamHandler.get(streamType);
+        Consumer<HttpStream> streamHandler = unidirectionalStreamHandler.get(streamType);
         if (streamHandler != null) {
-            streamHandler.accept(quicStream.getInputStream());
+            streamHandler.accept(wrap(quicStream));
         }
         else {
             // https://www.rfc-editor.org/rfc/rfc9114.html#name-unidirectional-streams
@@ -169,6 +164,20 @@ public class Http3ConnectionImpl implements Http3Connection {
             //  aborted, the recipient SHOULD use the H3_STREAM_CREATION_ERROR error code "
             quicStream.closeInput(H3_STREAM_CREATION_ERROR);
         }
+    }
+
+    protected HttpStream wrap(QuicStream quicStream) {
+        return new HttpStream() {
+            @Override
+            public OutputStream getOutputStream() {
+                return quicStream.getOutputStream();
+            }
+
+            @Override
+            public InputStream getInputStream() {
+                return quicStream.getInputStream();
+            }
+        };
     }
 
     protected void startControlStream() {

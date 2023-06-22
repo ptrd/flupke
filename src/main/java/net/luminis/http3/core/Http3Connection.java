@@ -18,5 +18,16 @@
  */
 package net.luminis.http3.core;
 
+import java.util.function.Consumer;
+
 public interface Http3Connection {
+
+    /**
+     * HTTP/3 extension method: allow registration of a new unidirectional stream type.
+     * https://www.rfc-editor.org/rfc/rfc9114.html#name-extensions-to-http-3
+     * "Extensions are permitted to use (...) new unidirectional stream types (Section 6.2)."
+     * @param streamType
+     * @param handler
+     */
+    void registerUnidirectionalStreamType(long streamType, Consumer<HttpStream> handler);
 }

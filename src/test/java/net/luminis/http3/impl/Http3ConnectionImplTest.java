@@ -104,7 +104,7 @@ public class Http3ConnectionImplTest {
         ByteBuffer buffer = ByteBuffer.allocate(11);
         connection.registerUnidirectionalStreamType(0x22, stream -> {
             try {
-                buffer.put(stream.readNBytes(11));
+                buffer.put(stream.getInputStream().readNBytes(11));
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
