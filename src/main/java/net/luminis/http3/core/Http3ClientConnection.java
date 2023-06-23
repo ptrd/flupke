@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.function.Consumer;
 
 public interface Http3ClientConnection extends Http3Connection {
 
@@ -63,6 +64,14 @@ public interface Http3ClientConnection extends Http3Connection {
      * @throws InterruptedException
      */
     HttpStream sendExtendedConnect(HttpRequest request, String protocol, String scheme, Duration settingsFrameTimeout) throws InterruptedException, HttpError, IOException;
+
+    /**
+     * HTTP/3 extension method: allow registration of a handler for an (incoming) bidirectional stream.
+     * https://www.rfc-editor.org/rfc/rfc9114.html#name-bidirectional-streams
+     * "HTTP/3 does not use server-initiated bidirectional streams, though an extension could define a use for these streams."
+     * @param streamHandler
+     */
+    void registerBidirectionalStreamHandler(Consumer<HttpStream> streamHandler);
 
     Statistics getConnectionStats();
 

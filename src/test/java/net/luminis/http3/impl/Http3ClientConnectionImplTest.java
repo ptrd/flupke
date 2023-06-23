@@ -21,6 +21,7 @@ package net.luminis.http3.impl;
 import net.luminis.http3.core.Http3ClientConnection;
 import net.luminis.http3.core.HttpStream;
 import net.luminis.http3.server.HttpError;
+import net.luminis.http3.test.Http3ClientConnectionBuilder;
 import net.luminis.qpack.Decoder;
 import net.luminis.qpack.Encoder;
 import net.luminis.quic.QuicClientConnection;
@@ -45,9 +46,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.emptyMap;
+import static net.luminis.http3.impl.Http3ConnectionImpl.H3_STREAM_CREATION_ERROR;
 import static net.luminis.http3.impl.SettingsFrame.SETTINGS_ENABLE_CONNECT_PROTOCOL;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -127,8 +131,10 @@ public class Http3ClientConnectionImplTest {
         });
 
         QuicStream mockedServerControlStream = mock(QuicStream.class);
+        when(mockedServerControlStream.isUnidirectional()).thenReturn(true);
+        when(mockedServerControlStream.isBidirectional()).thenReturn(false);
         when(mockedServerControlStream.getInputStream()).thenReturn(serverControlInputStream);
-        http3Connection.registerServerInitiatedStream(mockedServerControlStream);
+        http3Connection.handleIncomingStream(mockedServerControlStream);
 
         assertThat(http3Connection.getServerQpackMaxTableCapacity()).isEqualTo(32);
         assertThat(http3Connection.getServerQpackBlockedStreams()).isEqualTo(16);
@@ -566,7 +572,7 @@ public class Http3ClientConnectionImplTest {
         // Given
         Http3ClientConnectionImpl http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
         // Do _not_ send SETTINGS_ENABLE_CONNECT_PROTOCOL setting on control stream
-        http3Connection.registerServerInitiatedStream(createControlStream());
+        http3Connection.handleIncomingStream(createControlStream());
         HttpRequest connectRequest = HttpRequest.newBuilder()
                 .uri(new URI("http://proxy.net:443"))
                 .build();
@@ -587,7 +593,7 @@ public class Http3ClientConnectionImplTest {
         when(mockedQPackEncoder.compressHeaders(anyList())).thenReturn(ByteBuffer.allocate(0));
         FieldSetter.setField(http3Connection, Http3ClientConnectionImpl.class.getDeclaredField("qpackEncoder"), mockedQPackEncoder);
 
-        http3Connection.registerServerInitiatedStream(createControlStream(SETTINGS_ENABLE_CONNECT_PROTOCOL, 1));
+        http3Connection.handleIncomingStream(createControlStream(SETTINGS_ENABLE_CONNECT_PROTOCOL, 1));
 
         // When
         HttpRequest connectRequest = HttpRequest.newBuilder()
@@ -616,7 +622,7 @@ public class Http3ClientConnectionImplTest {
         when(mockedQPackEncoder.compressHeaders(anyList())).thenReturn(ByteBuffer.allocate(0));
         FieldSetter.setField(http3Connection, Http3ClientConnectionImpl.class.getDeclaredField("qpackEncoder"), mockedQPackEncoder);
 
-        http3Connection.registerServerInitiatedStream(createControlStream(SETTINGS_ENABLE_CONNECT_PROTOCOL, 1));
+        http3Connection.handleIncomingStream(createControlStream(SETTINGS_ENABLE_CONNECT_PROTOCOL, 1));
 
         // When
         HttpRequest connectRequest = HttpRequest.newBuilder()
@@ -644,7 +650,7 @@ public class Http3ClientConnectionImplTest {
         FieldSetter.setField(http3Connection, Http3ClientConnectionImpl.class.getDeclaredField("qpackEncoder"), mockedQPackEncoder);
 
         // Server must send SETTINGS_ENABLE_CONNECT_PROTOCOL setting on control stream in order to let client use extended CONNECT.
-        http3Connection.registerServerInitiatedStream(createControlStream(SETTINGS_ENABLE_CONNECT_PROTOCOL, 1));
+        http3Connection.handleIncomingStream(createControlStream(SETTINGS_ENABLE_CONNECT_PROTOCOL, 1));
 
         // When
         HttpRequest connectRequest = HttpRequest.newBuilder()
@@ -661,8 +667,71 @@ public class Http3ClientConnectionImplTest {
         assertThat(headersSent.get("x-test")).isEqualTo("testValue");
     }
 
+    @Test
+    public void registeredBidirectionalStreamHandlerShouldBeCalled() throws Exception {
+        // Given
+        Http3ClientConnectionImpl http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
+
+        AtomicReference<HttpStream> httpStreamRef = new AtomicReference<>();
+        Consumer<HttpStream> handler = (stream) -> {
+            httpStreamRef.set(stream);
+        };
+        http3Connection.registerBidirectionalStreamHandler(handler);
+
+        // When
+        QuicStream bidirectionalQuicStream = mockBidirectionalQuicStream(1, null);
+        http3Connection.handleIncomingStream(bidirectionalQuicStream);
+
+        // Then
+        assertThat(httpStreamRef.get()).isNotNull();
+    }
+
+    @Test
+    public void serverInitiatedBidirectionalStreamShouldLeadToError() throws Exception {
+        // Given
+        Http3ClientConnectionBuilder connectionBuilder = new Http3ClientConnectionBuilder();
+        Http3ClientConnectionImpl http3Connection = connectionBuilder
+                .withDefaultQuicConnection()
+                .build();
+
+        // When
+        QuicStream bidirectionalQuicStream = mockBidirectionalQuicStream(1, null);
+        http3Connection.handleIncomingStream(bidirectionalQuicStream);
+
+        // Then
+        ArgumentCaptor<Long> errorCaptor = ArgumentCaptor.forClass(Long.class);
+        verify(connectionBuilder.quicConnection()).close(errorCaptor.capture(), any());
+        assertThat(errorCaptor.getValue()).isEqualTo(H3_STREAM_CREATION_ERROR);
+    }
+
+    @Test
+    public void bidirectionalStreamHandlerShouldGetRawBytes() throws Exception {
+        // Given
+        Http3ClientConnectionImpl http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
+
+        AtomicReference<HttpStream> httpStreamRef = new AtomicReference<>();
+        Consumer<HttpStream> handler = (stream) -> {
+            httpStreamRef.set(stream);
+        };
+        http3Connection.registerBidirectionalStreamHandler(handler);
+
+        byte[] data = "test".getBytes(StandardCharsets.UTF_8);
+        QuicStream bidirectionalQuicStream = mockBidirectionalQuicStream(1, data);
+
+        // When
+        http3Connection.handleIncomingStream(bidirectionalQuicStream);
+        byte[] dataReadFromHttpStream = httpStreamRef.get().getInputStream().readNBytes(4);
+
+        // Then
+        assertThat(dataReadFromHttpStream).isEqualTo(data);
+    }
+
     private QuicStream createControlStream(Integer... additionalBytes) {
         QuicStream quicStream = mock(QuicStream.class);
+        when(quicStream.isBidirectional()).thenReturn(false);
+        when(quicStream.isUnidirectional()).thenReturn(true);
+        when(quicStream.getStreamId()).thenReturn(3);
+
         //                                  stream type stream frame type
         byte[] data = ByteUtils.hexToBytes("00          04"
                 // length (settings frame with 2 vars (01, 07) and additional data)
@@ -742,6 +811,17 @@ public class Http3ClientConnectionImplTest {
         when(http3StreamMock.getOutputStream()).thenReturn(mock(OutputStream.class));
 
         return quicConnection;
+    }
+
+    private QuicStream mockBidirectionalQuicStream(int streamId, byte[] data) {
+        QuicStream quicStream = mock(QuicStream.class);
+        when(quicStream.isBidirectional()).thenReturn(true);
+        when(quicStream.isUnidirectional()).thenReturn(false);
+        when(quicStream.getStreamId()).thenReturn(streamId);
+        if (data != null) {
+            when(quicStream.getInputStream()).thenReturn(new ByteArrayInputStream(data));
+        }
+        return quicStream;
     }
 
     private class NoOpEncoder extends Encoder {

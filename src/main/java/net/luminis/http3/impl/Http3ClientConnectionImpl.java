@@ -43,6 +43,7 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 
 public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Http3ClientConnection {
@@ -53,6 +54,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     private Encoder qpackEncoder;
     private final CountDownLatch settingsFrameReceived;
     private boolean settingsEnableConnectProtocol;
+    private Consumer<HttpStream> bidirectionalStreamHandler;
 
     public Http3ClientConnectionImpl(String host, int port) throws IOException {
         this(host, port, false, null);
@@ -65,7 +67,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     public Http3ClientConnectionImpl(QuicConnection quicConnection) {
         super(quicConnection);
 
-        quicConnection.setPeerInitiatedStreamCallback(stream -> doAsync(() -> registerServerInitiatedStream(stream)));
+        quicConnection.setPeerInitiatedStreamCallback(stream -> doAsync(() -> handleIncomingStream(stream)));
 
         // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.1
         // "clients MUST omit or specify a value of zero for the QUIC transport parameter "initial_max_bidi_streams"."
@@ -248,8 +250,9 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
                 bodySubscriber.getBody());
     }
 
-    void registerServerInitiatedStream(QuicStream stream) {
-        handleUnidirectionalStream(stream);
+    @Override
+    public void registerBidirectionalStreamHandler(Consumer<HttpStream> streamHandler) {
+        bidirectionalStreamHandler = streamHandler;
     }
 
     @Override
@@ -364,6 +367,19 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
                 ":path", extractPath(request.uri())));
 
         return createHttpStream(headersFrame);
+    }
+
+    @Override
+    protected void handleBidirectionalStream(QuicStream quicStream) {
+        if (bidirectionalStreamHandler != null) {
+            bidirectionalStreamHandler.accept(wrap(quicStream));
+        }
+        else {
+            // https://www.rfc-editor.org/rfc/rfc9114.html#name-bidirectional-streams
+            // "Clients MUST treat receipt of a server-initiated bidirectional stream as a connection error of type
+            //  H3_STREAM_CREATION_ERROR unless such an extension has been negotiated."
+            connectionError(H3_STREAM_CREATION_ERROR);
+        }
     }
 
     private HttpStream createHttpStream(HeadersFrame headersFrame) throws IOException, HttpError {
