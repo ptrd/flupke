@@ -327,4 +327,14 @@ public class Http3ConnectionImpl implements Http3Connection {
         }
         return data;
     }
+
+    protected void handleIncomingStream(QuicStream quicStream) {
+        if (quicStream.isUnidirectional()) {
+            handleUnidirectionalStream(quicStream);
+        } else {
+            handleBidirectionalStream(quicStream);
+        }
+    }
+
+    protected void handleBidirectionalStream(QuicStream quicStream) {}
 }
