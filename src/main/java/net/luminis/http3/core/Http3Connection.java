@@ -44,4 +44,11 @@ public interface Http3Connection {
      * @throws IOException
      */
     HttpStream createUnidirectionalStream(long streamType) throws IOException;
+
+    /**
+     * HTTP/3 extension method: create a new bidirectional stream.
+     * The returned stream does _not_ perform HTTP/3 framing; it's the callers responsibility to send the data in HTTP/3
+     * frames or in a format that is compatible with HTTP/3 framing.
+     */
+    HttpStream createBidirectionalStream();
 }

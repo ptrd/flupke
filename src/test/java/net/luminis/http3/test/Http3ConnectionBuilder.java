@@ -22,6 +22,9 @@ import net.luminis.http3.impl.Http3ConnectionImpl;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.io.OutputStream;
 
 import static org.mockito.Mockito.mock;
@@ -31,6 +34,8 @@ import static org.mockito.Mockito.when;
 public class Http3ConnectionBuilder {
 
     private OutputStream unidirectionalOutputStream;
+    private InputStream bidirectionalInputStream;
+    private OutputStream bidirectionalOutputStream;
 
     public Http3ConnectionBuilder withUnidirectionalQuicStream(OutputStream output) {
         unidirectionalOutputStream = output;
@@ -46,8 +51,21 @@ public class Http3ConnectionBuilder {
             when(quicConnection.createStream(false)).thenReturn(unidirectionalStream);
         }
 
+        if (bidirectionalInputStream !=null || bidirectionalOutputStream != null) {
+            QuicStream bidirectionalStream = mock(QuicStream.class);
+            when(bidirectionalStream.getInputStream()).thenReturn(bidirectionalInputStream);
+            when(bidirectionalStream.getOutputStream()).thenReturn(bidirectionalOutputStream);
+            when(quicConnection.createStream(true)).thenReturn(bidirectionalStream);
+        }
+
         Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection);
 
         return connection;
+    }
+
+    public Http3ConnectionBuilder withBidirectionalQuicStream(ByteArrayInputStream input, ByteArrayOutputStream output) {
+        bidirectionalInputStream = input;
+        bidirectionalOutputStream = output;
+        return this;
     }
 }

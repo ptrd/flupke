@@ -18,6 +18,7 @@
  */
 package net.luminis.http3.impl;
 
+import net.luminis.http3.core.HttpStream;
 import net.luminis.http3.server.HttpError;
 import net.luminis.http3.test.Http3ConnectionBuilder;
 import net.luminis.quic.QuicConnection;
@@ -221,5 +222,21 @@ public class Http3ConnectionImplTest {
         // Then
         assertThat(output.toByteArray()[0]).isEqualTo((byte) 0x23);
         assertThat(output.toByteArray()[1]).isEqualTo("H".getBytes(StandardCharsets.US_ASCII)[0]);
+    }
+
+    @Test
+    public void bidirectionalStreamShouldNotApplyFraming() throws IOException {
+        // Given
+        ByteArrayOutputStream output = new ByteArrayOutputStream(100);
+        Http3ConnectionImpl connection = new Http3ConnectionBuilder()
+                .withBidirectionalQuicStream(null, output)
+                .build();
+
+        // When
+        HttpStream bidirectionalStream = connection.createBidirectionalStream();
+        bidirectionalStream.getOutputStream().write("Hello World".getBytes());
+
+        // Then
+        assertThat(new String(output.toByteArray())).isEqualTo("Hello World");
     }
 }

@@ -141,6 +141,11 @@ public class Http3ConnectionImpl implements Http3Connection {
         };
     }
 
+    @Override
+    public HttpStream createBidirectionalStream() {
+        return wrap(quicConnection.createStream(true));
+    }
+
     private boolean isReservedStreamType(long streamType) {
         // https://www.rfc-editor.org/rfc/rfc9114.html#stream-grease
         // Stream types of the format 0x1f * N + 0x21 for non-negative integer values of N are reserved
