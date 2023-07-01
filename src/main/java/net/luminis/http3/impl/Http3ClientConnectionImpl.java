@@ -18,6 +18,8 @@
  */
 package net.luminis.http3.impl;
 
+import net.luminis.http3.core.Capsule;
+import net.luminis.http3.core.CapsuleProtocolStream;
 import net.luminis.http3.core.Http3ClientConnection;
 import net.luminis.http3.core.HttpStream;
 import net.luminis.http3.server.HttpError;
@@ -367,6 +369,56 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
                 ":path", extractPath(request.uri())));
 
         return new HttpStreamImpl(createHttpStream(headersFrame));
+    }
+
+    @Override
+    public CapsuleProtocolStream sendExtendedConnectWithCapsuleProtocol(HttpRequest request, String protocol, String scheme, Duration settingsFrameTimeout) throws InterruptedException, HttpError, IOException {
+        if (! settingsFrameReceived.await(settingsFrameTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
+            throw new HttpError("No SETTINGS frame received in time.");
+        }
+        if (! settingsEnableConnectProtocol) {
+            throw new HttpError("Server does not support Extended Connect (RFC 9220).");
+        }
+
+        // https://www.rfc-editor.org/rfc/rfc8441#section-4
+        // "A new pseudo-header field :protocol MAY be included on request HEADERS indicating the desired protocol to be
+        //  spoken on the tunnel created by CONNECT. The pseudo-header field is single valued and contains a value from
+        //  the "Hypertext Transfer Protocol (HTTP) Upgrade Token Registry located at <https://www.iana.org/assignments/http-upgrade-tokens/>"
+        // "On requests that contain the :protocol pseudo-header field, the :scheme and :path pseudo-header fields of
+        //  the target URI (see Section 5) MUST also be included."
+        HeadersFrame headersFrame = new HeadersFrame(request.headers(), Map.of(
+                ":authority", extractAuthority(request.uri()),
+                ":method", "CONNECT",
+                ":protocol", protocol,
+                ":scheme", scheme,
+                ":path", extractPath(request.uri())));
+
+        return capsuleProtocol(createHttpStream(headersFrame));
+    }
+
+    private CapsuleProtocolStream capsuleProtocol(QuicStream httpStream) {
+        return new CapsuleProtocolStream() {
+
+            @Override
+            public Capsule receive() throws IOException {
+                long type = VariableLengthInteger.parseLong(httpStream.getInputStream());
+                long length = VariableLengthInteger.parseLong(httpStream.getInputStream());
+                byte[] data = new byte[(int) length];
+                httpStream.getInputStream().read(data);
+                return new Capsule(type, data);
+            }
+
+            @Override
+            public void send(Capsule capsule) throws IOException {
+                capsule.write(httpStream.getOutputStream());
+                httpStream.getOutputStream().flush();
+            }
+
+            @Override
+            public long getStreamId() {
+                return httpStream.getStreamId();
+            }
+        };
     }
 
     @Override

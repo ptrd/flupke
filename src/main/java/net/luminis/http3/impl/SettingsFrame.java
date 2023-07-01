@@ -38,6 +38,12 @@ public class SettingsFrame extends Http3Frame {
         this.qpackBlockedStreams = qpackBlockedStreams;
     }
 
+    public SettingsFrame(int qpackMaxTableCapacity, int qpackBlockedStreams, boolean enableConnectProtocol) {
+        this.qpackMaxTableCapacity = qpackMaxTableCapacity;
+        this.qpackBlockedStreams = qpackBlockedStreams;
+        this.settingsEnableConnectProtocol = enableConnectProtocol;
+    }
+
     public SettingsFrame() {
     }
 
@@ -83,7 +89,7 @@ public class SettingsFrame extends Http3Frame {
     }
 
     public ByteBuffer getBytes() {
-        ByteBuffer buffer = ByteBuffer.allocate(12);
+        ByteBuffer buffer = ByteBuffer.allocate(13);
         buffer.put((byte) 0x04);  // Frame Type (var int)
         buffer.put((byte) 0x00);  // Payload length (var int) (placeholder)
 
@@ -92,6 +98,11 @@ public class SettingsFrame extends Http3Frame {
 
         buffer.put((byte) 0x07);  // Identifier (var int) QPACK_BLOCKED_STREAMS  (https://tools.ietf.org/html/draft-ietf-quic-qpack-08#section-8.1)
         VariableLengthInteger.encode(qpackMaxTableCapacity, buffer);
+
+        if (settingsEnableConnectProtocol) {
+            buffer.put((byte) SETTINGS_ENABLE_CONNECT_PROTOCOL);
+            VariableLengthInteger.encode(1, buffer);
+        }
 
         int length = buffer.position() - 2;
         buffer.put(1, (byte) length);

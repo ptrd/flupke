@@ -18,18 +18,24 @@
  */
 package net.luminis.http3.test;
 
-import net.luminis.http3.core.Http3ClientConnection;
 import net.luminis.http3.impl.Http3ClientConnectionImpl;
 import net.luminis.http3.impl.Http3ConnectionImpl;
-import net.luminis.quic.QuicClientConnection;
+import net.luminis.http3.impl.SettingsFrame;
+import net.luminis.qpack.Decoder;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
 import org.mockito.internal.util.reflection.FieldSetter;
 
-import java.io.IOException;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
+import java.util.AbstractMap;
+import java.util.List;
 
-import static org.mockito.ArgumentMatchers.anyBoolean;
+import static net.luminis.http3.impl.Http3ConnectionImpl.STREAM_TYPE_CONTROL_STREAM;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -38,6 +44,9 @@ public class Http3ClientConnectionBuilder {
 
     private OutputStream unidirectionalOutputStream;
     private QuicConnection quicConnection;
+    private SettingsFrame settingsFrame;
+    private ByteArrayInputStream bidirectionalInputStream;
+    private ByteArrayOutputStream bidirectionalOutputStream;
 
     public Http3ClientConnectionBuilder withUnidirectionalQuicStream(OutputStream output) {
         unidirectionalOutputStream = output;
@@ -53,7 +62,7 @@ public class Http3ClientConnectionBuilder {
         return this;
     }
 
-    public Http3ClientConnectionImpl build() {
+    public Http3ClientConnectionImpl build() throws Exception {
         if (quicConnection == null) {
             quicConnection = mock(QuicConnection.class);
         }
@@ -64,24 +73,67 @@ public class Http3ClientConnectionBuilder {
             when(quicConnection.createStream(false)).thenReturn(unidirectionalStream);
         }
 
-        Http3ClientConnectionImpl connection = new Http3ClientConnectionImpl(quicConnection);
+        Http3ClientConnectionImplExt connection = new Http3ClientConnectionImplExt(quicConnection);
+        if (settingsFrame != null) {
+            ByteBuffer settingsFrameBytes = settingsFrame.getBytes();
+            byte[] controlStreamContent = new byte[1 + settingsFrameBytes.limit()];
+            controlStreamContent[0] = STREAM_TYPE_CONTROL_STREAM;
+            settingsFrameBytes.flip();
+            settingsFrameBytes.get(controlStreamContent, 1, settingsFrameBytes.limit());
+            QuicStream stream = mock(QuicStream.class);
+            when(stream.isUnidirectional()).thenReturn(true);
+            when(stream.getInputStream()).thenReturn(new ByteArrayInputStream(controlStreamContent));
+            connection.handleUnidirectionalStream(stream);
+        }
+
+        if (bidirectionalInputStream != null) {
+            QuicStream bidirectionalStream = mock(QuicStream.class);
+            when(quicConnection.createStream(true)).thenReturn(bidirectionalStream);
+            when(bidirectionalStream.getInputStream()).thenReturn(bidirectionalInputStream);
+            when(bidirectionalStream.getOutputStream()).thenReturn(bidirectionalOutputStream);
+            Decoder decoder = mock(Decoder.class);
+            when(decoder.decodeStream(any(InputStream.class))).thenReturn(List.of(
+                    new AbstractMap.SimpleEntry<>(":status", "200"),
+                    new AbstractMap.SimpleEntry<>("content-type", "text/plain")));
+            FieldSetter.setField(connection, Http3ConnectionImpl.class.getDeclaredField("qpackDecoder"), decoder);
+        }
 
         return connection;
     }
 
-    private QuicClientConnection mockQuicConnection(Http3ClientConnection http3Connection) throws NoSuchFieldException, IOException {
-        QuicClientConnection quicConnection = mock(QuicClientConnection.class);
-        FieldSetter.setField(http3Connection, Http3ConnectionImpl.class.getDeclaredField("quicConnection"), quicConnection);
-
-        QuicStream http3StreamMock = mock(QuicStream.class);
-        when(quicConnection.createStream(anyBoolean())).thenReturn(http3StreamMock);
-        // Create sink to send the http3 request bytes to.
-        when(http3StreamMock.getOutputStream()).thenReturn(mock(OutputStream.class));
-
+    public QuicConnection quicConnection() {
         return quicConnection;
     }
 
-    public QuicConnection quicConnection() {
-        return quicConnection;
+    public Http3ClientConnectionBuilder withBidirectionalQuicStream(ByteArrayInputStream quicInputStream, ByteArrayOutputStream quicOutputStream) {
+        bidirectionalInputStream = quicInputStream;
+        bidirectionalOutputStream = quicOutputStream;
+        return this;
+    }
+
+    public Http3ClientConnectionBuilder withDefaultSettingsFrame() {
+        settingsFrame = new SettingsFrame(0, 0);
+        return this;
+    }
+
+    public Http3ClientConnectionBuilder withEnableConnectProtocolSettings() {
+        settingsFrame = new SettingsFrame(0, 0, true);
+        return this;
+    }
+
+    static private class Http3ClientConnectionImplExt extends Http3ClientConnectionImpl {
+
+        public Http3ClientConnectionImplExt(QuicConnection quicConnection) {
+            super(quicConnection);
+        }
+
+        /**
+         * Override to make it public.
+         * @param stream
+         */
+        @Override
+        public void handleUnidirectionalStream(QuicStream stream) {
+            super.handleUnidirectionalStream(stream);
+        }
     }
 }
