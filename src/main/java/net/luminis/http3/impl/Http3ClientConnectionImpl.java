@@ -341,7 +341,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
                 ":authority", extractAuthority(request.uri()),
                 ":method", "CONNECT"));
 
-        return createHttpStream(headersFrame);
+        return new HttpStreamImpl(createHttpStream(headersFrame));
     }
 
     @Override
@@ -366,7 +366,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
                 ":scheme", scheme,
                 ":path", extractPath(request.uri())));
 
-        return createHttpStream(headersFrame);
+        return new HttpStreamImpl(createHttpStream(headersFrame));
     }
 
     @Override
@@ -382,7 +382,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         }
     }
 
-    private HttpStream createHttpStream(HeadersFrame headersFrame) throws IOException, HttpError {
+    private QuicStream createHttpStream(HeadersFrame headersFrame) throws IOException, HttpError {
         QuicStream httpStream = quicConnection.createStream(true);
         httpStream.getOutputStream().write(headersFrame.toBytes(qpackEncoder));
 
@@ -397,7 +397,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
             }
             int statusCode = responseInfo.statusCode();
             if (statusCode >= 200 && statusCode < 300) {
-                return new HttpStreamImpl(httpStream);
+                return httpStream;
             }
             else {
                 throw new HttpError("CONNECT request failed", statusCode);
