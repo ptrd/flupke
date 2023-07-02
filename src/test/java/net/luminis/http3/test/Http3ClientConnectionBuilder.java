@@ -111,6 +111,12 @@ public class Http3ClientConnectionBuilder {
         return this;
     }
 
+    public Http3ClientConnectionBuilder withBidirectionalQuicStream(ByteArrayInputStream quicInputStream) {
+        bidirectionalInputStream = quicInputStream;
+        bidirectionalOutputStream = new ByteArrayOutputStream();
+        return this;
+    }
+
     public Http3ClientConnectionBuilder withDefaultSettingsFrame() {
         settingsFrame = new SettingsFrame(0, 0);
         return this;

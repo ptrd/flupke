@@ -19,6 +19,8 @@
 package net.luminis.http3.core;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.util.function.Function;
 
 /**
  * Stream for sending and receiving Capsules.
@@ -35,4 +37,11 @@ public interface CapsuleProtocolStream {
      * @return
      */
     long getStreamId();
+
+    /**
+     * Register a parser for a specific capsule type.
+     * @param type
+     * @param parser
+     */
+    void registerCapsuleParser(long type, Function<InputStream, Capsule> parser);
 }

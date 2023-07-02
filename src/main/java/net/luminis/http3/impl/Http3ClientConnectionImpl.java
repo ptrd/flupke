@@ -31,6 +31,7 @@ import net.luminis.quic.log.NullLogger;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.PushbackInputStream;
 import java.net.*;
 import java.net.http.HttpClient;
 import java.net.http.HttpHeaders;
@@ -46,6 +47,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 
 public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Http3ClientConnection {
@@ -399,13 +401,18 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     private CapsuleProtocolStream capsuleProtocol(QuicStream httpStream) {
         return new CapsuleProtocolStream() {
 
+            private Map<Long, Function<InputStream, Capsule>> capsuleParsers = new HashMap<>();
+            private PushbackInputStream inputStream = new PushbackInputStream(httpStream.getInputStream(), 8);
+
             @Override
             public Capsule receive() throws IOException {
-                long type = VariableLengthInteger.parseLong(httpStream.getInputStream());
-                long length = VariableLengthInteger.parseLong(httpStream.getInputStream());
-                byte[] data = new byte[(int) length];
-                httpStream.getInputStream().read(data);
-                return new Capsule(type, data);
+                long type = VariableLengthIntegerUtil.peekLong(inputStream);
+                if (capsuleParsers.containsKey(type)) {
+                    return capsuleParsers.get(type).apply(inputStream);
+                }
+                else {
+                    return parseGenericCapsule();
+                }
             }
 
             @Override
@@ -417,6 +424,19 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
             @Override
             public long getStreamId() {
                 return httpStream.getStreamId();
+            }
+
+            @Override
+            public void registerCapsuleParser(long type, Function<InputStream, Capsule> parser) {
+                capsuleParsers.put(type, parser);
+            }
+
+            private Capsule parseGenericCapsule() throws IOException {
+                long type = VariableLengthInteger.parseLong(inputStream);
+                long length = VariableLengthInteger.parseLong(inputStream);
+                byte[] data = new byte[(int) length];
+                httpStream.getInputStream().read(data);
+                return new Capsule(type, data);
             }
         };
     }

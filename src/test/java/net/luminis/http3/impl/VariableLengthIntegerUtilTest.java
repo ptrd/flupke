@@ -21,8 +21,10 @@ package net.luminis.http3.impl;
 import junit.framework.TestCase;
 import org.junit.Test;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.PushbackInputStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -42,5 +44,23 @@ public class VariableLengthIntegerUtilTest extends TestCase {
         assertThat(stream.toByteArray()[1]).isEqualTo((byte) 0x7f);
         assertThat(stream.toByteArray()[2]).isEqualTo((byte) 0x3e);
         assertThat(stream.toByteArray()[3]).isEqualTo((byte) 0x7d);
+    }
+
+    @Test
+    public void testReadWithPushBack() throws IOException {
+        // Given
+        byte[] data = new byte[] { (byte) 0x9d, (byte) 0x7f, (byte) 0x3e, (byte) 0x7d };
+        PushbackInputStream stream = new PushbackInputStream(new ByteArrayInputStream(data), 8);
+
+        // When
+        long value = VariableLengthIntegerUtil.peekLong(stream);
+
+        // Then
+        assertThat(value).isEqualTo(494878333L);
+        assertThat(stream.available()).isGreaterThanOrEqualTo(4);
+        assertThat(stream.read()).isEqualTo(0x9d);
+        assertThat(stream.read()).isEqualTo(0x7f);
+        assertThat(stream.read()).isEqualTo(0x3e);
+        assertThat(stream.read()).isEqualTo(0x7d);
     }
 }

@@ -39,6 +39,12 @@ public class Capsule {
         this.value = value;
     }
 
+    protected Capsule(long type, long length) {
+        this.type = type;
+        this.length = length;
+        value = null;
+    }
+
     public int write(OutputStream outputStream) throws IOException {
         ByteBuffer buffer = ByteBuffer.allocate(8 + 8 + value.length);
         VariableLengthInteger.encode(type, buffer);
@@ -51,6 +57,10 @@ public class Capsule {
 
     public long getType() {
         return type;
+    }
+
+    public long getLength() {
+        return length;
     }
 
     public byte[] getData() {
