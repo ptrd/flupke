@@ -201,12 +201,12 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
 
         HttpResponse.BodySubscriber<T> bodySubscriber = null;
         HttpResponseInfo responseInfo = null;
-        ResponseState responseState = new ResponseState(httpStream);
+        ResponseFramesSequenceChecker frameSequenceChecker = new ResponseFramesSequenceChecker(httpStream);
 
         Http3Frame frame;
         while ((frame = readFrame(responseStream)) != null) {
             if (frame instanceof HeadersFrame) {
-                responseState.gotHeader();
+                frameSequenceChecker.gotHeader();
                 if (responseInfo == null) {
                     // First frame should contain :status pseudo-header and other headers that the body handler might use to determine what kind of body subscriber to use
                     responseInfo = new HttpResponseInfo((HeadersFrame) frame);
@@ -230,12 +230,12 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
                 }
             }
             else if (frame instanceof DataFrame) {
-                responseState.gotData();
+                frameSequenceChecker.gotData();
                 ByteBuffer data = ByteBuffer.wrap(((DataFrame) frame).getPayload());
                 bodySubscriber.onNext(List.of(data));
             }
         }
-        responseState.done();
+        frameSequenceChecker.done();
         bodySubscriber.onComplete();
 
         connectionStats = quicConnection.getStats();
@@ -589,11 +589,11 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
 
     }
 
-    private static class ResponseState {
+    private static class ResponseFramesSequenceChecker {
 
         private final QuicStream httpStream;
 
-        public ResponseState(QuicStream httpStream) {
+        public ResponseFramesSequenceChecker(QuicStream httpStream) {
             this.httpStream = httpStream;
         }
 
