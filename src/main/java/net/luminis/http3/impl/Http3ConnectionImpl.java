@@ -235,7 +235,7 @@ public class Http3ConnectionImpl implements Http3Connection {
      * @param input the input stream to read from.
      * @param maxHeadersSize the maximum allowed size for a headers frame; if a headers frame is read and its size exceeds this value, a HttpError is thrown
      * @param maxDataSize the maximum allowed size for a data frame; if a data frame is read and its size exceeds this value, a HttpError is thrown
-     * @return the frame read, or null if no frame is available.
+     * @return the frame read, or null if no frame is available due to end of stream.
      * @throws IOException
      */
     protected Http3Frame readFrame(InputStream input, long maxHeadersSize, long maxDataSize) throws IOException, HttpError {

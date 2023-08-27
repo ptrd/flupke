@@ -19,22 +19,21 @@
 package net.luminis.http3.sample;
 
 import net.luminis.http3.Http3Client;
-import net.luminis.http3.Http3ClientBuilder;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.time.Duration;
 
-public class Sample {
+public class BodyHandlerWithStream {
 
-    public static void main(String[] args) throws IOException, InterruptedException {
+    public static void main(String[] args) throws IOException, InterruptedException, URISyntaxException {
 
         if (args.length != 1) {
             System.err.println("Missing argument: server URL");
@@ -49,47 +48,30 @@ public class Sample {
                 .timeout(Duration.ofSeconds(10))
                 .build();
 
-        // Easiest way to create a client with default configuration
-        HttpClient defaultClient = Http3Client.newHttpClient();
-
-        // For non-default configuration, use the builder
         Logger stdoutLogger = new SysOutLogger();
         stdoutLogger.useRelativeTime(true);
-        stdoutLogger.logPackets(true);
+        stdoutLogger.logPackets(false);
 
-        HttpClient client = ((Http3ClientBuilder) Http3Client.newBuilder())
+        HttpClient client = Http3Client.newBuilder()
+                .disableCertificateCheck()
                 .logger(stdoutLogger)
                 .connectTimeout(Duration.ofSeconds(3))
                 .build();
 
         try {
             long start = System.currentTimeMillis();
-            HttpResponse<String> httpResponse = client.send(request, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<InputStream> httpResponse = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            byte[] content = httpResponse.body().readAllBytes();
+            int contentSize = content.length;
             long end = System.currentTimeMillis();
-            reportResult(httpResponse, end - start);
+            System.out.println("Request (" + contentSize + " bytes) completed in " + (end - start) + " ms");
         }
         catch (IOException e) {
             System.err.println("Request failed: " + e.getMessage());
+            e.printStackTrace();
         }
         catch (InterruptedException e) {
-            System.err.println("Request interrupted: " + e.getMessage());
-        }
-    }
-
-    private static void reportResult(HttpResponse<String> httpResponse, long duration) throws IOException {
-        System.out.println("Request completed in " + duration + " ms");
-        System.out.println("Got HTTP response " + httpResponse);
-        System.out.println("-   HTTP headers: ");
-        httpResponse.headers().map().forEach((k, v) -> System.out.println("--  " + k + "\t" + v));
-        long downloadSpeed = httpResponse.body().length() / duration;
-        System.out.println("-   HTTP body (" + httpResponse.body().length() + " bytes, " + downloadSpeed + " KB/s):");
-        if (httpResponse.body().length() > 10 * 1024) {
-            String outputFile = "http3-response.txt";
-            Files.write(Paths.get(outputFile), httpResponse.body().getBytes());
-            System.out.println("Response body written to file: " + outputFile);
-        }
-        else {
-            System.out.println(httpResponse.body());
+            throw new RuntimeException(e);
         }
     }
 }

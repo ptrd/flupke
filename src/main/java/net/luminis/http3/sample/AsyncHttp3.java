@@ -29,6 +29,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -83,6 +84,9 @@ public class AsyncHttp3 {
         Duration timeout = Duration.ofMinutes(10);
         try {
             allResults.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        }
+        catch (ExecutionException executionException) {
+            System.out.println("At least one response failed: " + executionException.getCause());
         }
         catch (TimeoutException timedOut) {
             System.out.println("Not all responses are received within timeout of " + timeout);

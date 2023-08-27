@@ -25,6 +25,7 @@ import net.luminis.quic.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -198,47 +199,22 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
 
     private <T> Http3Response<T> receiveResponse(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler, QuicStream httpStream) throws IOException, MalformedResponseException, HttpError {
         InputStream responseStream = httpStream.getInputStream();
-
-        HttpResponse.BodySubscriber<T> bodySubscriber = null;
-        HttpResponseInfo responseInfo = null;
         ResponseFramesSequenceChecker frameSequenceChecker = new ResponseFramesSequenceChecker(httpStream);
 
-        Http3Frame frame;
-        while ((frame = readFrame(responseStream)) != null) {
-            if (frame instanceof HeadersFrame) {
-                frameSequenceChecker.gotHeader();
-                if (responseInfo == null) {
-                    // First frame should contain :status pseudo-header and other headers that the body handler might use to determine what kind of body subscriber to use
-                    responseInfo = new HttpResponseInfo((HeadersFrame) frame);
+        HeadersFrame headersFrame = readHeadersFrame(responseStream, frameSequenceChecker);
+        HttpResponseInfo responseInfo = new HttpResponseInfo(headersFrame);
 
-                    bodySubscriber = responseBodyHandler.apply(responseInfo);
-                    bodySubscriber.onSubscribe(new Flow.Subscription() {
-                        @Override
-                        public void request(long n) {
-                            // Always called with max long, so can be safely ignored.
-                        }
-
-                        @Override
-                        public void cancel() {
-                            System.out.println("BodySubscriber has cancelled the subscription.");
-                        }
-                    });
-                }
-                else {
-                    // Must be trailing header
-                    responseInfo.add((HeadersFrame) frame);
-                }
-            }
-            else if (frame instanceof DataFrame) {
-                frameSequenceChecker.gotData();
-                ByteBuffer data = ByteBuffer.wrap(((DataFrame) frame).getPayload());
-                bodySubscriber.onNext(List.of(data));
-            }
+        HttpResponse.BodySubscriber<T> bodySubscriber = responseBodyHandler.apply(responseInfo);
+        if (bodySubscriber == null) {
+            httpStream.closeInput(H3_REQUEST_CANCELLED);
+            throw new IllegalArgumentException("Body handler returned null body subscriber.");
         }
-        frameSequenceChecker.done();
-        bodySubscriber.onComplete();
+        BodySubscriptionHandler bodySubscriptionHandler = new BodySubscriptionHandler(httpStream, frameSequenceChecker, bodySubscriber, responseInfo);
+        bodySubscriber.onSubscribe(bodySubscriptionHandler);
 
-        connectionStats = quicConnection.getStats();
+        // Check if a fatal exception has occurred while reading body. If so, throw it.
+        // This is necessary because some body handlers (e.g. ofString) do not throw an exception when they receive an error from the publisher.
+        bodySubscriptionHandler.checkError();
 
         return new Http3Response<>(
                 request,
@@ -247,10 +223,30 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
                 bodySubscriber.getBody());
     }
 
+    private HeadersFrame readHeadersFrame(InputStream responseStream, ResponseFramesSequenceChecker frameSequenceChecker) throws IOException, HttpError {
+        Http3Frame frame = readFrame(responseStream);
+        if (frame == null) {
+            throw new EOFException("end of stream");
+        }
+        else if (frame instanceof HeadersFrame) {
+            frameSequenceChecker.gotHeader();
+            return (HeadersFrame) frame;
+        }
+        else if (frame instanceof DataFrame) {
+            frameSequenceChecker.gotData();
+            return null;  // Will not happen, checker will throw exception
+        }
+        else {
+            frameSequenceChecker.gotOther(frame);
+            // If it gets here, the unknown frame is ignored, continue to (try to) read a headers frame
+            return readHeadersFrame(responseStream, frameSequenceChecker);
+        }
+    }
+
     void registerServerInitiatedStream(QuicStream stream) {
         handleUnidirectionalStream(stream);
     }
-
+    
     @Override
     protected void registerStandardStreamHandlers() {
         super.registerStandardStreamHandlers();
@@ -635,10 +631,110 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
             }
         }
 
+
+        public void gotOther(Http3Frame frame) throws ProtocolException {
+            if (frame instanceof UnknownFrame) {
+                // Ignore, no status change.
+            } else {
+                throw new ProtocolException("only header and body frames are allowed on response stream");
+            }
+        }
+
         public void done() throws ProtocolException {
             if (status == ResponseStatus.INITIAL) {
                 throw new ProtocolException("Missing header frame (quic stream " + httpStream.getStreamId() + ")");
             }
+        }
+    }
+
+    private class BodySubscriptionHandler<T> implements Flow.Subscription {
+        private final InputStream inputStream;
+        private final QuicStream httpStream;
+        private final ResponseFramesSequenceChecker frameSequenceChecker;
+        private final HttpResponse.BodySubscriber<T> bodySubscriber;
+        private final HttpResponseInfo responseInfo;
+        private volatile IOException bodyReadException;
+
+        public BodySubscriptionHandler(QuicStream httpStream, ResponseFramesSequenceChecker frameSequenceChecker,
+                                       HttpResponse.BodySubscriber bodySubscriber, HttpResponseInfo responseInfo) {
+            this.inputStream = httpStream.getInputStream();
+            this.httpStream = httpStream;
+            this.frameSequenceChecker = frameSequenceChecker;
+            this.bodySubscriber = bodySubscriber;
+            this.responseInfo = responseInfo;
+        }
+
+        @Override
+        public void request(long n) {
+            try {
+                DataFrame dataFrame;
+                do {
+                    dataFrame = readDataFrame(inputStream);
+                    if (dataFrame != null) {
+                        frameSequenceChecker.gotData();
+                        n--;
+                        bodySubscriber.onNext(List.of(ByteBuffer.wrap(dataFrame.getPayload())));
+                    }
+                } while (n > 0 && dataFrame != null);
+
+                if (dataFrame == null) {
+                    // End of stream
+                    frameSequenceChecker.done();
+                    bodySubscriber.onComplete();
+                    close();
+                }
+            } catch (IOException e) {
+                bodyReadException = e;
+                bodySubscriber.onError(e);
+                close();
+            }
+        }
+
+        @Override
+        public void cancel() {
+            httpStream.closeInput(H3_REQUEST_CANCELLED);
+            bodySubscriber.onComplete();
+            close();
+        }
+
+        public void checkError() throws IOException {
+            if (bodyReadException != null) {
+                throw bodyReadException;
+            }
+        }
+
+        private void close() {
+            connectionStats = quicConnection.getStats();
+        }
+
+        private DataFrame readDataFrame(InputStream inputStream) throws IOException {
+            Http3Frame frame;
+            try {
+                frame = readFrame(inputStream);
+                if (frame == null) {
+                    return null;
+                }
+            } catch (HttpError e) {
+                throw new IOException(e);
+            }
+            if (frame instanceof DataFrame) {
+                return (DataFrame) frame;
+            }
+            if (frame instanceof HeadersFrame) {
+                frameSequenceChecker.gotHeader();
+                addTrailingHeaders((HeadersFrame) frame);
+                // No additional frames expected, but if more frames follow, an error must be generated, so
+                return readDataFrame(inputStream);
+            }
+            else {
+                frameSequenceChecker.gotOther(frame);
+                // If it gets here, the unknown frame is ignored, continue to (try to) read a data frame
+                return readDataFrame(inputStream);
+            }
+        }
+
+        private void addTrailingHeaders(HeadersFrame headersFrame) {
+            responseInfo.add(headersFrame);
         }
     }
 }

@@ -254,7 +254,7 @@ public class Http3ClientConnectionImplTest {
     }
 
     @Test
-    public void testResponseCanHaveTwoHeadersFrame() throws Exception {
+    public void testResponseCanHaveTrailingHeadersFrame() throws Exception {
         Http3ClientConnection http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
 
         byte[] responseBytes = new byte[] {
@@ -328,6 +328,7 @@ public class Http3ClientConnectionImplTest {
 
         assertThatThrownBy(
                 () -> http3Connection.send(request, HttpResponse.BodyHandlers.ofString()))
+                .isInstanceOf(IOException.class)
                 .isInstanceOf(EOFException.class);
     }
 
