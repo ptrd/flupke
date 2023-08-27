@@ -25,6 +25,7 @@ import net.luminis.qpack.Encoder;
 import net.luminis.quic.QuicClientConnection;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.TransportParameters;
+import net.luminis.quic.VariableLengthInteger;
 import net.luminis.tls.util.ByteUtils;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -183,6 +184,47 @@ public class Http3ClientConnectionImplTest {
         HttpResponse<String> httpResponse = http3Connection.send(request, HttpResponse.BodyHandlers.ofString());
         assertThat(httpResponse.statusCode()).isEqualTo(200);
         assertThat(httpResponse.body()).isEqualTo("Nice!");
+    }
+
+    @Test
+    public void receivingResponseWithInputStreamAndMultipleDataFramesShouldWork() throws Exception {
+        // Given
+        Http3ClientConnection http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
+
+        byte[] frameDataLengthBytes = new byte[]{ 0x62, (byte) 0xc4 };  // Var-int encoded: 0x62c4 = 8900
+        int dataPerFrame = VariableLengthInteger.parse(ByteBuffer.wrap(frameDataLengthBytes));
+        int nrOfDataFrames = 2;
+        byte[] responseBytes = new byte[2 + nrOfDataFrames * (3 + dataPerFrame)];
+        // Partial response for Headers frame, the rest is covered by the mock decoder
+        responseBytes[0] = 0x01; // type Headers Frame
+        responseBytes[1] = 0x00; // payload length (payload omitted for the test, is covered by the mock decoder)
+        // Complete response for 1st Data frame
+        responseBytes[2] = 0x00; // type Data Frame
+        responseBytes[3] = frameDataLengthBytes[0];
+        responseBytes[4] = frameDataLengthBytes[1];
+        int secondDataFrameStartIndex = 2 + 3 + dataPerFrame;
+        Arrays.fill(responseBytes, 5, secondDataFrameStartIndex, (byte) 'a');
+        // Complete response for 2nd Data frame
+        responseBytes[secondDataFrameStartIndex] = 0x00; // type Data Frame
+        responseBytes[secondDataFrameStartIndex + 1] = frameDataLengthBytes[0];
+        responseBytes[secondDataFrameStartIndex + 2] = frameDataLengthBytes[1];
+        Arrays.fill(responseBytes, secondDataFrameStartIndex + 3, secondDataFrameStartIndex + 3 + dataPerFrame, (byte) 'a');
+
+        mockQuicConnectionWithStreams(http3Connection, responseBytes);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost"))
+                .build();
+
+        // When
+        HttpResponse<InputStream> httpResponse = http3Connection.send(request, HttpResponse.BodyHandlers.ofInputStream());
+
+        // Then
+        assertThat(httpResponse.statusCode()).isEqualTo(200);
+        assertThat(httpResponse.body()).isNotNull();
+        byte[] actual = httpResponse.body().readAllBytes();
+        assertThat(actual).hasSize(nrOfDataFrames * dataPerFrame);
+        assertThat(actual).containsOnly((byte) 'a');
     }
 
     @Test
