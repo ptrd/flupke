@@ -19,6 +19,7 @@
 package net.luminis.http3.impl;
 
 import net.luminis.http3.Http3Client;
+import net.luminis.http3.core.Http3ClientConnection;
 
 import java.io.IOException;
 import java.net.http.HttpRequest;
@@ -26,21 +27,23 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static net.luminis.http3.core.Http3ClientConnection.DEFAULT_HTTP3_PORT;
+
 
 public class Http3ConnectionFactory {
 
     private final Http3Client http3Client;
-    private final Map<UdpAddress, Http3Connection> connections;
+    private final Map<UdpAddress, Http3ClientConnection> connections;
 
     public Http3ConnectionFactory(Http3Client http3Client) {
         this.http3Client = http3Client;
         connections = new ConcurrentHashMap<>();
     }
 
-    public Http3Connection getConnection(HttpRequest request) throws IOException {
+    public Http3ClientConnection getConnection(HttpRequest request) throws IOException {
         int port = request.uri().getPort();
         if (port <= 0) {
-            port = Http3Connection.DEFAULT_PORT;
+            port = DEFAULT_HTTP3_PORT;
         }
         UdpAddress address = new UdpAddress(request.uri().getHost(), port);
 
@@ -57,10 +60,10 @@ public class Http3ConnectionFactory {
         }
     }
 
-    private Http3Connection createConnection(UdpAddress address) {
-        Http3Connection http3Connection;
+    private Http3ClientConnection createConnection(UdpAddress address) {
+        Http3ClientConnection http3Connection;
         try {
-            http3Connection = new Http3Connection(address.host, address.port, http3Client.isDisableCertificateCheck(), http3Client.getLogger());
+            http3Connection = new Http3ClientConnectionImpl(address.host, address.port, http3Client.isDisableCertificateCheck(), http3Client.getLogger());
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

@@ -20,10 +20,11 @@ package net.luminis.http3.impl;
 
 import net.luminis.quic.InvalidIntegerEncodingException;
 import net.luminis.quic.VariableLengthInteger;
+
 import java.nio.ByteBuffer;
 
 
-// https://tools.ietf.org/html/draft-ietf-quic-http-20#section-4.2.1
+// https://www.rfc-editor.org/rfc/rfc9114.html#name-data
 public class DataFrame extends Http3Frame {
 
     private ByteBuffer payload;
@@ -41,7 +42,7 @@ public class DataFrame extends Http3Frame {
     }
 
     public byte[] toBytes() {
-        int payloadLength = payload.limit() - payload.position();
+        int payloadLength = payload.limit();
         ByteBuffer lengthBuffer = ByteBuffer.allocate(8);
         int varIntLength = VariableLengthInteger.encode(payloadLength, lengthBuffer);
         int dataLength = 1 + varIntLength + payloadLength;
@@ -50,6 +51,7 @@ public class DataFrame extends Http3Frame {
         lengthBuffer.flip();  // Prepare for reading length.
         lengthBuffer.get(data, 1, varIntLength);
         payload.get(data, 1 + varIntLength, payloadLength);
+        payload.rewind();
         return data;
     }
 
@@ -71,7 +73,7 @@ public class DataFrame extends Http3Frame {
     }
 
     public byte[] getPayload() {
-        int payloadLength = payload.limit() - payload.position();
+        int payloadLength = payload.limit();
         if (payloadLength == payload.array().length) {
             return payload.array();
         }
@@ -82,6 +84,10 @@ public class DataFrame extends Http3Frame {
             payload.reset();
             return payloadBytes;
         }
+    }
+
+    public long getDataLength() {
+        return payload.limit();
     }
 
     @Override

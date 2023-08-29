@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021, 2022, 2023 Peter Doornbosch
+ * Copyright © 2023 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *
@@ -16,23 +16,10 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.http3.server;
+package net.luminis.http3.impl;
 
-
-public class HttpError extends Exception {
-
-    private int statusCode;
-
-    public HttpError(String message, int statusCode) {
-        super(message + " (" + statusCode + ")");
-        this.statusCode = statusCode;
-    }
-
-    public HttpError(String message) {
-        super(message);
-    }
-
-    public int getStatusCode() {
-        return statusCode;
-    }
+/**
+ * A HTTP3 frame with unknown type.
+ */
+public class UnknownFrame extends Http3Frame {
 }

@@ -18,6 +18,7 @@
  */
 package net.luminis.http3.impl;
 
+import net.luminis.http3.core.Http3ClientConnection;
 import net.luminis.quic.QuicConnection;
 
 import java.io.IOException;
@@ -29,14 +30,14 @@ import java.net.http.HttpRequest;
 public class Http3SingleConnectionFactory extends Http3ConnectionFactory {
 
     private final QuicConnection quicConnection;
-    private Http3Connection http3Connection;
+    private Http3ClientConnection http3Connection;
 
     public Http3SingleConnectionFactory(QuicConnection quicConnection) {
         super(null);
         this.quicConnection = quicConnection;
     }
 
-    public Http3Connection getConnection(HttpRequest request) throws IOException {
+    public Http3ClientConnection getConnection(HttpRequest request) throws IOException {
         try {
             synchronized (this) {
                 if (http3Connection == null) {
@@ -55,8 +56,8 @@ public class Http3SingleConnectionFactory extends Http3ConnectionFactory {
         }
     }
 
-    private Http3Connection createConnection() {
-        return new Http3Connection(quicConnection);
+    private Http3ClientConnection createConnection() {
+        return new Http3ClientConnectionImpl(quicConnection);
     }
 
 }

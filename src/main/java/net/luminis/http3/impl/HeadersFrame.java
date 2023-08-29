@@ -31,8 +31,16 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 
-// https://tools.ietf.org/html/draft-ietf-quic-http-20#section-4.2.2
-public abstract class HeadersFrame extends Http3Frame {
+// https://www.rfc-editor.org/rfc/rfc9114.html#section-7.2.2
+public class HeadersFrame extends Http3Frame {
+
+    // https://www.rfc-editor.org/rfc/rfc9114.html#name-request-pseudo-header-field
+    public static final String PSEUDO_HEADER_METHOD = ":method";
+    public static final String PSEUDO_HEADER_SCHEME = ":scheme";
+    public static final String PSEUDO_HEADER_AUTHORITY = ":authority";
+    public static final String PSEUDO_HEADER_PATH = ":path";
+    // https://www.rfc-editor.org/rfc/rfc9114.html#name-response-pseudo-header-fiel
+    public static final String PSEUDO_HEADER_STATUS = ":status";
 
     protected HttpHeaders httpHeaders;
     protected Map<String, String> pseudoHeaders;
@@ -40,6 +48,25 @@ public abstract class HeadersFrame extends Http3Frame {
     public HeadersFrame() {
         pseudoHeaders = new HashMap<>();
         httpHeaders = HttpHeaders.of(Collections.emptyMap(), (a,b) -> true);
+    }
+
+    public HeadersFrame(String pseudoHeader, String value) {
+        pseudoHeaders = new HashMap<>();
+        pseudoHeaders.put(pseudoHeader, value);
+        httpHeaders = HttpHeaders.of(Collections.emptyMap(), (a,b) -> true);
+    }
+
+    public HeadersFrame(HttpHeaders headers, Map<String, String> pseudoHeaders) {
+        if (pseudoHeaders.keySet().stream().anyMatch(key -> ! key.startsWith(":"))) {
+            throw new IllegalArgumentException("Pseudo headers must start with ':'");
+        }
+        this.pseudoHeaders = Objects.requireNonNull(pseudoHeaders);
+        if (headers != null) {
+            this.httpHeaders = headers;
+        }
+        else {
+            httpHeaders = HttpHeaders.of(Collections.emptyMap(), (a,b) -> true);
+        }
     }
 
     public byte[] toBytes(Encoder encoder) {
@@ -73,17 +100,15 @@ public abstract class HeadersFrame extends Http3Frame {
         return this;
     }
 
-    protected abstract void extractPseudoHeaders(Map<String, List<String>> headersMap) throws ProtocolException;
-
-    public void setHeaders(HttpHeaders headers) {
-        this.httpHeaders = headers;
+    private void extractPseudoHeaders(Map<String, List<String>> headersMap) throws ProtocolException {
+        headersMap.entrySet().stream()
+                .filter(entry -> entry.getKey().startsWith(":"))
+                .forEach(entry -> pseudoHeaders.put(entry.getKey(), entry.getValue().get(0)));
     }
 
-    public HttpHeaders headers() {
-        return httpHeaders;
+    private void addPseudoHeaders(List<Map.Entry<String, String>> qpackHeaders) {
+        pseudoHeaders.entrySet().forEach(entry -> qpackHeaders.add(entry));
     }
-
-    protected abstract void addPseudoHeaders(List<Map.Entry<String, String>> qpackHeaders);
 
     private void addHeaders(List<Map.Entry<String, String>> qpackHeaders) {
         httpHeaders.map().entrySet().forEach(entry -> {
@@ -103,5 +128,26 @@ public abstract class HeadersFrame extends Http3Frame {
         result.addAll(value1);
         result.addAll(value2);
         return result;
+    }
+
+    public String getPseudoHeader(String header) {
+        return pseudoHeaders.get(header);
+    }
+
+    public HttpHeaders headers() {
+        return httpHeaders;
+    }
+
+    /**
+     * Returns the size of the uncompressed headers.
+     * @return
+     */
+    public long getHeadersSize() {
+        return pseudoHeaders.entrySet().stream()
+                .mapToLong(entry -> entry.getKey().length() + entry.getValue().length())
+                .sum() +
+                httpHeaders.map().entrySet().stream()
+                        .mapToLong(entry -> entry.getKey().length() + entry.getValue().stream().mapToLong(String::length).sum())
+                        .sum();
     }
 }

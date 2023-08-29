@@ -28,7 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class DataFrameTest {
 
     @Test
-    public void dataFrameStartWithFrameType() throws Exception {
+    public void dataFrameStartWithFrameType() {
         byte[] frameBytes = new DataFrame().toBytes();
 
         // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-4.2.1: DATA frames (type=0x0) ....
@@ -36,7 +36,7 @@ public class DataFrameTest {
     }
 
     @Test
-    public void emptyDataFrameContainsTypeAndLength() throws Exception {
+    public void emptyDataFrameContainsTypeAndLength() {
         byte[] frameBytes = new DataFrame().toBytes();
 
         assertThat(frameBytes).containsExactly(0x00, 0x00);
@@ -105,5 +105,33 @@ public class DataFrameTest {
         // Then
         byte[] payload = dataFrame.getPayload();
         assertThat(payload).isEqualTo(new byte[] { (byte) 0xca, (byte) 0xfe, (byte) 0xba, (byte) 0xbe });
+    }
+
+    @Test
+    public void repeatedlyCallingToBytesShouldReturnSameResult() {
+        // Given
+        DataFrame dataFrame = new DataFrame("hello world".getBytes());
+
+        // When
+        byte[] frameBytes1 = dataFrame.toBytes();
+        byte[] frameBytes2 = dataFrame.toBytes();
+
+        // Then
+        assertThat(frameBytes1).isEqualTo(frameBytes2);
+    }
+
+    @Test
+    public void testDataFrameLength() {
+        // Given
+        byte[] rawData = new byte[100];
+        ByteBuffer buffer = ByteBuffer.wrap(rawData);
+        buffer.get(new byte[10]);
+        ByteBuffer data = buffer.slice();
+
+        // When
+        DataFrame dataFrame = new DataFrame(data);
+
+        // Then
+        assertThat(dataFrame.getDataLength()).isEqualTo(90);
     }
 }

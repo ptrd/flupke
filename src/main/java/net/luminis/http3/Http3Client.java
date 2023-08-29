@@ -18,8 +18,10 @@
  */
 package net.luminis.http3;
 
-import net.luminis.http3.impl.Http3Connection;
+import net.luminis.http3.core.Http3ClientConnection;
+import net.luminis.http3.impl.Http3ClientConnectionImpl;
 import net.luminis.http3.impl.Http3ConnectionFactory;
+import net.luminis.http3.server.HttpError;
 import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.Statistics;
 import net.luminis.quic.log.Logger;
@@ -49,7 +51,7 @@ public class Http3Client extends HttpClient {
     private final Long receiveBufferSize;
     private final boolean disableCertificateCheck;
     private final Logger logger;
-    private Http3Connection http3Connection;
+    private Http3ClientConnection http3Connection;
     protected Http3ConnectionFactory http3ConnectionFactory;
     private final ExecutorService executorService;
 
@@ -155,6 +157,42 @@ public class Http3Client extends HttpClient {
     @Override
     public <T> CompletableFuture<HttpResponse<T>> sendAsync(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler, HttpResponse.PushPromiseHandler<T> pushPromiseHandler) {
         throw new UnsupportedOperationException("server push is not (yet) supported");
+    }
+
+    /**
+     * Sends a CONNECT request (that creates a tunnel to a remote host) and returns a HttpStream object that can be used
+     * to send/receive data to/from remote host.
+     *
+     * https://www.rfc-editor.org/rfc/rfc9114.html#name-the-connect-method:
+     * "In HTTP/2 and HTTP/3, the CONNECT method is used to establish a tunnel over a single stream."
+     *
+     * @param request
+     * @return
+     * @throws IOException
+     * @throws HttpError
+     */
+    public Http3ClientConnectionImpl.HttpStreamImpl sendConnect(HttpRequest request) throws IOException, HttpError {
+        http3Connection = http3ConnectionFactory.getConnection(request);
+        http3Connection.connect((int) connectTimeout().orElse(DEFAULT_CONNECT_TIMEOUT).toMillis());
+        return http3Connection.sendConnect(request);
+    }
+
+    /**
+     * Sends an Extended CONNECT request (that can be used for tunneling other protocols like websocket and webtransport).
+     * See https://www.rfc-editor.org/rfc/rfc9220.html and  https://www.rfc-editor.org/rfc/rfc8441.html.
+     *
+     * @param request
+     * @param protocol
+     * @param scheme
+     * @return
+     * @throws IOException
+     * @throws HttpError
+     * @throws InterruptedException
+     */
+    public Http3ClientConnection.HttpStream sendExtendedConnect(HttpRequest request, String protocol, String scheme) throws IOException, HttpError, InterruptedException {
+        http3Connection = http3ConnectionFactory.getConnection(request);
+        http3Connection.connect((int) connectTimeout().orElse(DEFAULT_CONNECT_TIMEOUT).toMillis());
+        return http3Connection.sendExtendedConnect(request, protocol, scheme, Duration.ofSeconds(10));
     }
 
     public Statistics getConnectionStatistics() {
