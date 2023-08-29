@@ -790,7 +790,7 @@ public class Http3ClientConnectionImplTest {
         @Override
         public ByteBuffer compressHeaders(List<Map.Entry<String, String>> headers) {
             mockEncoderCompressedHeaders = headers;
-            return mock(ByteBuffer.class);
+            return ByteBuffer.wrap(new byte[0]);
         }
     }
 
