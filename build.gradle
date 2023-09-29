@@ -34,7 +34,7 @@ sourceSets {
         java {
             srcDir 'kwik/src/main/java'
             srcDir 'qpack/src/main/java'
-            srcDir 'kwik/agent15/src'
+            srcDir 'kwik/agent15/src/main'
         }
         resources {
             srcDir 'qpack/src/main/resources'
