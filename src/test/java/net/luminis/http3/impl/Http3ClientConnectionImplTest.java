@@ -24,8 +24,7 @@ import net.luminis.qpack.Decoder;
 import net.luminis.qpack.Encoder;
 import net.luminis.quic.QuicClientConnection;
 import net.luminis.quic.QuicStream;
-import net.luminis.quic.TransportParameters;
-import net.luminis.quic.VariableLengthInteger;
+import net.luminis.quic.generic.VariableLengthInteger;
 import net.luminis.tls.util.ByteUtils;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -144,7 +143,7 @@ public class Http3ClientConnectionImplTest {
         ByteArrayOutputStream controlStreamOutput = new ByteArrayOutputStream();
         when(quicStreamMock.getOutputStream()).thenReturn(controlStreamOutput);
         when(quicConnection.createStream(anyBoolean())).thenReturn(quicStreamMock);
-        http3Connection.connect(10);
+        http3Connection.connect();
 
         assertThat(controlStreamOutput.toByteArray()).isEqualTo(new byte[] {
                 0x00,  // type: control stream
@@ -429,10 +428,10 @@ public class Http3ClientConnectionImplTest {
         QuicClientConnection quicConnection = mockQuicConnection(http3Connection);
         when(quicConnection.isConnected()).thenReturn(false, true);  // Assuming (knowing) that Http3Connection.connect calls QuicConnection.isConnected once
 
-        http3Connection.connect(10);
-        http3Connection.connect(10);
+        http3Connection.connect();
+        http3Connection.connect();
 
-        verify(quicConnection, times(1)).connect(anyInt(), anyString(), nullable(TransportParameters.class), anyList());
+        verify(quicConnection, times(1)).connect();
     }
 
     @Test
