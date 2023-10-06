@@ -76,11 +76,8 @@ You can also run the java command directly:
 
 Whether the URL is specified with HTTP or HTTPS protocol doesn't matter, Flupke will always (and only) try to setup a QUIC connection.
 The port specified in the URL must be the UDP port on which the HTTP3/QUIC server listens. 
-By default, Flupke will use QUIC version 1 (the official RFC version). However, some public servers on the internet (www.facebook for example)
-still use on older draft version (draft-29). To let Flupke use a different QUIC version, put the version in an environment variable called "QUIC_VERSION". 
-For example, on linux based OS:
 
-    QUIC_VERSION=29 ./flupke.sh https://www.facebook.com
+By default, Flupke will use QUIC version 1 (the official RFC version). To let Flupke use a different QUIC version (e.g. QUIC version 2, RFC 9369), put the version in an environment variable called "QUIC_VERSION" (for QUIC version 2, use the value "2" (without the quotes)).
 
 To generate the Kwik server plugin:
 

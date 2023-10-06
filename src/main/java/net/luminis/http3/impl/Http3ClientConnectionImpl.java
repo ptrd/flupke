@@ -21,7 +21,10 @@ package net.luminis.http3.impl;
 import net.luminis.http3.core.Http3ClientConnection;
 import net.luminis.http3.server.HttpError;
 import net.luminis.qpack.Encoder;
-import net.luminis.quic.*;
+import net.luminis.quic.QuicClientConnection;
+import net.luminis.quic.QuicConnection;
+import net.luminis.quic.QuicStream;
+import net.luminis.quic.Statistics;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 
@@ -36,7 +39,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
 import java.time.Duration;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,6 +49,8 @@ import java.util.concurrent.TimeUnit;
 
 public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Http3ClientConnection {
 
+    public static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(5);
+
     private InputStream serverPushStream;
     private Statistics connectionStats;
     private boolean initialized;
@@ -55,11 +59,11 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     private boolean settingsEnableConnectProtocol;
 
     public Http3ClientConnectionImpl(String host, int port) throws IOException {
-        this(host, port, false, null);
+        this(host, port, DEFAULT_CONNECT_TIMEOUT, false, null);
     }
 
-    public Http3ClientConnectionImpl(String host, int port, boolean disableCertificateCheck, Logger logger) throws IOException {
-        this(createQuicConnection(host, port, disableCertificateCheck, logger));
+    public Http3ClientConnectionImpl(String host, int port, Duration connectTimeout, boolean disableCertificateCheck, Logger logger) throws IOException {
+        this(createQuicConnection(host, port, connectTimeout, disableCertificateCheck, logger));
     }
 
     public Http3ClientConnectionImpl(QuicConnection quicConnection) {
@@ -83,17 +87,15 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     }
 
     public Http3ClientConnectionImpl(String host, int port, Encoder encoder) throws IOException {
-        this(host, port, false, null);
+        this(host, port);
         qpackEncoder = encoder;
     }
 
     @Override
-    public void connect(int connectTimeoutInMillis) throws IOException {
+    public void connect() throws IOException {
         synchronized (this) {
             if (! ((QuicClientConnection) quicConnection).isConnected()) {
-                Version quicVersion = determinePreferredQuicVersion();
-                String applicationProtocol = quicVersion.equals(Version.QUIC_version_1) ? "h3" : determineH3Version(quicVersion);
-                ((QuicClientConnection) quicConnection).connect(connectTimeoutInMillis, applicationProtocol, null, Collections.emptyList());
+                ((QuicClientConnection) quicConnection).connect();
             }
             if (!initialized) {
                 startControlStream();
@@ -119,16 +121,17 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         }
     }
 
-    private static QuicConnection createQuicConnection(String host, int port, boolean disableCertificateCheck, Logger logger) throws SocketException, UnknownHostException {
-        QuicClientConnectionImpl.Builder builder = QuicClientConnectionImpl.newBuilder();
+    private static QuicConnection createQuicConnection(String host, int port, Duration connectTimeout, boolean disableCertificateCheck, Logger logger) throws SocketException, UnknownHostException {
+        QuicClientConnection.Builder builder = QuicClientConnection.newBuilder();
         try {
             builder.uri(new URI("//" + host + ":" + port));
         } catch (URISyntaxException e) {
             // Impossible
             throw new RuntimeException();
         }
-        Version quicVersion = determinePreferredQuicVersion();
-        builder.version(quicVersion);
+        builder.version(determinePreferredQuicVersion());
+        builder.connectTimeout(connectTimeout);
+        builder.applicationProtocol("h3");
         if (disableCertificateCheck) {
             builder.noServerCertificateCheck();
         }
@@ -275,34 +278,19 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         new Thread(task).start();
     }
 
-    private static Version determinePreferredQuicVersion() {
+    private static QuicConnection.QuicVersion determinePreferredQuicVersion() {
         String quicVersionEnvVar = System.getenv("QUIC_VERSION");
         if (quicVersionEnvVar != null) {
             quicVersionEnvVar = quicVersionEnvVar.trim().toLowerCase();
             if (quicVersionEnvVar.equals("1")) {
-                return Version.QUIC_version_1;
+                return QuicConnection.QuicVersion.V1;
             }
-            if (quicVersionEnvVar.startsWith("draft-")) {
-                try {
-                    int draftNumber = Integer.parseInt(quicVersionEnvVar.substring("draft-".length(), quicVersionEnvVar.length()));
-                    if (draftNumber >= 29 && draftNumber <= 32) {
-                        return Version.parse(0xff000000 + draftNumber);
-                    }
-                } catch (NumberFormatException e) {}
+            if (quicVersionEnvVar.equals("2")) {
+                return QuicConnection.QuicVersion.V2;
             }
-            System.err.println("Unsupported QUIC version '" + quicVersionEnvVar + "'; should be one of: 1, draft-29, draft-30, draft-31, draft-32.");
+            System.err.println("Unsupported QUIC version '" + quicVersionEnvVar + "'; should be one of: 1, 2");
         }
-        return Version.QUIC_version_1;
-    }
-
-    private static String determineH3Version(Version quicVersion) {
-        if (quicVersion.atLeast(Version.IETF_draft_29)) {
-            String versionString = quicVersion.toString();
-            return "h3-" + versionString.substring(versionString.length() - 2, versionString.length());
-        }
-        else {
-            return "";
-        }
+        return QuicConnection.QuicVersion.V1;
     }
 
     public int getServerQpackMaxTableCapacity() {

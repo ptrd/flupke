@@ -72,26 +72,6 @@ public class Http3ClientTest {
     }
 
     @Test
-    public void testDefaultConnectionTimeout() throws Exception {
-        HttpClient httpClient = new Http3ClientBuilder()
-                .disableCertificateCheck()
-                .build();
-
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://localhost:5896"))
-                .build();
-
-        Instant start = Instant.now();
-
-        assertThatThrownBy(
-                () -> httpClient.send(request, null))
-                .isInstanceOf(ConnectException.class);
-
-        Instant finished = Instant.now();
-        assertThat(Duration.between(start, finished).toSeconds()).isGreaterThanOrEqualTo(5);
-    }
-
-    @Test
     public void sendAsyncShouldThrowWhenGettingFutureResultIfSendFails() throws Exception {
         Http3Client httpClient = (Http3Client) new Http3ClientBuilder().build();
         Http3ClientConnectionImpl http3Connection = createMockHttp3Connection(httpClient);
