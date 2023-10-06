@@ -21,9 +21,10 @@ package net.luminis.http3.impl;
 import net.luminis.http3.core.Http3Connection;
 import net.luminis.http3.server.HttpError;
 import net.luminis.qpack.Decoder;
+import net.luminis.quic.NotYetImplementedException;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
-import net.luminis.quic.generic.VariableLengthInteger;
+import net.luminis.quic.VariableLengthInteger;
 
 import java.io.*;
 import java.nio.ByteBuffer;

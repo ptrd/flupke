@@ -35,7 +35,7 @@ public interface Http3ClientConnection extends Http3Connection {
 
     void setReceiveBufferSize(long receiveBufferSize);
 
-    void connect() throws IOException;
+    void connect(int connectTimeoutInMillis) throws IOException;
 
     <T> HttpResponse<T> send(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler) throws IOException;
 

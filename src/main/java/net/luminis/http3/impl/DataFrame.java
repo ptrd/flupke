@@ -18,8 +18,8 @@
  */
 package net.luminis.http3.impl;
 
-import net.luminis.quic.generic.InvalidIntegerEncodingException;
-import net.luminis.quic.generic.VariableLengthInteger;
+import net.luminis.quic.InvalidIntegerEncodingException;
+import net.luminis.quic.VariableLengthInteger;
 
 import java.nio.ByteBuffer;
 

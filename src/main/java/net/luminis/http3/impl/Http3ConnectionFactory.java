@@ -23,7 +23,6 @@ import net.luminis.http3.core.Http3ClientConnection;
 
 import java.io.IOException;
 import java.net.http.HttpRequest;
-import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -64,8 +63,7 @@ public class Http3ConnectionFactory {
     private Http3ClientConnection createConnection(UdpAddress address) {
         Http3ClientConnection http3Connection;
         try {
-            Duration connectTimeout = http3Client.connectTimeout().orElse(Http3ClientConnectionImpl.DEFAULT_CONNECT_TIMEOUT);
-            http3Connection = new Http3ClientConnectionImpl(address.host, address.port, connectTimeout, http3Client.isDisableCertificateCheck(), http3Client.getLogger());
+            http3Connection = new Http3ClientConnectionImpl(address.host, address.port, http3Client.isDisableCertificateCheck(), http3Client.getLogger());
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

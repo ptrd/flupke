@@ -22,8 +22,8 @@ import net.luminis.http3.core.Http3ClientConnection;
 import net.luminis.http3.impl.Http3ClientConnectionImpl;
 import net.luminis.http3.impl.Http3ConnectionFactory;
 import net.luminis.http3.server.HttpError;
-import net.luminis.quic.Statistics;
 import net.luminis.quic.concurrent.DaemonThreadFactory;
+import net.luminis.quic.Statistics;
 import net.luminis.quic.log.Logger;
 
 import javax.net.ssl.SSLContext;
@@ -44,6 +44,8 @@ import java.util.concurrent.Executors;
 
 
 public class Http3Client extends HttpClient {
+
+    protected static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(5);
 
     private final Duration connectTimeout;
     private final Long receiveBufferSize;
@@ -131,7 +133,7 @@ public class Http3Client extends HttpClient {
     @Override
     public <T> HttpResponse<T> send(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler) throws IOException {
         http3Connection = http3ConnectionFactory.getConnection(request);
-        http3Connection.connect();
+        http3Connection.connect((int) connectTimeout().orElse(DEFAULT_CONNECT_TIMEOUT).toMillis());
         return http3Connection.send(request, responseBodyHandler);
     }
 
@@ -171,7 +173,7 @@ public class Http3Client extends HttpClient {
      */
     public Http3ClientConnectionImpl.HttpStreamImpl sendConnect(HttpRequest request) throws IOException, HttpError {
         http3Connection = http3ConnectionFactory.getConnection(request);
-        http3Connection.connect();
+        http3Connection.connect((int) connectTimeout().orElse(DEFAULT_CONNECT_TIMEOUT).toMillis());
         return http3Connection.sendConnect(request);
     }
 
@@ -189,7 +191,7 @@ public class Http3Client extends HttpClient {
      */
     public Http3ClientConnection.HttpStream sendExtendedConnect(HttpRequest request, String protocol, String scheme) throws IOException, HttpError, InterruptedException {
         http3Connection = http3ConnectionFactory.getConnection(request);
-        http3Connection.connect();
+        http3Connection.connect((int) connectTimeout().orElse(DEFAULT_CONNECT_TIMEOUT).toMillis());
         return http3Connection.sendExtendedConnect(request, protocol, scheme, Duration.ofSeconds(10));
     }
 

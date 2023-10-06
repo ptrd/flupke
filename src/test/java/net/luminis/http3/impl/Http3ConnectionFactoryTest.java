@@ -25,8 +25,6 @@ import org.junit.Test;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpRequest;
-import java.time.Duration;
-import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -82,21 +80,4 @@ public class Http3ConnectionFactoryTest {
         ).isInstanceOf(IOException.class);
     }
 
-    @Test
-    public void testDefaultConnectionTimeout() throws Exception {
-        // Given
-        Http3ConnectionFactory connectionFactory = new Http3ConnectionFactory((Http3Client) Http3Client.newHttpClient());
-        HttpRequest request = HttpRequest.newBuilder().uri(new URI("http://localhost:61482/index.html")).build();
-        Http3ClientConnection connection = connectionFactory.getConnection(request);
-
-        Instant start = Instant.now();
-        assertThatThrownBy(
-                // When
-                () -> connection.connect())
-                .isInstanceOf(IOException.class);
-        Instant finished = Instant.now();
-
-        // Then
-        assertThat(Duration.between(start, finished).toSeconds()).isGreaterThanOrEqualTo(5);
-    }
 }
