@@ -1,14 +1,13 @@
-plugins {
-    id 'java-library'
-    id 'idea'
+apply plugin: 'java'
+apply plugin: 'idea'
+apply plugin: 'eclipse'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
 }
 
-sourceCompatibility = 11
-targetCompatibility = 11
-
 repositories {
-    // Use jcenter for resolving your dependencies.
-    // You can declare any Maven/Ivy/file repository here.
     mavenCentral()
 }
 
