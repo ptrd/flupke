@@ -1,6 +1,0 @@
-[submodule "kwik"]
-	path = kwik
-	url = ../kwik.git
-[submodule "qpack"]
-	path = qpack
-	url = ../qpack.git

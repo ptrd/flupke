@@ -12,16 +12,9 @@ repositories {
 }
 
 dependencies {
+    implementation group: 'net.luminis.networking', name: 'kwik', version: '0.8'
+    implementation group: 'net.luminis.networking', name: 'qpack', version: '1.0'
 
-    // https://mvnrepository.com/artifact/at.favre.lib/hkdf
-    implementation group: 'at.favre.lib', name: 'hkdf', version: '1.0.1'
-
-    // https://mvnrepository.com/artifact/commons-cli/commons-cli
-    implementation group: 'commons-cli', name: 'commons-cli', version: '1.4'
-
-    implementation 'org.glassfish:javax.json:1.1.4'
-
-    // Use JUnit test framework
     testImplementation 'junit:junit:4.12'
 
     testImplementation("org.assertj:assertj-core:3.11.1")
@@ -30,13 +23,7 @@ dependencies {
 
 sourceSets {
     main {
-        java {
-            srcDir 'kwik/src/main/java'
-            srcDir 'qpack/src/main/java'
-            srcDir 'kwik/agent15/src/main'
-        }
         resources {
-            srcDir 'qpack/src/main/resources'
             srcDir "${buildDir}/generated"
         }
     }
@@ -72,9 +59,11 @@ task flupkePlugin(type: Jar) {
         attributes 'Main-Class': 'net.luminis.http3.sample.Flupke'
     }
     archiveBaseName = "flupke-plugin"
-    from(sourceSets.main.output) {
-        include "net/luminis/http3/**"
-        include "net/luminis/qpack/**"
+    from sourceSets.main.output
+
+    dependsOn configurations.runtimeClasspath
+    from {
+        configurations.runtimeClasspath.findAll { it.name.endsWith('jar') && it.name.contains('qpack') }.collect { zipTree(it) }
     }
 }
 
