@@ -1,6 +1,8 @@
 apply plugin: 'java'
 apply plugin: 'idea'
 apply plugin: 'eclipse'
+apply plugin: 'maven-publish'
+apply plugin: 'signing'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_11
@@ -25,6 +27,7 @@ sourceSets {
     main {
         resources {
             srcDir "${buildDir}/generated"
+            exclude 'sources/**'
         }
     }
 }
@@ -70,7 +73,17 @@ task determineVersion {
             logger.quiet("Building development version.")
         } else {
             def versionTag = proc.in.readLines()[0]
-            logger.quiet("Building version ${versionTag}.")
+            // Check that tag matches format like v1.0 or v1.0.19
+            if (versionTag ==~ /v?[0-9]+(\.\d+){1,2}/) {
+                if (versionTag.startsWith("v")) {
+                    versionTag = versionTag[1..-1]
+                }
+                logger.quiet("Building version ${versionTag}.")
+            }
+            else {
+                logger.error("Version tag '${versionTag}' does not contain a valid version.");
+            }
+            project.version = versionTag
 
             ext.versionDir = new File("${buildDir}", "generated/net/luminis/http3/impl")
             versionDir.mkdirs()
@@ -81,3 +94,67 @@ task determineVersion {
 }
 
 compileJava.dependsOn (determineVersion, processResources)
+
+group = 'net.luminis.networking'
+
+java {
+    withJavadocJar()
+    withSourcesJar()
+}
+
+def pomContent = {
+    name = 'Flupke'
+    description = 'Java implementation of HTTP3 (RFC 9114): generic client / client library and HTTP3 server plugin for Kwik.'
+    url = 'https://github.com/ptrd/flupke'
+
+    licenses {
+        license {
+            name = 'GNU Lesser General Public License v3'
+            url = 'https://www.gnu.org/licenses/lgpl-3.0-standalone.html'
+        }
+    }
+
+    developers {
+        developer {
+            id = 'peterd'
+            name = 'Peter Doornbosch'
+            email = 'peter.doornbosch@luminis.eu'
+            organization  = 'Luminis'
+            organizationUrl = 'https://www.luminis.eu'
+        }
+    }
+
+    scm {
+        connection = 'scm:git:git@github.com:ptrd/flupke.git'
+        developerConnection = 'scm:git:git@github.com:ptrd/flupke.git'
+        url = 'https://github.com/ptrd/flupke'
+    }
+}
+
+publishing {
+    publications {
+        flupke(MavenPublication) {
+            artifactId = 'flupke'
+            from components.java
+            pom pomContent
+        }
+    }
+    repositories {
+        maven {
+            url = "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
+            credentials {
+                username = project.properties.ossrhUsername
+                password = project.properties.ossrhPassword
+            }
+        }
+    }
+}
+
+signing {
+    sign publishing.publications.flupke
+}
+
+javadoc {
+    options.addStringOption('Xdoclint:none', '-quiet')
+    options.addBooleanOption('html5', true)
+}
