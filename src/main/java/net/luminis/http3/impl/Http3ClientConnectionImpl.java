@@ -18,10 +18,7 @@
  */
 package net.luminis.http3.impl;
 
-import net.luminis.http3.core.Capsule;
-import net.luminis.http3.core.CapsuleProtocolStream;
-import net.luminis.http3.core.Http3ClientConnection;
-import net.luminis.http3.core.HttpStream;
+import net.luminis.http3.core.*;
 import net.luminis.http3.server.HttpError;
 import net.luminis.qpack.Encoder;
 import net.luminis.quic.*;
@@ -436,7 +433,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
                 long length = VariableLengthInteger.parseLong(inputStream);
                 byte[] data = new byte[(int) length];
                 httpStream.getInputStream().read(data);
-                return new Capsule(type, data);
+                return new GenericCapsule(type, data);
             }
         };
     }

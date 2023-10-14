@@ -18,7 +18,7 @@
  */
 package net.luminis.http3.impl;
 
-import net.luminis.http3.core.Capsule;
+import net.luminis.http3.core.GenericCapsule;
 import net.luminis.http3.core.CapsuleProtocolStream;
 import net.luminis.http3.core.Http3ClientConnection;
 import net.luminis.http3.core.HttpStream;
@@ -745,7 +745,7 @@ public class Http3ClientConnectionImplTest {
 
         // When
         int position = quicOutputStream.size();
-        capsuleProtocolStream.send(new Capsule(0x68, new byte[] { 0x01, 0x02, 0x03 }));
+        capsuleProtocolStream.send(new GenericCapsule(0x68, new byte[] { 0x01, 0x02, 0x03 }));
 
         // Then
         byte[] data = Arrays.copyOfRange(quicOutputStream.toByteArray(), position, quicOutputStream.size());
@@ -771,7 +771,7 @@ public class Http3ClientConnectionImplTest {
         CapsuleProtocolStream capsuleProtocolStream = http3Connection.sendExtendedConnectWithCapsuleProtocol(connectRequest, "websocket", "https", Duration.ofMillis(100));
 
         // When
-        Capsule received = capsuleProtocolStream.receive();
+        GenericCapsule received = (GenericCapsule) capsuleProtocolStream.receive();
 
         // Then
         assertThat(received.getType()).isEqualTo(0x68);
@@ -805,7 +805,7 @@ public class Http3ClientConnectionImplTest {
             }
         });
 
-        Capsule received = capsuleProtocolStream.receive();
+        GenericCapsule received = (GenericCapsule) capsuleProtocolStream.receive();
 
         // Then
         assertThat(received).isInstanceOf(TestCapsule.class);
@@ -813,7 +813,7 @@ public class Http3ClientConnectionImplTest {
         assertThat(received.getData()).isEqualTo(new byte[] { 0x75, 0x49, (byte) 0xde });
     }
 
-    static class TestCapsule extends Capsule {
+    static class TestCapsule extends GenericCapsule {
         public TestCapsule(byte[] data) {
             super(0x68, data);
         }

@@ -18,57 +18,15 @@
  */
 package net.luminis.http3.core;
 
-import net.luminis.quic.VariableLengthInteger;
-
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.ByteBuffer;
 
 /**
- * https://www.rfc-editor.org/rfc/rfc9297.html#name-capsules
+ * https://www.rfc-editor.org/rfc/rfc9297.html#name-the-capsule-protocol
  */
-public class Capsule {
+public interface Capsule {
 
-    private long type;
-    private long length;
-    private byte[] value;
+    int write(OutputStream outputStream) throws IOException;
 
-    public Capsule(long type, byte[] value) {
-        this.type = type;
-        this.length = value.length;
-        this.value = value;
-    }
-
-    protected Capsule(long type, long length) {
-        this.type = type;
-        this.length = length;
-        value = null;
-    }
-
-    public int write(OutputStream outputStream) throws IOException {
-        ByteBuffer buffer = ByteBuffer.allocate(8 + 8 + value.length);
-        VariableLengthInteger.encode(type, buffer);
-        VariableLengthInteger.encode(length, buffer);
-        buffer.put(value);
-        // Write to output stream in one operation, to avoid multiple data frames.
-        outputStream.write(buffer.array(), 0, buffer.position());
-        return buffer.position();
-    }
-
-    public long getType() {
-        return type;
-    }
-
-    public long getLength() {
-        return length;
-    }
-
-    public byte[] getData() {
-        return value;
-    }
-
-    @Override
-    public String toString() {
-        return "Capsule[type=" + type + ", length=" + length + "]";
-    }
+    long getType();
 }
