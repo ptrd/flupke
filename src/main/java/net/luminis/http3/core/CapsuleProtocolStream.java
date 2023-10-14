@@ -40,6 +40,7 @@ public interface CapsuleProtocolStream {
 
     /**
      * Register a parser for a specific capsule type.
+     * When the parser encounters an IOException, it should rethrow is as an UncheckedIOException.
      * @param type
      * @param parser
      */

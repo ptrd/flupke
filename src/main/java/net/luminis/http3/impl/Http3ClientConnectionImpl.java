@@ -25,10 +25,7 @@ import net.luminis.quic.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.PushbackInputStream;
+import java.io.*;
 import java.net.*;
 import java.net.http.HttpClient;
 import java.net.http.HttpHeaders;
@@ -405,7 +402,12 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
             public Capsule receive() throws IOException {
                 long type = VariableLengthIntegerUtil.peekLong(inputStream);
                 if (capsuleParsers.containsKey(type)) {
-                    return capsuleParsers.get(type).apply(inputStream);
+                    try {
+                        return capsuleParsers.get(type).apply(inputStream);
+                    }
+                    catch (UncheckedIOException ioException) {
+                        throw ioException.getCause();
+                    }
                 }
                 else {
                     return parseGenericCapsule();

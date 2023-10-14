@@ -813,6 +813,31 @@ public class Http3ClientConnectionImplTest {
         assertThat(received.getData()).isEqualTo(new byte[] { 0x75, 0x49, (byte) 0xde });
     }
 
+    @Test
+    public void whenCapsuleParserThrowsIORuntimeExceptionThisIsConvertedToIoException() throws Exception {
+        // Given
+        Http3ClientConnection http3Connection = new Http3ClientConnectionBuilder()
+                .withEnableConnectProtocolSettings()
+                .withBidirectionalQuicStream(new ByteArrayInputStream(new byte[] {
+                        FRAME_TYPE_HEADERS, 0x00,
+                        0x2f }))
+                .build();
+        HttpRequest connectRequest = HttpRequest.newBuilder()
+                .uri(new URI("http://example.com"))
+                .build();
+        CapsuleProtocolStream capsuleProtocolStream = http3Connection.sendExtendedConnectWithCapsuleProtocol(connectRequest, "websocket", "https", Duration.ofMillis(100));
+
+        // When
+        capsuleProtocolStream.registerCapsuleParser(0x2f, input -> {
+            throw new UncheckedIOException(new IOException("missing data"));
+        });
+
+        // Then
+        assertThatThrownBy(() -> capsuleProtocolStream.receive())
+                .isInstanceOf(IOException.class)
+                .hasMessage("missing data");
+    }
+    
     static class TestCapsule extends GenericCapsule {
         public TestCapsule(byte[] data) {
             super(0x68, data);
