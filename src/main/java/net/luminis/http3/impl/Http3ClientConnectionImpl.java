@@ -678,6 +678,11 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
             return inputStream;
         }
 
+        @Override
+        public long getStreamId() {
+            return quicStream.getStreamId();
+        }
+
     }
 
     private static class ResponseState {

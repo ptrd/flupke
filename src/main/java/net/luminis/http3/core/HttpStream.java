@@ -30,4 +30,6 @@ public interface HttpStream {
     OutputStream getOutputStream();
 
     InputStream getInputStream();
+
+    long getStreamId();
 }

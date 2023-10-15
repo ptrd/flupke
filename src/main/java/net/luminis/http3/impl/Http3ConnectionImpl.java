@@ -138,6 +138,11 @@ public class Http3ConnectionImpl implements Http3Connection {
             public InputStream getInputStream() {
                 throw new IllegalStateException("Cannot read from unidirectional stream");
             }
+
+            @Override
+            public long getStreamId() {
+                return quicStream.getStreamId();
+            }
         };
     }
 
@@ -205,6 +210,11 @@ public class Http3ConnectionImpl implements Http3Connection {
             @Override
             public InputStream getInputStream() {
                 return quicStream.getInputStream();
+            }
+
+            @Override
+            public long getStreamId() {
+                return quicStream.getStreamId();
             }
         };
     }
