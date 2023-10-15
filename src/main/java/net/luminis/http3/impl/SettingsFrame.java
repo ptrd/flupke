@@ -23,6 +23,8 @@ import net.luminis.quic.VariableLengthInteger;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
 
 // https://www.rfc-editor.org/rfc/rfc9114.html#name-settings
 public class SettingsFrame extends Http3Frame {
@@ -40,6 +42,7 @@ public class SettingsFrame extends Http3Frame {
     private int qpackMaxTableCapacity;
     private int qpackBlockedStreams;
     private boolean settingsEnableConnectProtocol;
+    private Map<Long, Long> additionalSettings;
 
     public SettingsFrame(int qpackMaxTableCapacity, int qpackBlockedStreams) {
         this(qpackMaxTableCapacity, qpackBlockedStreams, false);
@@ -49,6 +52,7 @@ public class SettingsFrame extends Http3Frame {
         this.qpackMaxTableCapacity = qpackMaxTableCapacity;
         this.qpackBlockedStreams = qpackBlockedStreams;
         this.settingsEnableConnectProtocol = enableConnectProtocol;
+        this.additionalSettings = new HashMap<>();
     }
 
     public SettingsFrame() {
@@ -60,34 +64,31 @@ public class SettingsFrame extends Http3Frame {
             // https://www.rfc-editor.org/rfc/rfc9114.html#name-settings
             // "The payload of a SETTINGS frame consists of zero or more parameters. Each parameter consists of
             //  a setting identifier and a value, both encoded as QUIC variable-length integers."
-            int identifier = 0;
-            long value = 0;
             try {
-                identifier = (int) VariableLengthInteger.parseLong(buffer);
-                value = VariableLengthInteger.parseLong(buffer);
-                switch (identifier) {
-                    // https://tools.ietf.org/html/draft-ietf-quic-qpack-07#section-8.1
-                    case QPACK_MAX_TABLE_CAPACITY:
-                        qpackMaxTableCapacity = (int) value;
-                        break;
-                    case QPACK_BLOCKED_STREAMS:
-                        qpackBlockedStreams = (int) value;
-                        break;
+                long identifier = VariableLengthInteger.parseLong(buffer);
+                long value = VariableLengthInteger.parseLong(buffer);
+                if (identifier == QPACK_MAX_TABLE_CAPACITY) {
+                    qpackMaxTableCapacity = (int) value;
+                }
+                else if (identifier == QPACK_BLOCKED_STREAMS) {
+                    qpackBlockedStreams = (int) value;
+                }
+                else if (identifier == SETTINGS_ENABLE_CONNECT_PROTOCOL) {
                     // https://www.rfc-editor.org/rfc/rfc9220#name-iana-considerations
                     // "Value: 0x08
                     //  Setting Name: SETTINGS_ENABLE_CONNECT_PROTOCOL"
-                    case SETTINGS_ENABLE_CONNECT_PROTOCOL:
-                        if (value == 1L) {
-                            // https://www.rfc-editor.org/rfc/rfc8441#section-3
-                            // "The value of the parameter MUST be 0 or 1."
-                            // "Upon receipt of SETTINGS_ENABLE_CONNECT_PROTOCOL with a value of 1, a client MAY use the
-                            //  Extended CONNECT as defined in this document when creating new streams."
-                            settingsEnableConnectProtocol = true;
-                        }
-                        break;
-                    default:
-                        // https://www.rfc-editor.org/rfc/rfc9114.html#name-settings
-                        // "An implementation MUST ignore any parameter with an identifier it does not understand."
+                    if (value == 1L) {
+                        // https://www.rfc-editor.org/rfc/rfc8441#section-3
+                        // "The value of the parameter MUST be 0 or 1."
+                        // "Upon receipt of SETTINGS_ENABLE_CONNECT_PROTOCOL with a value of 1, a client MAY use the
+                        //  Extended CONNECT as defined in this document when creating new streams."
+                        settingsEnableConnectProtocol = true;
+                    }
+                }
+                else {
+                    // https://www.rfc-editor.org/rfc/rfc9114.html#name-settings
+                    // "An implementation MUST ignore any parameter with an identifier it does not understand."
+                    additionalSettings.put(identifier, value);
                 }
             }
             catch (InvalidIntegerEncodingException e) {
@@ -110,6 +111,10 @@ public class SettingsFrame extends Http3Frame {
             serializedParams.put((byte) SETTINGS_ENABLE_CONNECT_PROTOCOL);
             VariableLengthInteger.encode(1, serializedParams);
         }
+        additionalSettings.entrySet().forEach(entry -> {
+            VariableLengthInteger.encode(entry.getKey(), serializedParams);
+            VariableLengthInteger.encode(entry.getValue(), serializedParams);
+        });
 
         int paramLength = serializedParams.position();
         ByteBuffer buffer = ByteBuffer.allocate(1 + VariableLengthInteger.bytesNeeded(paramLength) + paramLength);
@@ -129,5 +134,13 @@ public class SettingsFrame extends Http3Frame {
 
     public boolean isSettingsEnableConnectProtocol() {
         return settingsEnableConnectProtocol;
+    }
+
+    public void addAdditionalSettings(Map<Long, Long> settingsParameters) {
+        this.additionalSettings = settingsParameters;
+    }
+
+    public Long getParameter(long identifier) {
+        return additionalSettings.get(identifier);
     }
 }

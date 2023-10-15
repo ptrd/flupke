@@ -24,6 +24,8 @@ import org.junit.Test;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -100,6 +102,67 @@ public class SettingsFrameTest {
         assertThat(parsedFrame.getQpackMaxTableCapacity()).isEqualTo(32);
         assertThat(parsedFrame.getQpackBlockedStreams()).isEqualTo(10);
         assertThat(parsedFrame.isSettingsEnableConnectProtocol()).isTrue();
+    }
+
+    @Test
+    public void additionalSettingsAreSerialized() throws InvalidIntegerEncodingException {
+        // Given
+        SettingsFrame settingsFrame = new SettingsFrame();
+        settingsFrame.addAdditionalSettings(Map.of(0xc671706aL, 1L, 0x22L, 2L));
+
+        // When
+        ByteBuffer serializedFrame = settingsFrame.getBytes();
+        serializedFrame.rewind();
+
+        // Then
+        VariableLengthInteger.parse(serializedFrame);  // Skip type
+        VariableLengthInteger.parse(serializedFrame);  // Skip length
+        Map<Long, Long> parameters = readParameters(serializedFrame);
+
+        assertThat(parameters)
+                .containsEntry(0xc671706aL, 1L)
+                .containsEntry(0x22L, 2L);
+    }
+
+    @Test
+    public void additionalSettingsAreParsed() throws Exception {
+        // Given
+        SettingsFrame originalSettingsFrame = new SettingsFrame();
+        originalSettingsFrame.addAdditionalSettings(Map.of(0xc671706aL, 1L, 0x22L, 2L));
+        ByteBuffer serializedFrame = originalSettingsFrame.getBytes();
+        serializedFrame.rewind();
+
+        // When
+        SettingsFrame parsedSettingsFrame = new SettingsFrame();
+        parsedSettingsFrame.parsePayload(serializedFrame);
+
+        // Then
+        assertThat(parsedSettingsFrame.getParameter(0xc671706aL)).isEqualTo(1L);
+        assertThat(parsedSettingsFrame.getParameter(0x22L)).isEqualTo(2L);
+    }
+
+    @Test
+    public void unknownParameterIsNull() throws Exception {
+        // Given
+        ByteBuffer serializedFrame = new SettingsFrame().getBytes();
+        serializedFrame.rewind();
+
+        // When
+        SettingsFrame parsedSettingsFrame = new SettingsFrame();
+        parsedSettingsFrame.parsePayload(serializedFrame);
+
+        // Then
+        assertThat(parsedSettingsFrame.getParameter(0xc671706aL)).isNull();
+    }
+
+    private static Map<Long, Long> readParameters(ByteBuffer serializedFrame) throws InvalidIntegerEncodingException {
+        Map<Long, Long> parameters = new HashMap<>();
+        while (serializedFrame.remaining() > 0) {
+            long identifier = VariableLengthInteger.parseLong(serializedFrame);
+            long value = VariableLengthInteger.parseLong(serializedFrame);
+            parameters.put(identifier, value);
+        }
+        return parameters;
     }
 
     private Long nextLong(ByteBuffer buffer) throws InvalidIntegerEncodingException {
