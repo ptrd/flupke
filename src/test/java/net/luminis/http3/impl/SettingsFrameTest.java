@@ -22,6 +22,7 @@ import net.luminis.quic.InvalidIntegerEncodingException;
 import net.luminis.quic.VariableLengthInteger;
 import org.junit.Test;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -86,7 +87,7 @@ public class SettingsFrameTest {
     }
 
     @Test
-    public void testSerializedCanBeParsedCorrectly() {
+    public void testSerializedCanBeParsedCorrectly() throws IOException {
         // Given
         SettingsFrame settingsFrame = new SettingsFrame(32, 10, true);
 
