@@ -89,18 +89,19 @@ public class Http3ConnectionImpl implements Http3Connection {
     public static final int FRAME_TYPE_GOAWAY = 0x07;
     public static final int FRAME_TYPE_MAX_PUSH_ID = 0x0d;
 
-
     protected final QuicConnection quicConnection;
     protected InputStream peerEncoderStream;
     protected int peerQpackBlockedStreams;
     protected int peerQpackMaxTableCapacity;
     protected Map<Long, Consumer<HttpStream>> unidirectionalStreamHandler = new HashMap<>();
     protected final Decoder qpackDecoder;
+    protected final Map<Long, Long> settingsParameters;
 
 
     public Http3ConnectionImpl(QuicConnection quicConnection) {
         this.quicConnection = quicConnection;
         qpackDecoder = new Decoder();
+        settingsParameters = new HashMap<>();
 
         registerStandardStreamHandlers();
     }
@@ -149,6 +150,11 @@ public class Http3ConnectionImpl implements Http3Connection {
     @Override
     public HttpStream createBidirectionalStream() {
         return wrap(quicConnection.createStream(true));
+    }
+
+    @Override
+    public void addSettingsParameter(long identifier, long value) {
+        settingsParameters.put(identifier, value);  // TODO: check overwrite?
     }
 
     private boolean isReservedStreamType(long streamType) {
@@ -228,8 +234,10 @@ public class Http3ConnectionImpl implements Http3Connection {
             OutputStream clientControlOutput = clientControlStream.getOutputStream();
             clientControlOutput.write(STREAM_TYPE_CONTROL_STREAM);
 
-            ByteBuffer settingsFrame = new SettingsFrame(0, 0).getBytes();
-            clientControlStream.getOutputStream().write(settingsFrame.array(), 0, settingsFrame.limit());
+            SettingsFrame settingsFrame = new SettingsFrame(0, 0);
+            settingsFrame.addAdditionalSettings(settingsParameters);
+            ByteBuffer serializedSettings = settingsFrame.getBytes();
+            clientControlStream.getOutputStream().write(serializedSettings.array(), 0, serializedSettings.limit());
             // https://www.rfc-editor.org/rfc/rfc9114.html#name-control-streams
             // "The sender MUST NOT close the control stream, and the receiver MUST NOT request that the sender close
             //  the control stream."

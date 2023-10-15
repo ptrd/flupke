@@ -20,6 +20,7 @@ package net.luminis.http3.impl;
 
 import net.luminis.http3.core.HttpStream;
 import net.luminis.http3.server.HttpError;
+import net.luminis.http3.test.Http3ClientConnectionBuilder;
 import net.luminis.http3.test.Http3ConnectionBuilder;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
@@ -238,5 +239,21 @@ public class Http3ConnectionImplTest {
 
         // Then
         assertThat(new String(output.toByteArray())).isEqualTo("Hello World");
+    }
+
+    @Test
+    public void additionalSettingsParametersShouldBeWrittenToControlStream() throws Exception {
+        // Given
+        ByteArrayOutputStream controlStreamOutput = new ByteArrayOutputStream();
+        Http3ConnectionImpl connection = new Http3ClientConnectionBuilder()
+                .withUnidirectionalQuicStream(controlStreamOutput)
+                .build();
+
+        // When
+        connection.addSettingsParameter(0x22, 0x33);
+        connection.startControlStream();
+
+        // Then
+        assertThat(controlStreamOutput.toByteArray()).isEqualTo(new byte[] { 0x00, 0x04, 0x06, 0x01, 0x0, 0x07, 0x0, 0x22, 0x33 });
     }
 }

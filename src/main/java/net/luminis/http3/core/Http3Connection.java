@@ -51,4 +51,12 @@ public interface Http3Connection {
      * frames or in a format that is compatible with HTTP/3 framing.
      */
     HttpStream createBidirectionalStream();
+
+    /**
+     * HTTP/3 extension method for adding additional settings.
+     * https://www.rfc-editor.org/rfc/rfc9114.html#name-extensions-to-http-3
+     * "Extensions are permitted to use new frame types (Section 7.2), new settings (Section 7.2.4.1), ..."
+     * Note that this method must be called before the connection is established.
+     */
+    void addSettingsParameter(long identifier, long value);
 }
