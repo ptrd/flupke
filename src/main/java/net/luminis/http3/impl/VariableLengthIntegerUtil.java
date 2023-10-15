@@ -22,6 +22,7 @@ import net.luminis.quic.VariableLengthInteger;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.PushbackInputStream;
 import java.nio.ByteBuffer;
 
 /**
@@ -30,12 +31,25 @@ import java.nio.ByteBuffer;
 public class VariableLengthIntegerUtil {
 
     public static void write(long value, OutputStream outputStream) throws IOException {
-
         ByteBuffer buffer = ByteBuffer.allocate(8);
         int numberOfBytes = VariableLengthInteger.encode(value, buffer);
         buffer.flip();
         for (int i = 0; i < numberOfBytes; i++) {
             outputStream.write(buffer.get());
         }
+    }
+
+    /**
+     * Reads a variable length integer from the input stream, and pushes it back to the stream so it can be reread.
+     * @param inputStream  pushback buffer must be at least 8 bytes!
+     * @return
+     * @throws IOException
+     */
+    public static long peekLong(PushbackInputStream inputStream) throws IOException {
+        Long value = VariableLengthInteger.parseLong(inputStream);
+        ByteBuffer buffer = ByteBuffer.allocate(8);
+        int numberOfBytes = VariableLengthInteger.encode(value, buffer);
+        inputStream.unread(buffer.array(), 0, numberOfBytes);
+        return value;
     }
 }

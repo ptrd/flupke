@@ -18,17 +18,14 @@
  */
 package net.luminis.http3.impl;
 
-import net.luminis.http3.core.Http3ClientConnection;
-import net.luminis.http3.core.HttpStream;
+import net.luminis.http3.core.*;
 import net.luminis.http3.server.HttpError;
 import net.luminis.qpack.Encoder;
 import net.luminis.quic.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.*;
 import java.net.http.HttpClient;
 import java.net.http.HttpHeaders;
@@ -44,6 +41,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 
 public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Http3ClientConnection {
@@ -341,7 +339,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
                 ":authority", extractAuthority(request.uri()),
                 ":method", "CONNECT"));
 
-        return createHttpStream(headersFrame);
+        return new HttpStreamImpl(createHttpStream(headersFrame));
     }
 
     @Override
@@ -366,7 +364,80 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
                 ":scheme", scheme,
                 ":path", extractPath(request.uri())));
 
-        return createHttpStream(headersFrame);
+        return new HttpStreamImpl(createHttpStream(headersFrame));
+    }
+
+    @Override
+    public CapsuleProtocolStream sendExtendedConnectWithCapsuleProtocol(HttpRequest request, String protocol, String scheme, Duration settingsFrameTimeout) throws InterruptedException, HttpError, IOException {
+        if (! settingsFrameReceived.await(settingsFrameTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
+            throw new HttpError("No SETTINGS frame received in time.");
+        }
+        if (! settingsEnableConnectProtocol) {
+            throw new HttpError("Server does not support Extended Connect (RFC 9220).");
+        }
+
+        // https://www.rfc-editor.org/rfc/rfc8441#section-4
+        // "A new pseudo-header field :protocol MAY be included on request HEADERS indicating the desired protocol to be
+        //  spoken on the tunnel created by CONNECT. The pseudo-header field is single valued and contains a value from
+        //  the "Hypertext Transfer Protocol (HTTP) Upgrade Token Registry located at <https://www.iana.org/assignments/http-upgrade-tokens/>"
+        // "On requests that contain the :protocol pseudo-header field, the :scheme and :path pseudo-header fields of
+        //  the target URI (see Section 5) MUST also be included."
+        HeadersFrame headersFrame = new HeadersFrame(request.headers(), Map.of(
+                ":authority", extractAuthority(request.uri()),
+                ":method", "CONNECT",
+                ":protocol", protocol,
+                ":scheme", scheme,
+                ":path", extractPath(request.uri())));
+
+        return capsuleProtocol(createHttpStream(headersFrame));
+    }
+
+    private CapsuleProtocolStream capsuleProtocol(QuicStream httpStream) {
+        return new CapsuleProtocolStream() {
+
+            private Map<Long, Function<InputStream, Capsule>> capsuleParsers = new HashMap<>();
+            private PushbackInputStream inputStream = new PushbackInputStream(httpStream.getInputStream(), 8);
+
+            @Override
+            public Capsule receive() throws IOException {
+                long type = VariableLengthIntegerUtil.peekLong(inputStream);
+                if (capsuleParsers.containsKey(type)) {
+                    try {
+                        return capsuleParsers.get(type).apply(inputStream);
+                    }
+                    catch (UncheckedIOException ioException) {
+                        throw ioException.getCause();
+                    }
+                }
+                else {
+                    return parseGenericCapsule();
+                }
+            }
+
+            @Override
+            public void send(Capsule capsule) throws IOException {
+                capsule.write(httpStream.getOutputStream());
+                httpStream.getOutputStream().flush();
+            }
+
+            @Override
+            public long getStreamId() {
+                return httpStream.getStreamId();
+            }
+
+            @Override
+            public void registerCapsuleParser(long type, Function<InputStream, Capsule> parser) {
+                capsuleParsers.put(type, parser);
+            }
+
+            private Capsule parseGenericCapsule() throws IOException {
+                long type = VariableLengthInteger.parseLong(inputStream);
+                long length = VariableLengthInteger.parseLong(inputStream);
+                byte[] data = new byte[(int) length];
+                httpStream.getInputStream().read(data);
+                return new GenericCapsule(type, data);
+            }
+        };
     }
 
     @Override
@@ -382,7 +453,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         }
     }
 
-    private HttpStream createHttpStream(HeadersFrame headersFrame) throws IOException, HttpError {
+    private QuicStream createHttpStream(HeadersFrame headersFrame) throws IOException, HttpError {
         QuicStream httpStream = quicConnection.createStream(true);
         httpStream.getOutputStream().write(headersFrame.toBytes(qpackEncoder));
 
@@ -397,7 +468,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
             }
             int statusCode = responseInfo.statusCode();
             if (statusCode >= 200 && statusCode < 300) {
-                return new HttpStreamImpl(httpStream);
+                return httpStream;
             }
             else {
                 throw new HttpError("CONNECT request failed", statusCode);
