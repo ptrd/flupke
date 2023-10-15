@@ -97,7 +97,7 @@ public class SettingsFrame extends Http3Frame {
         VariableLengthInteger.encode(qpackMaxTableCapacity, buffer);
 
         buffer.put((byte) 0x07);  // Identifier (var int) QPACK_BLOCKED_STREAMS  (https://tools.ietf.org/html/draft-ietf-quic-qpack-08#section-8.1)
-        VariableLengthInteger.encode(qpackMaxTableCapacity, buffer);
+        VariableLengthInteger.encode(qpackBlockedStreams, buffer);
 
         if (settingsEnableConnectProtocol) {
             buffer.put((byte) SETTINGS_ENABLE_CONNECT_PROTOCOL);
