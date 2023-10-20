@@ -195,6 +195,18 @@ public class Http3Client extends HttpClient {
         return http3Connection.sendExtendedConnect(request, protocol, scheme, Duration.ofSeconds(10));
     }
 
+    /**
+     * Creates a new Http3ClientConnection object, even if there is already a connection to the same host.
+     * The returned Http3ClientConnection object is not yet connected, enabling the caller to set additional settings
+     * before connecting.
+     * @param request  the request for which the connection is to be used (used to determine the host and port)
+     * @return
+     * @throws IOException
+     */
+    public Http3ClientConnection createConnection(HttpRequest request) throws IOException {
+        return http3ConnectionFactory.getConnection(request, true, true);
+    }
+
     public Statistics getConnectionStatistics() {
         if (http3Connection != null) {
             return http3Connection.getConnectionStats();

@@ -81,4 +81,31 @@ public class Http3ConnectionFactoryTest {
         ).isInstanceOf(IOException.class);
     }
 
+    @Test
+    public void newConnection() throws Exception {
+        // Given
+        HttpRequest request = HttpRequest.newBuilder().uri(new URI("http://localhost:433/index.html")).build();
+        Http3ClientConnection originalConnection = connectionFactory.getConnection(request);
+
+        // When
+        Http3ClientConnection newConnection = connectionFactory.getConnection(request, true, false);
+
+        // Then
+        assertThat(newConnection).isNotSameAs(originalConnection);
+        assertThat(connectionFactory.getConnection(request)).isSameAs(originalConnection);
+    }
+
+    @Test
+    public void newConnectionWithReplace() throws Exception {
+        // Given
+        HttpRequest request = HttpRequest.newBuilder().uri(new URI("http://localhost:433/index.html")).build();
+        Http3ClientConnection originalConnection = connectionFactory.getConnection(request);
+
+        // When
+        Http3ClientConnection newConnection = connectionFactory.getConnection(request, true, true);
+
+        // Then
+        assertThat(newConnection).isNotSameAs(originalConnection);
+        assertThat(connectionFactory.getConnection(request)).isSameAs(newConnection);
+    }
 }
