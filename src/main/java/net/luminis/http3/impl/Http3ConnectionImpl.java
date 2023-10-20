@@ -30,8 +30,13 @@ import net.luminis.quic.VariableLengthInteger;
 import java.io.*;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+
+import static net.luminis.http3.impl.SettingsFrame.QPACK_BLOCKED_STREAMS;
+import static net.luminis.http3.impl.SettingsFrame.QPACK_MAX_TABLE_CAPACITY;
+import static net.luminis.http3.impl.SettingsFrame.SETTINGS_ENABLE_CONNECT_PROTOCOL;
 
 public class Http3ConnectionImpl implements Http3Connection {
 
@@ -96,6 +101,11 @@ public class Http3ConnectionImpl implements Http3Connection {
     protected Map<Long, Consumer<HttpStream>> unidirectionalStreamHandler = new HashMap<>();
     protected final Decoder qpackDecoder;
     protected final Map<Long, Long> settingsParameters;
+    private final List<Long> internalSettingsParameterIds = List.of(
+            (long) QPACK_MAX_TABLE_CAPACITY,
+            (long) QPACK_BLOCKED_STREAMS,
+            (long) SETTINGS_ENABLE_CONNECT_PROTOCOL
+    );
 
 
     public Http3ConnectionImpl(QuicConnection quicConnection) {
@@ -154,7 +164,13 @@ public class Http3ConnectionImpl implements Http3Connection {
 
     @Override
     public void addSettingsParameter(long identifier, long value) {
-        settingsParameters.put(identifier, value);  // TODO: check overwrite?
+        if (identifier < 0) {
+            throw new IllegalArgumentException("Identifier must be a positive integer");
+        }
+        if (internalSettingsParameterIds.contains(identifier)) {
+            throw new IllegalArgumentException("Cannot overwrite internal settings parameter");
+        }
+        settingsParameters.put(identifier, value);
     }
 
     private boolean isReservedStreamType(long streamType) {

@@ -256,4 +256,30 @@ public class Http3ConnectionImplTest {
         // Then
         assertThat(controlStreamOutput.toByteArray()).isEqualTo(new byte[] { 0x00, 0x04, 0x06, 0x01, 0x0, 0x07, 0x0, 0x22, 0x33 });
     }
+
+    @Test
+    public void internalSettingsParameterShouldNotBeOverwrittenByCustomValues() throws Exception {
+        // Given
+        ByteArrayOutputStream controlStreamOutput = new ByteArrayOutputStream();
+        Http3ConnectionImpl connection = new Http3ClientConnectionBuilder()
+                .withUnidirectionalQuicStream(controlStreamOutput)
+                .build();
+
+        // When
+        ignoreExceptions(() -> connection.addSettingsParameter(SettingsFrame.QPACK_MAX_TABLE_CAPACITY, 0x1b));
+        ignoreExceptions(() -> connection.addSettingsParameter(SettingsFrame.QPACK_BLOCKED_STREAMS, 0x1b));
+
+        connection.startControlStream();
+
+        // Then
+        assertThat(controlStreamOutput.toByteArray()).isEqualTo(new byte[] { 0x00, 0x04, 0x04, 0x01, 0x0, 0x07, 0x0 });
+    }
+
+    private void ignoreExceptions(Runnable runnable) {
+        try {
+            runnable.run();
+        } catch (Exception e) {
+            // Ignore
+        }
+    }
 }
