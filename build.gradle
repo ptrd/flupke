@@ -46,25 +46,20 @@ jar {
         attributes 'Main-Class': 'net.luminis.http3.sample.Flupke'
     }
 
-    doFirst {
-        from {
-           configurations.compileClasspath.collect { it.isDirectory() ? it : zipTree(it) }
-        }
-        exclude 'META-INF/*.RSA', 'META-INF/*.SF','META-INF/*.DSA'
+    from {
+        configurations.compileClasspath.findAll { it.name =~ /qpack.*\.jar/ }.collect { it.isDirectory() ? it : zipTree(it) }
     }
 }
 
-task flupkePlugin(type: Jar) {
+task uberJar(type: Jar) {
     manifest {
         attributes 'Main-Class': 'net.luminis.http3.sample.Flupke'
     }
-    archiveBaseName = "flupke-plugin"
-    from sourceSets.main.output
-
-    dependsOn configurations.runtimeClasspath
-    from {
-        configurations.runtimeClasspath.findAll { it.name.endsWith('jar') && it.name.contains('qpack') }.collect { zipTree(it) }
-    }
+    archiveBaseName = "flupke-uber"
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
+    exclude 'META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.txt'
+    with jar
 }
 
 task determineVersion {

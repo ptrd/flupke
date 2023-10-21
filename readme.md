@@ -54,36 +54,32 @@ enum does not provide a value for HTTP3. See [JDK-8229533](https://bugs.java.com
 
 ## Build & run
 
-Flupke uses git submodules for dependencies, so make sure when you clone the git repo, 
-you include the submodules or add them later with
-
-    git submodule update --init --recursive
-
-Building is done by gradle, but the gradle wrapper is included in the sources, so after checking out the source, just run
+Building is done by gradle; the gradle wrapper is included in the sources, so after checking out the source, just run
 
     ./gradlew build
     
-which will run the unit tests and create a jar file in `build/libs`.
+which will run the unit tests and create the `flupke.jar` file in `build/libs`.
+This `flupke.jar` contains the Flupke library (including QPack classes). 
+When using in your own project, you will also need the Kwik dependency, which you can fetch from Maven Central.
+
+Alternatively, you can build the uberjar, which contains all dependencies and provides a runnable sample client.
+To build the uberjar, run
+
+    ./gradlew uberjar
+
+To run the sample client, use the provided `flupke.sh` shell script and pass the targer URL as a parameter.
+You can also run the java command directly:
+
+    java -cp build/libs/flupke-uber.jar net.luminis.http3.sample.Sample <URL>
+
+Whether the URL is specified with HTTP or HTTPS protocol doesn't matter, Flupke will always (and only) try to set up a QUIC connection.
+The port specified in the URL must be the UDP port on which the HTTP3/QUIC server listens.
 
 Gradle can also generate IntelliJ Idea project files for you:
 
     gradle idea
-    
-To run the sample, use the provided `flupke.sh` shell script and pass the targer URL as a parameter.
-You can also run the java command directly:
-
-    java -cp build/libs/flupke.jar net.luminis.http3.sample.Sample <URL>
-
-Whether the URL is specified with HTTP or HTTPS protocol doesn't matter, Flupke will always (and only) try to setup a QUIC connection.
-The port specified in the URL must be the UDP port on which the HTTP3/QUIC server listens. 
 
 By default, Flupke will use QUIC version 1 (the official RFC version). To let Flupke use a different QUIC version (e.g. QUIC version 2, RFC 9369), put the version in an environment variable called "QUIC_VERSION" (for QUIC version 2, use the value "2" (without the quotes)).
-
-To generate the Kwik server plugin:
-
-    gradle flupkePlugin
-
-which will create a jar file named 'flupke-plugin.jar' in `build/libs`.
 
 The project requires Java 11.
 
