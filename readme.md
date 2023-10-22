@@ -29,6 +29,17 @@ class for a working example.
 Flupke also supports POST requests, or more generally, HTTP methods that require or use a request body. 
 See the [PostExample](https://bitbucket.org/pjtr/flupke/src/master/src/main/java/net/luminis/http3/sample/PostExample.java) for details.
 
+### Maven
+
+Flupke is available from Maven Central; maven coordinates are
+
+    <dependency>
+        <groupId>net.luminis.networking</groupId>
+        <artifactId>flupke</artifactId>
+        <version>0.5.0</version>
+    </dependency> 
+
+
 ### Work in progress
 
 This project (as well as the projects it builds on) is work in progress.
