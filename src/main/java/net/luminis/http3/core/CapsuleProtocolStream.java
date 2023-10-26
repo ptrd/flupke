@@ -32,6 +32,10 @@ public interface CapsuleProtocolStream {
 
     void send(Capsule capsule) throws IOException;
 
+    void sendAndClose(Capsule capsule) throws IOException;
+
+    void close() throws IOException;
+
     /**
      * Returns the stream id of the underlying (QUIC) stream.
      * @return

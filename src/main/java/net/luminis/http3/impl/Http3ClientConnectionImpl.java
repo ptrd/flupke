@@ -421,6 +421,17 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
             }
 
             @Override
+            public void sendAndClose(Capsule capsule) throws IOException {
+                capsule.write(httpStream.getOutputStream());
+                httpStream.getOutputStream().close();
+            }
+
+            @Override
+            public void close() throws IOException {
+                httpStream.getOutputStream().close();
+            }
+
+            @Override
             public long getStreamId() {
                 return httpStream.getStreamId();
             }

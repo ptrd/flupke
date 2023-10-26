@@ -45,8 +45,8 @@ public class Http3ClientConnectionBuilder {
     private OutputStream unidirectionalOutputStream;
     private QuicConnection quicConnection;
     private SettingsFrame settingsFrame;
-    private ByteArrayInputStream bidirectionalInputStream;
-    private ByteArrayOutputStream bidirectionalOutputStream;
+    private InputStream bidirectionalInputStream;
+    private OutputStream bidirectionalOutputStream;
 
     public Http3ClientConnectionBuilder withUnidirectionalQuicStream(OutputStream output) {
         unidirectionalOutputStream = output;
@@ -105,13 +105,13 @@ public class Http3ClientConnectionBuilder {
         return quicConnection;
     }
 
-    public Http3ClientConnectionBuilder withBidirectionalQuicStream(ByteArrayInputStream quicInputStream, ByteArrayOutputStream quicOutputStream) {
+    public Http3ClientConnectionBuilder withBidirectionalQuicStream(InputStream quicInputStream, OutputStream quicOutputStream) {
         bidirectionalInputStream = quicInputStream;
         bidirectionalOutputStream = quicOutputStream;
         return this;
     }
 
-    public Http3ClientConnectionBuilder withBidirectionalQuicStream(ByteArrayInputStream quicInputStream) {
+    public Http3ClientConnectionBuilder withBidirectionalQuicStream(InputStream quicInputStream) {
         bidirectionalInputStream = quicInputStream;
         bidirectionalOutputStream = new ByteArrayOutputStream();
         return this;

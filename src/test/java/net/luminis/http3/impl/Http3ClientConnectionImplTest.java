@@ -18,8 +18,8 @@
  */
 package net.luminis.http3.impl;
 
-import net.luminis.http3.core.GenericCapsule;
 import net.luminis.http3.core.CapsuleProtocolStream;
+import net.luminis.http3.core.GenericCapsule;
 import net.luminis.http3.core.Http3ClientConnection;
 import net.luminis.http3.core.HttpStream;
 import net.luminis.http3.server.HttpError;
@@ -56,7 +56,9 @@ import static java.util.Collections.emptyMap;
 import static net.luminis.http3.impl.Http3ConnectionImpl.FRAME_TYPE_HEADERS;
 import static net.luminis.http3.impl.Http3ConnectionImpl.H3_STREAM_CREATION_ERROR;
 import static net.luminis.http3.impl.SettingsFrame.SETTINGS_ENABLE_CONNECT_PROTOCOL;
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.entry;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.*;
@@ -732,11 +734,10 @@ public class Http3ClientConnectionImplTest {
     @Test
     public void testSendCapsuleOnConnectStream() throws Exception {
         // Given
-        ByteArrayInputStream quicInputStream = new ByteArrayInputStream(new byte[] { FRAME_TYPE_HEADERS, 0x00 });
         ByteArrayOutputStream quicOutputStream = new ByteArrayOutputStream();
         Http3ClientConnection http3Connection = new Http3ClientConnectionBuilder()
                 .withEnableConnectProtocolSettings()
-                .withBidirectionalQuicStream(quicInputStream, quicOutputStream)
+                .withBidirectionalQuicStream(new ByteArrayInputStream(MOCK_HEADER), quicOutputStream)
                 .build();
         HttpRequest connectRequest = HttpRequest.newBuilder()
                 .uri(new URI("http://example.com"))
@@ -837,7 +838,48 @@ public class Http3ClientConnectionImplTest {
                 .isInstanceOf(IOException.class)
                 .hasMessage("missing data");
     }
-    
+
+    @Test
+    public void closeOnCapsuleStreamClosesOutputStreamOfUnderlyingQuicStream() throws Exception {
+        // Given
+        OutputStream quicOutputStream = mock(OutputStream.class);
+        Http3ClientConnection http3Connection = new Http3ClientConnectionBuilder()
+                .withEnableConnectProtocolSettings()
+                .withBidirectionalQuicStream(new ByteArrayInputStream(MOCK_HEADER), quicOutputStream)
+                .build();
+        HttpRequest connectRequest = HttpRequest.newBuilder()
+                .uri(new URI("http://example.com"))
+                .build();
+        CapsuleProtocolStream capsuleProtocolStream = http3Connection.sendExtendedConnectWithCapsuleProtocol(connectRequest, "websocket", "https", Duration.ofMillis(100));
+
+        // When
+        capsuleProtocolStream.close();
+
+        // Then
+        verify(quicOutputStream).close();
+    }
+
+    @Test
+    public void sendAndcloseOnCapsuleStreamClosesOutputStreamOfUnderlyingQuicStream() throws Exception {
+        // Given
+        OutputStream quicOutputStream = mock(OutputStream.class);
+        Http3ClientConnection http3Connection = new Http3ClientConnectionBuilder()
+                .withEnableConnectProtocolSettings()
+                .withBidirectionalQuicStream(new ByteArrayInputStream(MOCK_HEADER), quicOutputStream)
+                .build();
+        HttpRequest connectRequest = HttpRequest.newBuilder()
+                .uri(new URI("http://example.com"))
+                .build();
+        CapsuleProtocolStream capsuleProtocolStream = http3Connection.sendExtendedConnectWithCapsuleProtocol(connectRequest, "websocket", "https", Duration.ofMillis(100));
+
+        // When
+        capsuleProtocolStream.sendAndClose(new GenericCapsule(0x68, new byte[] { 0x01, 0x02, 0x03 }));
+
+        // Then
+        verify(quicOutputStream).write(any());
+        verify(quicOutputStream).close();
+    }
+
     static class TestCapsule extends GenericCapsule {
         public TestCapsule(byte[] data) {
             super(0x68, data);
