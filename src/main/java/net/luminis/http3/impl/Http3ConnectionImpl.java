@@ -19,6 +19,7 @@
 package net.luminis.http3.impl;
 
 import net.luminis.http3.core.Http3Connection;
+import net.luminis.http3.core.HttpStream;
 import net.luminis.http3.server.HttpError;
 import net.luminis.qpack.Decoder;
 import net.luminis.quic.QuicConnection;
@@ -28,8 +29,13 @@ import net.luminis.quic.generic.VariableLengthInteger;
 import java.io.*;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+
+import static net.luminis.http3.impl.SettingsFrame.QPACK_BLOCKED_STREAMS;
+import static net.luminis.http3.impl.SettingsFrame.QPACK_MAX_TABLE_CAPACITY;
+import static net.luminis.http3.impl.SettingsFrame.SETTINGS_ENABLE_CONNECT_PROTOCOL;
 
 public class Http3ConnectionImpl implements Http3Connection {
 
@@ -87,30 +93,30 @@ public class Http3ConnectionImpl implements Http3Connection {
     public static final int FRAME_TYPE_GOAWAY = 0x07;
     public static final int FRAME_TYPE_MAX_PUSH_ID = 0x0d;
 
-
     protected final QuicConnection quicConnection;
     protected InputStream peerEncoderStream;
     protected int peerQpackBlockedStreams;
     protected int peerQpackMaxTableCapacity;
-    protected Map<Long, Consumer<InputStream>> unidirectionalStreamHandler = new HashMap<>();
+    protected Map<Long, Consumer<HttpStream>> unidirectionalStreamHandler = new HashMap<>();
     protected final Decoder qpackDecoder;
+    protected final Map<Long, Long> settingsParameters;
+    private final List<Long> internalSettingsParameterIds = List.of(
+            (long) QPACK_MAX_TABLE_CAPACITY,
+            (long) QPACK_BLOCKED_STREAMS,
+            (long) SETTINGS_ENABLE_CONNECT_PROTOCOL
+    );
 
 
     public Http3ConnectionImpl(QuicConnection quicConnection) {
         this.quicConnection = quicConnection;
         qpackDecoder = new Decoder();
+        settingsParameters = new HashMap<>();
 
         registerStandardStreamHandlers();
     }
 
-    /**
-     * Allow registration of a new unidirectional stream type.
-     * https://www.rfc-editor.org/rfc/rfc9114.html#name-extensions-to-http-3
-     * "Extensions are permitted to use (...) new unidirectional stream types (Section 6.2)."
-     * @param streamType
-     * @param handler
-     */
-    public void registerUnidirectionalStreamType(long streamType, Consumer<InputStream> handler) {
+    @Override
+    public void registerUnidirectionalStreamType(long streamType, Consumer<HttpStream> handler) {
         // ensure the stream type is not one of the standard types
         if (streamType >= 0x00 && streamType <= 0x03) {
             throw new IllegalArgumentException("Cannot register standard stream type");
@@ -119,6 +125,51 @@ public class Http3ConnectionImpl implements Http3Connection {
             throw new IllegalArgumentException("Cannot register reserved stream type");
         }
         unidirectionalStreamHandler.put(streamType, handler);
+    }
+
+    @Override
+    public HttpStream createUnidirectionalStream(long streamType) throws IOException {
+        // ensure the stream type is not one of the standard types
+        if (streamType >= 0x00 && streamType <= 0x03) {
+            throw new IllegalArgumentException("Cannot create standard stream type");
+        }
+        if (isReservedStreamType(streamType)) {
+            throw new IllegalArgumentException("Cannot create reserved stream type");
+        }
+        QuicStream quicStream = quicConnection.createStream(false);
+        VariableLengthIntegerUtil.write(streamType, quicStream.getOutputStream());
+        return new HttpStream() {
+            @Override
+            public OutputStream getOutputStream() {
+                return quicStream.getOutputStream();
+            }
+
+            @Override
+            public InputStream getInputStream() {
+                throw new IllegalStateException("Cannot read from unidirectional stream");
+            }
+
+            @Override
+            public long getStreamId() {
+                return quicStream.getStreamId();
+            }
+        };
+    }
+
+    @Override
+    public HttpStream createBidirectionalStream() {
+        return wrap(quicConnection.createStream(true));
+    }
+
+    @Override
+    public void addSettingsParameter(long identifier, long value) {
+        if (identifier < 0) {
+            throw new IllegalArgumentException("Identifier must be a positive integer");
+        }
+        if (internalSettingsParameterIds.contains(identifier)) {
+            throw new IllegalArgumentException("Cannot overwrite internal settings parameter");
+        }
+        settingsParameters.put(identifier, value);
     }
 
     private boolean isReservedStreamType(long streamType) {
@@ -132,11 +183,11 @@ public class Http3ConnectionImpl implements Http3Connection {
         // "Two stream types are defined in this document: control streams (Section 6.2.1) and push streams (Section 6.2.2).
         // https://www.rfc-editor.org/rfc/rfc9114.html#name-control-streams
         // "A control stream is indicated by a stream type of 0x00."
-        unidirectionalStreamHandler.put((long) STREAM_TYPE_CONTROL_STREAM, this::processControlStream);
+        unidirectionalStreamHandler.put((long) STREAM_TYPE_CONTROL_STREAM, httpStream -> processControlStream(httpStream.getInputStream()));
         // "[QPACK] defines two additional stream types. Other stream types can be defined by extensions to HTTP/3;..."
         // https://www.rfc-editor.org/rfc/rfc9204.html#name-encoder-and-decoder-streams
         // "An encoder stream is a unidirectional stream of type 0x02."
-        unidirectionalStreamHandler.put((long) STREAM_TYPE_QPACK_ENCODER, this::setPeerEncoderStream);
+        unidirectionalStreamHandler.put((long) STREAM_TYPE_QPACK_ENCODER, httpStream -> setPeerEncoderStream(httpStream.getInputStream()));
 
         unidirectionalStreamHandler.put((long) STREAM_TYPE_QPACK_DECODER, httpStream -> {});
     }
@@ -156,9 +207,9 @@ public class Http3ConnectionImpl implements Http3Connection {
             //  unidirectional stream header."
             return;
         }
-        Consumer<InputStream> streamHandler = unidirectionalStreamHandler.get(streamType);
+        Consumer<HttpStream> streamHandler = unidirectionalStreamHandler.get(streamType);
         if (streamHandler != null) {
-            streamHandler.accept(quicStream.getInputStream());
+            streamHandler.accept(wrap(quicStream));
         }
         else {
             // https://www.rfc-editor.org/rfc/rfc9114.html#name-unidirectional-streams
@@ -170,6 +221,25 @@ public class Http3ConnectionImpl implements Http3Connection {
         }
     }
 
+    protected HttpStream wrap(QuicStream quicStream) {
+        return new HttpStream() {
+            @Override
+            public OutputStream getOutputStream() {
+                return quicStream.getOutputStream();
+            }
+
+            @Override
+            public InputStream getInputStream() {
+                return quicStream.getInputStream();
+            }
+
+            @Override
+            public long getStreamId() {
+                return quicStream.getStreamId();
+            }
+        };
+    }
+
     protected void startControlStream() {
         try {
             // https://www.rfc-editor.org/rfc/rfc9114.html#name-control-streams
@@ -179,8 +249,10 @@ public class Http3ConnectionImpl implements Http3Connection {
             OutputStream clientControlOutput = clientControlStream.getOutputStream();
             clientControlOutput.write(STREAM_TYPE_CONTROL_STREAM);
 
-            ByteBuffer settingsFrame = new SettingsFrame(0, 0).getBytes();
-            clientControlStream.getOutputStream().write(settingsFrame.array(), 0, settingsFrame.limit());
+            SettingsFrame settingsFrame = new SettingsFrame(0, 0);
+            settingsFrame.addAdditionalSettings(settingsParameters);
+            ByteBuffer serializedSettings = settingsFrame.getBytes();
+            clientControlStream.getOutputStream().write(serializedSettings.array(), 0, serializedSettings.limit());
             // https://www.rfc-editor.org/rfc/rfc9114.html#name-control-streams
             // "The sender MUST NOT close the control stream, and the receiver MUST NOT request that the sender close
             //  the control stream."
@@ -293,4 +365,14 @@ public class Http3ConnectionImpl implements Http3Connection {
         }
         return data;
     }
+
+    protected void handleIncomingStream(QuicStream quicStream) {
+        if (quicStream.isUnidirectional()) {
+            handleUnidirectionalStream(quicStream);
+        } else {
+            handleBidirectionalStream(quicStream);
+        }
+    }
+
+    protected void handleBidirectionalStream(QuicStream quicStream) {}
 }

@@ -18,15 +18,20 @@
  */
 package net.luminis.http3.impl;
 
+import net.luminis.http3.core.HttpStream;
 import net.luminis.http3.server.HttpError;
+import net.luminis.http3.test.Http3ClientConnectionBuilder;
+import net.luminis.http3.test.Http3ConnectionBuilder;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.function.Consumer;
 
 import static net.luminis.http3.impl.Http3ConnectionImpl.*;
@@ -104,7 +109,7 @@ public class Http3ConnectionImplTest {
         ByteBuffer buffer = ByteBuffer.allocate(11);
         connection.registerUnidirectionalStreamType(0x22, stream -> {
             try {
-                buffer.put(stream.readNBytes(11));
+                buffer.put(stream.getInputStream().readNBytes(11));
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -184,5 +189,97 @@ public class Http3ConnectionImplTest {
         // Then
         verify(quicConnection, never()).close(anyLong(), any());
         verify(quicStream, never()).closeInput(anyLong());
+    }
+
+    @Test
+    public void streamWithUnsupportedStreamTypeShouldBeDiscarded() {
+        // Given
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(mock(QuicConnection.class));
+
+        byte[] streamData = new byte[] { 0x37 };
+        QuicStream quicStream = mock(QuicStream.class);
+        when(quicStream.getInputStream()).thenReturn(new ByteArrayInputStream(streamData));
+
+        // When
+        connection.handleUnidirectionalStream(quicStream);
+
+        // Then
+        ArgumentCaptor<Long> errorCodeCaptor = ArgumentCaptor.forClass(Long.class);
+        verify(quicStream).closeInput(errorCodeCaptor.capture());
+        assertThat(errorCodeCaptor.getValue()).isEqualTo(H3_STREAM_CREATION_ERROR);
+    }
+
+    @Test
+    public void creatingUnidirectionalStreamShouldSendStreamType() throws IOException {
+        // Given
+        ByteArrayOutputStream output = new ByteArrayOutputStream(100);
+        Http3ConnectionImpl connection = new Http3ConnectionBuilder()
+                .withUnidirectionalQuicStream(output)
+                .build();
+
+        // When
+        connection.createUnidirectionalStream(0x23).getOutputStream().write("Hello World".getBytes());
+
+        // Then
+        assertThat(output.toByteArray()[0]).isEqualTo((byte) 0x23);
+        assertThat(output.toByteArray()[1]).isEqualTo("H".getBytes(StandardCharsets.US_ASCII)[0]);
+    }
+
+    @Test
+    public void bidirectionalStreamShouldNotApplyFraming() throws IOException {
+        // Given
+        ByteArrayOutputStream output = new ByteArrayOutputStream(100);
+        Http3ConnectionImpl connection = new Http3ConnectionBuilder()
+                .withBidirectionalQuicStream(null, output)
+                .build();
+
+        // When
+        HttpStream bidirectionalStream = connection.createBidirectionalStream();
+        bidirectionalStream.getOutputStream().write("Hello World".getBytes());
+
+        // Then
+        assertThat(new String(output.toByteArray())).isEqualTo("Hello World");
+    }
+
+    @Test
+    public void additionalSettingsParametersShouldBeWrittenToControlStream() throws Exception {
+        // Given
+        ByteArrayOutputStream controlStreamOutput = new ByteArrayOutputStream();
+        Http3ConnectionImpl connection = new Http3ClientConnectionBuilder()
+                .withUnidirectionalQuicStream(controlStreamOutput)
+                .build();
+
+        // When
+        connection.addSettingsParameter(0x22, 0x33);
+        connection.startControlStream();
+
+        // Then
+        assertThat(controlStreamOutput.toByteArray()).isEqualTo(new byte[] { 0x00, 0x04, 0x06, 0x01, 0x0, 0x07, 0x0, 0x22, 0x33 });
+    }
+
+    @Test
+    public void internalSettingsParameterShouldNotBeOverwrittenByCustomValues() throws Exception {
+        // Given
+        ByteArrayOutputStream controlStreamOutput = new ByteArrayOutputStream();
+        Http3ConnectionImpl connection = new Http3ClientConnectionBuilder()
+                .withUnidirectionalQuicStream(controlStreamOutput)
+                .build();
+
+        // When
+        ignoreExceptions(() -> connection.addSettingsParameter(SettingsFrame.QPACK_MAX_TABLE_CAPACITY, 0x1b));
+        ignoreExceptions(() -> connection.addSettingsParameter(SettingsFrame.QPACK_BLOCKED_STREAMS, 0x1b));
+
+        connection.startControlStream();
+
+        // Then
+        assertThat(controlStreamOutput.toByteArray()).isEqualTo(new byte[] { 0x00, 0x04, 0x04, 0x01, 0x0, 0x07, 0x0 });
+    }
+
+    private void ignoreExceptions(Runnable runnable) {
+        try {
+            runnable.run();
+        } catch (Exception e) {
+            // Ignore
+        }
     }
 }

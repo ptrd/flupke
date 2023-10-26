@@ -20,6 +20,8 @@ package net.luminis.http3.impl;
 
 import net.luminis.http3.Http3Client;
 import net.luminis.http3.core.Http3ClientConnection;
+import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -33,12 +35,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class Http3ConnectionFactoryTest {
 
+    private Http3ConnectionFactory connectionFactory;
+
+    @Before
+    public void setupObjectUnderTest() {
+        connectionFactory = new Http3ConnectionFactory((Http3Client) Http3Client.newHttpClient());
+    }
+
     @Test
     public void requestsForSameAddressReuseConnection() throws Exception {
         HttpRequest request1 = HttpRequest.newBuilder().uri(new URI("http://localhost:433/index.html")).build();
         HttpRequest request2 = HttpRequest.newBuilder().uri(new URI("http://localhost:433/whatever.html")).build();
-
-        Http3ConnectionFactory connectionFactory = new Http3ConnectionFactory((Http3Client) Http3Client.newHttpClient());
 
         Http3ClientConnection connection1 = connectionFactory.getConnection(request1);
         Http3ClientConnection connection2 = connectionFactory.getConnection(request2);
@@ -51,8 +58,6 @@ public class Http3ConnectionFactoryTest {
         HttpRequest request1 = HttpRequest.newBuilder().uri(new URI("http://localhost:433/index.html")).build();
         HttpRequest request2 = HttpRequest.newBuilder().uri(new URI("http://www.developer.com:433/whatever.html")).build();
 
-        Http3ConnectionFactory connectionFactory = new Http3ConnectionFactory((Http3Client) Http3Client.newHttpClient());
-
         Http3ClientConnection connection1 = connectionFactory.getConnection(request1);
         Http3ClientConnection connection2 = connectionFactory.getConnection(request2);
 
@@ -64,8 +69,6 @@ public class Http3ConnectionFactoryTest {
         HttpRequest request1 = HttpRequest.newBuilder().uri(new URI("http://localhost:433/index.html")).build();
         HttpRequest request2 = HttpRequest.newBuilder().uri(new URI("http://localhost:80/whatever.html")).build();
 
-        Http3ConnectionFactory connectionFactory = new Http3ConnectionFactory((Http3Client) Http3Client.newHttpClient());
-
         Http3ClientConnection connection1 = connectionFactory.getConnection(request1);
         Http3ClientConnection connection2 = connectionFactory.getConnection(request2);
 
@@ -74,7 +77,6 @@ public class Http3ConnectionFactoryTest {
 
     @Test
     public void invalidHostnameThrowsCheckedException() throws Exception {
-        Http3ConnectionFactory connectionFactory = new Http3ConnectionFactory((Http3Client) Http3Client.newHttpClient());
         HttpRequest request = HttpRequest.newBuilder().uri(new URI("https://www.doeshopefullystillnotexist.com/")).build();
 
         assertThatThrownBy(
@@ -83,6 +85,7 @@ public class Http3ConnectionFactoryTest {
     }
 
     @Test
+    @Ignore("test ignored because it takes too long")
     public void testDefaultConnectionTimeout() throws Exception {
         // Given
         Http3ConnectionFactory connectionFactory = new Http3ConnectionFactory((Http3Client) Http3Client.newHttpClient());
@@ -98,5 +101,33 @@ public class Http3ConnectionFactoryTest {
 
         // Then
         assertThat(Duration.between(start, finished).toSeconds()).isGreaterThanOrEqualTo(5);
+    }
+
+    @Test
+    public void newConnection() throws Exception {
+        // Given
+        HttpRequest request = HttpRequest.newBuilder().uri(new URI("http://localhost:433/index.html")).build();
+        Http3ClientConnection originalConnection = connectionFactory.getConnection(request);
+
+        // When
+        Http3ClientConnection newConnection = connectionFactory.getConnection(request, true, false);
+
+        // Then
+        assertThat(newConnection).isNotSameAs(originalConnection);
+        assertThat(connectionFactory.getConnection(request)).isSameAs(originalConnection);
+    }
+
+    @Test
+    public void newConnectionWithReplace() throws Exception {
+        // Given
+        HttpRequest request = HttpRequest.newBuilder().uri(new URI("http://localhost:433/index.html")).build();
+        Http3ClientConnection originalConnection = connectionFactory.getConnection(request);
+
+        // When
+        Http3ClientConnection newConnection = connectionFactory.getConnection(request, true, true);
+
+        // Then
+        assertThat(newConnection).isNotSameAs(originalConnection);
+        assertThat(connectionFactory.getConnection(request)).isSameAs(newConnection);
     }
 }

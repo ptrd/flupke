@@ -61,6 +61,40 @@ public class Http3ConnectionFactory {
         }
     }
 
+    public Http3ClientConnection getConnection(HttpRequest request, boolean createNew, boolean replaceExisting) throws IOException {
+        if (replaceExisting && !createNew) {
+            throw new IllegalArgumentException("replaceExisting can only be true if createNew is true");
+        }
+
+        int port = request.uri().getPort();
+        if (port <= 0) {
+            port = DEFAULT_HTTP3_PORT;
+        }
+        UdpAddress address = new UdpAddress(request.uri().getHost(), port);
+
+        try {
+            Http3ClientConnection connection;
+            if (createNew) {
+                connection = createConnection(address);
+                if (replaceExisting) {
+                    connections.put(address, connection);
+                }
+            }
+            else {
+                connection = connections.computeIfAbsent(address, this::createConnection);
+            }
+            return connection;
+        }
+        catch (RuntimeException error) {
+            if (error.getCause() instanceof IOException) {
+                throw (IOException) error.getCause();
+            }
+            else {
+                throw error;
+            }
+        }
+    }
+    
     private Http3ClientConnection createConnection(UdpAddress address) {
         Http3ClientConnection http3Connection;
         try {

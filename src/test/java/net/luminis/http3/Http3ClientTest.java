@@ -20,6 +20,7 @@ package net.luminis.http3;
 
 import net.luminis.http3.impl.Http3ClientConnectionImpl;
 import net.luminis.http3.impl.Http3ConnectionFactory;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.mockito.internal.util.reflection.FieldSetter;
 
@@ -69,6 +70,27 @@ public class Http3ClientTest {
 
         Instant finished = Instant.now();
         assertThat(Duration.between(start, finished).toMillis()).isLessThan(500);
+    }
+
+    @Test
+    @Ignore("test ignored because it takes too long")
+    public void testDefaultConnectionTimeout() throws Exception {
+        HttpClient httpClient = new Http3ClientBuilder()
+                .disableCertificateCheck()
+                .build();
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI("http://localhost:5896"))
+                .build();
+
+        Instant start = Instant.now();
+
+        assertThatThrownBy(
+                () -> httpClient.send(request, null))
+                .isInstanceOf(ConnectException.class);
+
+        Instant finished = Instant.now();
+        assertThat(Duration.between(start, finished).toSeconds()).isGreaterThanOrEqualTo(5);
     }
 
     @Test

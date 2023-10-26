@@ -19,7 +19,7 @@
 package net.luminis.http3;
 
 import net.luminis.http3.core.Http3ClientConnection;
-import net.luminis.http3.impl.Http3ClientConnectionImpl;
+import net.luminis.http3.core.HttpStream;
 import net.luminis.http3.impl.Http3ConnectionFactory;
 import net.luminis.http3.server.HttpError;
 import net.luminis.quic.Statistics;
@@ -169,7 +169,7 @@ public class Http3Client extends HttpClient {
      * @throws IOException
      * @throws HttpError
      */
-    public Http3ClientConnectionImpl.HttpStreamImpl sendConnect(HttpRequest request) throws IOException, HttpError {
+    public HttpStream sendConnect(HttpRequest request) throws IOException, HttpError {
         http3Connection = http3ConnectionFactory.getConnection(request);
         http3Connection.connect();
         return http3Connection.sendConnect(request);
@@ -187,10 +187,22 @@ public class Http3Client extends HttpClient {
      * @throws HttpError
      * @throws InterruptedException
      */
-    public Http3ClientConnection.HttpStream sendExtendedConnect(HttpRequest request, String protocol, String scheme) throws IOException, HttpError, InterruptedException {
+    public HttpStream sendExtendedConnect(HttpRequest request, String protocol, String scheme) throws IOException, HttpError, InterruptedException {
         http3Connection = http3ConnectionFactory.getConnection(request);
         http3Connection.connect();
         return http3Connection.sendExtendedConnect(request, protocol, scheme, Duration.ofSeconds(10));
+    }
+
+    /**
+     * Creates a new Http3ClientConnection object, even if there is already a connection to the same host.
+     * The returned Http3ClientConnection object is not yet connected, enabling the caller to set additional settings
+     * before connecting.
+     * @param request  the request for which the connection is to be used (used to determine the host and port)
+     * @return
+     * @throws IOException
+     */
+    public Http3ClientConnection createConnection(HttpRequest request) throws IOException {
+        return http3ConnectionFactory.getConnection(request, true, true);
     }
 
     public Statistics getConnectionStatistics() {

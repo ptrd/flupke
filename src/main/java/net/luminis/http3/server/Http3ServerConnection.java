@@ -69,20 +69,13 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
 
     @Override
     public void acceptPeerInitiatedStream(QuicStream quicStream) {
-        Thread thread = new Thread(() -> handle(quicStream));
+        Thread thread = new Thread(() -> handleIncomingStream(quicStream));
         thread.setName("http-" + threadCount.getAndIncrement());
         thread.start();
     }
 
-    void handle(QuicStream quicStream) {
-        if (quicStream.isUnidirectional()) {
-            handleUnidirectionalStream(quicStream);
-        } else {
-            handleBidirectionalStream(quicStream);
-        }
-    }
-
-    void handleBidirectionalStream(QuicStream quicStream) {
+    @Override
+    protected void handleBidirectionalStream(QuicStream quicStream) {
         // https://tools.ietf.org/html/draft-ietf-quic-http-34#section-6.1
         // "All client-initiated bidirectional streams are used for HTTP requests and responses."
         // https://tools.ietf.org/html/draft-ietf-quic-http-34#section-4.1
