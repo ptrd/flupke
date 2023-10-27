@@ -52,6 +52,11 @@ public class FileBodyHandlerImpl implements HttpResponse.BodyHandler<Path> {
             }
 
             @Override
+            public void onError(Throwable throwable) {
+                future.completeExceptionally(throwable);
+            }
+
+            @Override
             public void onComplete() {
                 try {
                     future.complete(file);

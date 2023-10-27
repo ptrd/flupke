@@ -1,7 +1,7 @@
 package net.luminis.httpclient;
 
 import javax.net.ssl.SSLSession;
-
+import java.io.InputStream;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
@@ -48,13 +48,7 @@ public interface HttpResponse<T> {
         HttpClient.Version version();
     }
 
-    interface BodySubscriber<T> {
-
-        void onSubscribe(Flow.Subscription subscription);
-
-        void onNext(List<ByteBuffer> wrap);
-
-        void onComplete();
+    interface BodySubscriber<T> extends Flow.Subscriber<List<ByteBuffer>> {
 
         CompletionStage<T> getBody();
     }
@@ -67,6 +61,10 @@ public interface HttpResponse<T> {
 
         public static HttpResponse.BodyHandler<Path> ofFile(Path file) {
             return new FileBodyHandlerImpl(file);
+        }
+
+        public static HttpResponse.BodyHandler<InputStream> ofInputStream() {
+            throw new RuntimeException("Not implemented");
         }
     }
 }

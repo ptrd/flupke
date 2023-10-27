@@ -29,6 +29,11 @@ public class StringBodyHandlerImpl implements HttpResponse.BodyHandler<String> {
             }
 
             @Override
+            public void onError(Throwable throwable) {
+                future.completeExceptionally(throwable);
+            }
+
+            @Override
             public void onComplete() {
                 int size = dataBuffers.stream().mapToInt(b -> b.limit()).sum();
                 ByteBuffer bytes = ByteBuffer.allocate(size);

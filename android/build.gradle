@@ -12,13 +12,8 @@ repositories {
 
 dependencies {
 
-    // https://mvnrepository.com/artifact/at.favre.lib/hkdf
-    implementation group: "at.favre.lib", name: "hkdf", version: "1.0.1"
-
-    // https://mvnrepository.com/artifact/commons-cli/commons-cli
-    implementation group: "commons-cli", name: "commons-cli", version: "1.4"
-
-    implementation "org.glassfish:javax.json:1.1.4"
+    implementation group: 'net.luminis.networking', name: 'kwik', version: '0.8'
+    implementation group: 'net.luminis.networking', name: 'qpack', version: '1.0'
 
     // Use JUnit test framework
     testImplementation "junit:junit:4.12"
@@ -45,14 +40,8 @@ tasks.named("compileJava") {
 sourceSets {
     main {
         java {
-            srcDir("../agent15/src")
-            srcDir("../kwik/src/main/java")
-            srcDir("../qpack/src/main/java")
             srcDir("httpclient/src/main/java")
             srcDir "${buildDir}/generated/main/java"
-        }
-        resources {
-            srcDir "../qpack/src/main/resources"
         }
     }
 
@@ -68,4 +57,7 @@ jar {
     include "net/luminis/http3/**"
     exclude "net/luminis/http3/server/**"
     include "net/luminis/qpack/**"
+    from {
+        configurations.compileClasspath.findAll { it.name =~ /qpack.*\.jar/ }.collect { it.isDirectory() ? it : zipTree(it) }
+    }
 }
