@@ -19,8 +19,8 @@
 package net.luminis.http3.impl;
 
 import net.luminis.http3.core.Http3Connection;
+import net.luminis.http3.core.HttpError;
 import net.luminis.http3.core.HttpStream;
-import net.luminis.http3.server.HttpError;
 import net.luminis.qpack.Decoder;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;

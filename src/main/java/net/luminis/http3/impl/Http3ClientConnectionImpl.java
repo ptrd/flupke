@@ -19,7 +19,6 @@
 package net.luminis.http3.impl;
 
 import net.luminis.http3.core.*;
-import net.luminis.http3.server.HttpError;
 import net.luminis.qpack.Encoder;
 import net.luminis.quic.QuicClientConnection;
 import net.luminis.quic.QuicConnection;

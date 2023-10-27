@@ -18,8 +18,8 @@
  */
 package net.luminis.http3.impl;
 
+import net.luminis.http3.core.HttpError;
 import net.luminis.http3.core.HttpStream;
-import net.luminis.http3.server.HttpError;
 import net.luminis.http3.test.Http3ClientConnectionBuilder;
 import net.luminis.http3.test.Http3ConnectionBuilder;
 import net.luminis.quic.QuicConnection;

@@ -18,7 +18,6 @@
  */
 package net.luminis.http3.core;
 
-import net.luminis.http3.server.HttpError;
 import net.luminis.quic.Statistics;
 
 import java.io.IOException;

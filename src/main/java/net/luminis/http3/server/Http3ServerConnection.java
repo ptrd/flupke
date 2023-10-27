@@ -18,6 +18,7 @@
  */
 package net.luminis.http3.server;
 
+import net.luminis.http3.core.HttpError;
 import net.luminis.http3.impl.DataFrame;
 import net.luminis.http3.impl.HeadersFrame;
 import net.luminis.http3.impl.Http3ConnectionImpl;

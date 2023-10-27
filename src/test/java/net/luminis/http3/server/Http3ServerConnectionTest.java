@@ -18,6 +18,7 @@
  */
 package net.luminis.http3.server;
 
+import net.luminis.http3.core.HttpError;
 import net.luminis.http3.impl.DataFrame;
 import net.luminis.http3.impl.HeadersFrame;
 import net.luminis.qpack.Decoder;
@@ -43,7 +44,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 
 public class Http3ServerConnectionTest {
