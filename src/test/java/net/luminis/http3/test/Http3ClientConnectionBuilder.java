@@ -24,7 +24,6 @@ import net.luminis.http3.impl.SettingsFrame;
 import net.luminis.qpack.Decoder;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
-import org.mockito.internal.util.reflection.FieldSetter;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;

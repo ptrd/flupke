@@ -24,7 +24,7 @@ import net.luminis.http3.test.Http3ClientConnectionBuilder;
 import net.luminis.http3.test.Http3ConnectionBuilder;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.io.ByteArrayInputStream;

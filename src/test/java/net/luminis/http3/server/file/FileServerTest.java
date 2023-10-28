@@ -20,28 +20,24 @@ package net.luminis.http3.server.file;
 
 import net.luminis.http3.server.HttpServerRequest;
 import net.luminis.http3.server.HttpServerResponse;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.net.Inet4Address;
 import java.nio.file.Files;
-import java.nio.file.OpenOption;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 
-import static org.mockito.Mockito.*;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.*;
 
 public class FileServerTest {
 
     private FileServer fileServer;
     private File wwwDir;
 
-    @Before
+    @BeforeEach
     public void initFileServer() throws IOException {
         wwwDir = Files.createTempDirectory("www").toFile();
         fileServer = new FileServer(wwwDir);

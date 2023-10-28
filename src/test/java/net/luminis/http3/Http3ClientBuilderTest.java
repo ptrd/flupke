@@ -18,8 +18,8 @@
  */
 package net.luminis.http3;
 
-import org.assertj.core.api.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+
 import java.net.http.HttpClient;
 import java.time.Duration;
 

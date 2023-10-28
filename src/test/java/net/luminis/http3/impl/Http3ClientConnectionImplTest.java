@@ -23,6 +23,7 @@ import net.luminis.http3.core.GenericCapsule;
 import net.luminis.http3.core.Http3ClientConnection;
 import net.luminis.http3.core.HttpError;
 import net.luminis.http3.core.HttpStream;
+import net.luminis.http3.test.FieldSetter;
 import net.luminis.http3.test.Http3ClientConnectionBuilder;
 import net.luminis.qpack.Decoder;
 import net.luminis.qpack.Encoder;
@@ -30,9 +31,8 @@ import net.luminis.quic.QuicClientConnection;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.generic.VariableLengthInteger;
 import net.luminis.tls.util.ByteUtils;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.internal.util.reflection.FieldSetter;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 

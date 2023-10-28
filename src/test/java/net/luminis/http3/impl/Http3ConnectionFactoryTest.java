@@ -20,9 +20,9 @@ package net.luminis.http3.impl;
 
 import net.luminis.http3.Http3Client;
 import net.luminis.http3.core.Http3ClientConnection;
-import org.junit.Before;
-import org.junit.Ignore;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.net.URI;
@@ -37,7 +37,7 @@ public class Http3ConnectionFactoryTest {
 
     private Http3ConnectionFactory connectionFactory;
 
-    @Before
+    @BeforeEach
     public void setupObjectUnderTest() {
         connectionFactory = new Http3ConnectionFactory((Http3Client) Http3Client.newHttpClient());
     }
@@ -85,7 +85,7 @@ public class Http3ConnectionFactoryTest {
     }
 
     @Test
-    @Ignore("test ignored because it takes too long")
+    @Disabled("test ignored because it takes too long")
     public void testDefaultConnectionTimeout() throws Exception {
         // Given
         Http3ConnectionFactory connectionFactory = new Http3ConnectionFactory((Http3Client) Http3Client.newHttpClient());

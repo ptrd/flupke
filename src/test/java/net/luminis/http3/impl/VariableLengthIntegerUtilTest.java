@@ -18,8 +18,7 @@
  */
 package net.luminis.http3.impl;
 
-import junit.framework.TestCase;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -28,7 +27,7 @@ import java.io.PushbackInputStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class VariableLengthIntegerUtilTest extends TestCase {
+public class VariableLengthIntegerUtilTest {
 
     @Test
     public void testWrite() throws IOException {
