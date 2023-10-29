@@ -21,7 +21,7 @@ package net.luminis.http3.core;
 
 public class HttpError extends Exception {
 
-    private int statusCode;
+    private Integer statusCode;
 
     public HttpError(String message, int statusCode) {
         super(message + " (" + statusCode + ")");
@@ -32,7 +32,7 @@ public class HttpError extends Exception {
         super(message);
     }
 
-    public int getStatusCode() {
+    public Integer getStatusCode() {
         return statusCode;
     }
 }
