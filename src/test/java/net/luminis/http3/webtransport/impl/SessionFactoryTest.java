@@ -22,14 +22,17 @@ import net.luminis.http3.Http3Client;
 import net.luminis.http3.core.CapsuleProtocolStream;
 import net.luminis.http3.core.Http3ClientConnection;
 import net.luminis.http3.core.HttpError;
+import net.luminis.http3.test.FieldReader;
 import net.luminis.http3.webtransport.Session;
 import net.luminis.http3.webtransport.SessionFactory;
+import net.luminis.http3.webtransport.WebTransportStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 
 import java.net.URI;
 import java.net.http.HttpRequest;
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -41,57 +44,97 @@ import static org.mockito.Mockito.*;
 class SessionFactoryTest {
 
     private SessionFactory factory;
+    private Http3Client client;
 
     @BeforeEach
     void initObjectUnderTest() {
         factory = new SessionFactoryImpl();
+        client = mock(Http3Client.class);
     }
 
     @Test
     void createWebTransportSessionShouldSendExtendedConnect() throws Exception {
-        Http3Client client = mock(Http3Client.class);
-        Http3ClientConnection http3connection = mock(Http3ClientConnection.class);
-        when(client.createConnection(any())).thenReturn(http3connection);
-        CapsuleProtocolStream capsuleProtocolStream = mock(CapsuleProtocolStream.class);
-        when(http3connection.sendExtendedConnectWithCapsuleProtocol(any(), any(), any(), any())).thenReturn(capsuleProtocolStream);
+        // Given
+        Http3ClientConnection http3connection = createMockHttp3ConnectionForExtendedConnect(client);
+
+        // When
         Session session = factory.createSession(client, new URI("http://example.com/webtransport"));
 
+        // Then
         verify(http3connection).sendExtendedConnectWithCapsuleProtocol(
                 any(HttpRequest.class),
                 argThat(s -> s.equals("webtransport")),
                 argThat(p -> p.equals("https")),
                 any());
-
         assertThat(session).isNotNull();
     }
 
     @Test
     void whenExtendedConnectFailsWith404AnHttpErrorIsThrown() throws Exception {
-        Http3Client client = mock(Http3Client.class);
-        Http3ClientConnection http3connection = mock(Http3ClientConnection.class);
-        when(client.createConnection(any())).thenReturn(http3connection);
+        // Given
+        Http3ClientConnection http3connection = createMockHttp3ConnectionForExtendedConnect(client);
         when(http3connection.sendExtendedConnectWithCapsuleProtocol(any(), any(), any(), any())).thenThrow(new HttpError("", 404));
-        SessionFactory factory = new SessionFactoryImpl();
 
-        assertThatThrownBy(() -> factory.createSession(client, new URI("http://example.com/webtransport")))
+        assertThatThrownBy(() ->
+                // When
+                factory.createSession(client, new URI("http://example.com/webtransport")))
+                // Then
                 .isInstanceOf(HttpError.class)
                 .hasMessageContaining("404");
     }
 
     @Test
     void createWebTransportSessionShouldSetParameterBeforeHttpConnect() throws Exception {
-        Http3Client client = mock(Http3Client.class);
-        Http3ClientConnection http3connection = mock(Http3ClientConnection.class);
+        // Given
+        Http3ClientConnection http3connection = createMockHttp3ConnectionForExtendedConnect(client);
         InOrder inOrder = inOrder(http3connection);
-        when(client.createConnection(any())).thenReturn(http3connection);
-        CapsuleProtocolStream capsuleProtocolStream = mock(CapsuleProtocolStream.class);
-        when(http3connection.sendExtendedConnectWithCapsuleProtocol(any(), any(), any(), any())).thenReturn(capsuleProtocolStream);
-        SessionFactory factory = new SessionFactoryImpl();
-        Session session = factory.createSession(client, new URI("http://example.com/webtransport"));
+
+        // When
+        factory.createSession(client, new URI("http://example.com/webtransport"));
 
         // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-08.html#name-protocol-overview
         // "When an HTTP/3 connection is established, both the client and server have to send a SETTINGS_WEBTRANSPORT_MAX_SESSIONS"
+        // Then
         inOrder.verify(http3connection).addSettingsParameter(longThat(l -> l == 0xc671706aL), longThat(l -> l > 0));
         inOrder.verify(http3connection).connect();
+    }
+
+    @Test
+    void whenCreatingSessionWebtransportStreamTypeIsRegistered() throws Exception {
+        // Given
+        Http3ClientConnection http3connection = createMockHttp3ConnectionForExtendedConnect(client);
+
+        // When
+        factory.createSession(client, new URI("http://example.com/webtransport"));
+
+        // Then
+        verify(http3connection).registerUnidirectionalStreamType(longThat(type -> type == 0x54), any(Consumer.class));
+    }
+
+    @Test
+    void whenCreatingSessionWithHandlersTheseAreUsed() throws Exception {
+        // Given
+        createMockHttp3ConnectionForExtendedConnect(client);
+
+        // When
+        Consumer<WebTransportStream> unidirectionalStreamHandler = mock(Consumer.class);
+        Consumer<WebTransportStream> bidirectionalStreamHandler = mock(Consumer.class);
+        Session session = factory.createSession(client, new URI("http://example.com/webtransport"),
+                unidirectionalStreamHandler, bidirectionalStreamHandler, () -> {});
+
+        // Then
+        Object handler1 = new FieldReader(session, SessionImpl.class, "unidirectionalStreamReceiveHandler").read();
+        assertThat(handler1).isSameAs(unidirectionalStreamHandler);
+        // And
+        Object handler2 = new FieldReader(session, SessionImpl.class, "bidirectionalStreamReceiveHandler").read();
+        assertThat(handler2).isSameAs(bidirectionalStreamHandler);
+    }
+
+    private static Http3ClientConnection createMockHttp3ConnectionForExtendedConnect(Http3Client client) throws Exception {
+        Http3ClientConnection http3connection = mock(Http3ClientConnection.class);
+        when(client.createConnection(any())).thenReturn(http3connection);
+        CapsuleProtocolStream capsuleProtocolStream = mock(CapsuleProtocolStream.class);
+        when(http3connection.sendExtendedConnectWithCapsuleProtocol(any(), any(), any(), any())).thenReturn(capsuleProtocolStream);
+        return http3connection;
     }
 }

@@ -31,24 +31,24 @@ import java.io.OutputStream;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
+import static net.luminis.http3.webtransport.Constants.FRAME_TYPE_WEBTRANSPORT_STREAM;
+import static net.luminis.http3.webtransport.Constants.STREAM_TYPE_WEBTRANSPORT;
+
 public class SessionImpl implements Session {
-
-    // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-frame-type-registration
-    // "Code: 0x41
-    //  Frame Type: WEBTRANSPORT_STREAM"
-    public static final int FRAME_TYPE_WEBTRANSPORT_STREAM = 0x41;
-
-    // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-stream-type-registration
-    // "Code: 0x54
-    //  Stream Type: WebTransport stream"
-    public static final int STREAM_TYPE_WEBTRANSPORT = 0x54;
 
     private final Http3Connection http3Connection;
     private final long sessionId;
+    private Consumer<WebTransportStream> unidirectionalStreamReceiveHandler;
+    private Consumer<WebTransportStream> bidirectionalStreamReceiveHandler;
 
-    SessionImpl(Http3Connection http3Connection, CapsuleProtocolStream connectStream, Runnable closedCallback) {
+    SessionImpl(Http3Connection http3Connection, CapsuleProtocolStream connectStream,
+                Consumer<WebTransportStream> unidirectionalStreamHandler, Consumer<WebTransportStream> bidirectionalStreamHandler,
+                Runnable closedCallback) {
         this.http3Connection = http3Connection;
         sessionId = connectStream.getStreamId();
+
+        unidirectionalStreamReceiveHandler = unidirectionalStreamHandler;
+        bidirectionalStreamReceiveHandler = bidirectionalStreamHandler;
     }
 
     @Override
@@ -59,7 +59,6 @@ public class SessionImpl implements Session {
         HttpStream httpStream = http3Connection.createUnidirectionalStream(STREAM_TYPE_WEBTRANSPORT);
         VariableLengthIntegerUtil.write(sessionId, httpStream.getOutputStream());
         return wrap(httpStream);
-
     }
 
     @Override
@@ -70,17 +69,16 @@ public class SessionImpl implements Session {
         VariableLengthIntegerUtil.write(FRAME_TYPE_WEBTRANSPORT_STREAM, httpStream.getOutputStream());
         VariableLengthIntegerUtil.write(sessionId, httpStream.getOutputStream());
         return wrap(httpStream);
-
     }
 
     @Override
     public void setUnidirectionalStreamReceiveHandler(Consumer<WebTransportStream> handler) {
-
+        unidirectionalStreamReceiveHandler = handler;
     }
 
     @Override
     public void setBidirectionalStreamReceiveHandler(Consumer<WebTransportStream> handler) {
-
+        bidirectionalStreamReceiveHandler = handler;
     }
 
     @Override
@@ -98,6 +96,14 @@ public class SessionImpl implements Session {
 
     }
 
+    void handleUnidirectionalStream(InputStream inputStream) {
+        unidirectionalStreamReceiveHandler.accept(wrap(inputStream));
+    }
+
+    void handleBidirectionalStream(HttpStream httpStream) {
+        bidirectionalStreamReceiveHandler.accept(wrap(httpStream));
+    }
+
     private WebTransportStream wrap(HttpStream httpStream) {
         return new WebTransportStream() {
             @Override
@@ -108,6 +114,20 @@ public class SessionImpl implements Session {
             @Override
             public InputStream getInputStream() {
                 return httpStream.getInputStream();
+            }
+        };
+    }
+
+    private WebTransportStream wrap(InputStream inputStream) {
+        return new WebTransportStream() {
+            @Override
+            public OutputStream getOutputStream() {
+                return null;
+            }
+
+            @Override
+            public InputStream getInputStream() {
+                return inputStream;
             }
         };
     }

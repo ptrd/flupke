@@ -25,6 +25,12 @@ public class FieldReader {
     private final Object target;
     private final Field field;
 
+    public FieldReader(Object target, Class type, String fieldName) throws Exception {
+        this.target = target;
+        this.field = type.getDeclaredField(fieldName);
+        field.setAccessible(true);
+    }
+
     public FieldReader(Object target, Field field) {
         this.target = target;
         this.field = field;

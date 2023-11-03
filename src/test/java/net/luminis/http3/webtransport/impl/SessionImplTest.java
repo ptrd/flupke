@@ -19,15 +19,23 @@
 package net.luminis.http3.webtransport.impl;
 
 import net.luminis.http3.Http3Client;
+import net.luminis.http3.core.Http3ClientConnection;
+import net.luminis.http3.core.HttpStream;
 import net.luminis.http3.webtransport.Session;
 import net.luminis.http3.webtransport.WebTransportStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.mockito.ArgumentMatchers.longThat;
@@ -117,5 +125,160 @@ class SessionImplTest {
         // Then
         verify(builder.getHttp3connection()).createBidirectionalStream();
         assertThat(output.toByteArray()[2]).isEqualTo((byte) 0x04);
+    }
+
+    @Test
+    void whenSettingUnidirectionalStreamHandlerTheSessionStreamHandlerWillReceiveIt() throws Exception {
+        // Given
+        Http3Client client = builder
+                .buildClient();
+        Session session = factory.createSession(client, defaultWebtransportUri);
+
+        Consumer<HttpStream> handler = captureHttpConnectionUnidirectionalStreamHandler(builder.getHttp3connection());
+
+        AtomicReference<String> receivedMessage = new AtomicReference<>();
+
+        // When session registers a handler for unidirectional streams
+        session.setUnidirectionalStreamReceiveHandler(stream -> {
+            receivedMessage.set(readStringFrom(stream.getInputStream()));
+        });
+
+        // And When the peer sends something on a (new) unidirectional stream
+        String binarySessionId = "\u0004";  // (one byte, just 0x04)
+        handler.accept(httpStreamWith(new ByteArrayInputStream((binarySessionId + "Hello from peer!").getBytes(StandardCharsets.UTF_8))));
+
+        // Then the session handler receives it
+        assertThat(receivedMessage.get()).isEqualTo("Hello from peer!");
+    }
+
+    @Test
+    void whenCreatingSessionWithUnidirectionalStreamHandlerTheSessionStreamHandlerWillReceive() throws Exception {
+        // Given
+        Http3Client client = builder
+                .buildClient();
+
+        AtomicReference<String> receivedMessage = new AtomicReference<>();
+        Consumer<WebTransportStream> unidirectionalStreamHandler = stream -> {
+            receivedMessage.set(readStringFrom(stream.getInputStream()));
+        };
+        factory.createSession(client, new URI("http://example.com/webtransport"), unidirectionalStreamHandler, s -> {}, () -> {});
+        Consumer<HttpStream> handler = captureHttpConnectionUnidirectionalStreamHandler(builder.getHttp3connection());
+
+        // When the peer sends something on a (new) unidirectional stream
+        String binarySessionId = "\u0004";  // (one byte, just 0x04)
+        handler.accept(httpStreamWith(new ByteArrayInputStream((binarySessionId + "Hello from peer!").getBytes(StandardCharsets.UTF_8))));
+
+        // Then the session handler receives it
+        assertThat(receivedMessage.get()).isEqualTo("Hello from peer!");
+    }
+
+    @Test
+    void whenSettingBidirectionalStreamHandlerTheSessionStreamHandlerWillReceiveIt() throws Exception {
+        // Given
+        Http3Client client = builder
+                .buildClient();
+
+        AtomicReference<String> receivedMessage = new AtomicReference<>();
+        Session session = factory.createSession(client, defaultWebtransportUri);
+        Consumer<HttpStream> handler = captureHttpConnectionBidirectionalStreamHandler(builder.getHttp3connection());
+
+        // When session registers a handler for bidirectional streams
+        session.setBidirectionalStreamReceiveHandler(stream -> {
+            receivedMessage.set(readStringFrom(stream.getInputStream()));
+        });
+
+        // And When the peer sends something on a (new) unidirectional stream
+        // 0x41 is the signal value for bidirectional streams; encoded as variable length integer it is 0x4041!
+        String binarySignalValue = "\u0040\u0041";
+        String binarySessionId = "\u0004";  // (one byte, just 0x04)
+        handler.accept(httpStreamWith(new ByteArrayInputStream((binarySignalValue + binarySessionId + "Hello from peer!").getBytes(StandardCharsets.UTF_8))));
+
+        // Then the session handler receives it
+        assertThat(receivedMessage.get()).isEqualTo("Hello from peer!");
+    }
+
+    @Test
+    void whenCreatingSessionWithBidirectionalStreamHandlerTheSessionStreamHandlerWillReceive() throws Exception {
+        // Given
+        Http3Client client = builder
+                .buildClient();
+
+        AtomicReference<String> receivedMessage = new AtomicReference<>();
+        Consumer<WebTransportStream> bidirectionalStreamHandler = stream -> {
+            receivedMessage.set(readStringFrom(stream.getInputStream()));
+        };
+        factory.createSession(client, new URI("http://example.com/webtransport"), s -> {}, bidirectionalStreamHandler, () -> {});
+        Consumer<HttpStream> handler = captureHttpConnectionBidirectionalStreamHandler(builder.getHttp3connection());
+
+        // And When the peer sends something on a (new) bidirectional stream
+        // 0x41 is the signal value for bidirectional streams; encoded as variable length integer it is 0x4041!
+        String binarySignalValue = "\u0040\u0041";
+        String binarySessionId = "\u0004";  // (one byte, just 0x04)
+        handler.accept(httpStreamWith(new ByteArrayInputStream((binarySignalValue + binarySessionId + "Hello from peer!").getBytes(StandardCharsets.UTF_8))));
+
+        // Then the session handler receives it
+        assertThat(receivedMessage.get()).isEqualTo("Hello from peer!");
+    }
+
+    @Test
+    void whenNoHandlerSet() throws Exception {
+        // Given
+        Http3Client client = builder
+                .buildClient();
+        factory.createSession(client, defaultWebtransportUri);
+
+        Consumer<HttpStream> handler = captureHttpConnectionUnidirectionalStreamHandler(builder.getHttp3connection());
+
+        AtomicReference<String> receivedMessage = new AtomicReference<>();
+
+        // When no handler is registered
+
+        // And When the peer sends something on a (new) unidirectional stream
+        String binarySessionId = "\u0004";  // (one byte, just 0x04)
+        handler.accept(httpStreamWith(new ByteArrayInputStream((binarySessionId + "Going nowhere").getBytes(StandardCharsets.UTF_8))));
+
+        // Then
+        // Nothing (expect no exception)
+    }
+
+    private Consumer<HttpStream> captureHttpConnectionUnidirectionalStreamHandler(Http3ClientConnection http3Connection) {
+        ArgumentCaptor<Consumer<HttpStream>> handlerCapturer = ArgumentCaptor.forClass(Consumer.class);
+        verify(http3Connection).registerUnidirectionalStreamType(longThat(type -> type == 0x54), handlerCapturer.capture());
+        Consumer<HttpStream> handler = handlerCapturer.getValue();
+        return handler;
+    }
+
+    private Consumer<HttpStream> captureHttpConnectionBidirectionalStreamHandler(Http3ClientConnection http3Connection) {
+        ArgumentCaptor<Consumer<HttpStream>> handlerCapturer = ArgumentCaptor.forClass(Consumer.class);
+        verify(http3Connection).registerBidirectionalStreamHandler(handlerCapturer.capture());
+        Consumer<HttpStream> handler = handlerCapturer.getValue();
+        return handler;
+    }
+
+    private HttpStream httpStreamWith(ByteArrayInputStream byteArrayInputStream) {
+        return new HttpStream() {
+            @Override
+            public InputStream getInputStream() {
+                return byteArrayInputStream;
+            }
+
+            @Override
+            public long getStreamId() {
+                return 7;
+            }
+
+            @Override
+            public OutputStream getOutputStream() {
+                return null;
+            }
+        };
+    }
+
+    private String readStringFrom(InputStream inputStream) {
+        try {
+            return new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 }
