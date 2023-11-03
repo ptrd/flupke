@@ -29,8 +29,6 @@ class for a working example.
 Flupke also supports POST requests, or more generally, HTTP methods that require or use a request body. 
 See the [PostExample](https://bitbucket.org/pjtr/flupke/src/master/src/main/java/net/luminis/http3/sample/PostExample.java) for details.
 
-### Maven
-
 
 ### Work in progress
 
