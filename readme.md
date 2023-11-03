@@ -31,14 +31,6 @@ See the [PostExample](https://bitbucket.org/pjtr/flupke/src/master/src/main/java
 
 ### Maven
 
-Flupke is available from Maven Central; maven coordinates are
-
-    <dependency>
-        <groupId>net.luminis.networking</groupId>
-        <artifactId>flupke</artifactId>
-        <version>0.5.0</version>
-    </dependency> 
-
 
 ### Work in progress
 
