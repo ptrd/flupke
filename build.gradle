@@ -119,8 +119,6 @@ def pomContent = {
             id = 'peterd'
             name = 'Peter Doornbosch'
             email = 'peter.doornbosch@luminis.eu'
-            organization  = 'Luminis'
-            organizationUrl = 'https://www.luminis.eu'
         }
     }
 
