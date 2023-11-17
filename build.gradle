@@ -14,8 +14,8 @@ repositories {
 }
 
 dependencies {
-    implementation group: 'net.luminis.networking', name: 'kwik', version: '0.8'
-    implementation group: 'net.luminis.networking', name: 'qpack', version: '1.0'
+    implementation group: 'tech.kwik', name: 'kwik', version: '0.8.3'
+    implementation group: 'tech.kwik', name: 'qpack', version: '1.0.2'
 
     testImplementation 'junit:junit:4.12'
 
@@ -95,7 +95,7 @@ task determineVersion {
 
 compileJava.dependsOn (determineVersion, processResources)
 
-group = 'net.luminis.networking'
+group = 'tech.kwik'
 
 java {
     withJavadocJar()
@@ -139,7 +139,7 @@ publishing {
     }
     repositories {
         maven {
-            url = "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
+            url = "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
             credentials {
                 username = project.properties.ossrhUsername
                 password = project.properties.ossrhPassword
