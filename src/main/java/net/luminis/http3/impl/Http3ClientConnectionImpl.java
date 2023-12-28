@@ -29,7 +29,11 @@ import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 
 import java.io.*;
-import java.net.*;
+import java.net.ProtocolException;
+import java.net.SocketException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.UnknownHostException;
 import java.net.http.HttpClient;
 import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
@@ -71,15 +75,17 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
 
         quicConnection.setPeerInitiatedStreamCallback(stream -> doAsync(() -> handleIncomingStream(stream)));
 
-        // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.1
-        // "clients MUST omit or specify a value of zero for the QUIC transport parameter "initial_max_bidi_streams"."
-        quicConnection.setMaxAllowedBidirectionalStreams(0);
+        if (! ((QuicClientConnection) quicConnection).isConnected()) {
+            // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.1
+            // "clients MUST omit or specify a value of zero for the QUIC transport parameter "initial_max_bidi_streams"."
+            quicConnection.setMaxAllowedBidirectionalStreams(0);
 
-        // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.2
-        // "To reduce the likelihood of blocking,
-        //   both clients and servers SHOULD send a value of three or greater for
-        //   the QUIC transport parameter "initial_max_uni_streams","
-        quicConnection.setMaxAllowedUnidirectionalStreams(3);
+            // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.2
+            // "To reduce the likelihood of blocking,
+            //   both clients and servers SHOULD send a value of three or greater for
+            //   the QUIC transport parameter "initial_max_uni_streams","
+            quicConnection.setMaxAllowedUnidirectionalStreams(3);
+        }
 
         qpackEncoder = new Encoder();
 
