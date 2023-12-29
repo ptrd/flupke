@@ -88,9 +88,11 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
             handleHttpRequest(receivedFrames, quicStream, new Encoder());
         }
         catch (IOException ioError) {
+            quicStream.abortReading(H3_INTERNAL_ERROR);
             sendHttpErrorResponse(500, "", quicStream);
         }
         catch (HttpError httpError) {
+            quicStream.abortReading(H3_REQUEST_REJECTED);
             sendHttpErrorResponse(httpError.getStatusCode(), httpError.getMessage(), quicStream);
         }
     }

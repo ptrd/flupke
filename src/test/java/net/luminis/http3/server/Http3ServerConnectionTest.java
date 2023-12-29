@@ -43,6 +43,7 @@ import static net.luminis.http3.impl.Http3ConnectionImpl.FRAME_TYPE_DATA;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -54,7 +55,7 @@ public class Http3ServerConnectionTest {
     private List<Map.Entry<String, String>> mockEncoderCompressedHeaders = new ArrayList<>();
 
     @Test
-    public void handlerIsCalledWithMethodAndPathFromHeadersFrame() throws Exception {
+    void handlerIsCalledWithMethodAndPathFromHeadersFrame() throws Exception {
         HttpRequestHandler handler = mock(HttpRequestHandler.class);
         Http3ServerConnection http3Connection = new Http3ServerConnection(createMockQuicConnection(), handler);
 
@@ -68,7 +69,7 @@ public class Http3ServerConnectionTest {
     }
 
     @Test
-    public void statusReturnedByHandlerIsWrittenToHeadersFrame() throws Exception {
+    void statusReturnedByHandlerIsWrittenToHeadersFrame() throws Exception {
         // Given
         HttpRequestHandler handler = new HttpRequestHandler() {
             @Override
@@ -91,7 +92,7 @@ public class Http3ServerConnectionTest {
     }
 
     @Test
-    public void responseWrittenByHandlerIsWrittenToQuicStream() throws Exception {
+    void responseWrittenByHandlerIsWrittenToQuicStream() throws Exception {
         // Given
         HttpRequestHandler handler = new HttpRequestHandler() {
             @Override
@@ -117,7 +118,7 @@ public class Http3ServerConnectionTest {
     }
 
     @Test
-    public void requestDataLargerThanMaxIsNotAccepted() {
+    void requestDataLargerThanMaxIsNotAccepted() {
         // Given
         long maxHeaderSize = Long.MAX_VALUE;
         long maxDataSize = 2500;
@@ -139,7 +140,7 @@ public class Http3ServerConnectionTest {
     }
 
     @Test
-    public void requestHeadersLargerThanMaxIsNotAccepted() {
+    void requestHeadersLargerThanMaxIsNotAccepted() {
         // Given
         long maxHeaderSize = 1000;
         long maxDataSize = Long.MAX_VALUE;
@@ -154,6 +155,24 @@ public class Http3ServerConnectionTest {
                 // Then
                 .isInstanceOf(HttpError.class)
                 .hasMessageContaining("max header");
+    }
+
+    @Test
+    void requestThatIsAbortedWithErrorDiscardsStream() {
+        // Given
+        long maxHeaderSize = 1000;
+        long maxDataSize = Long.MAX_VALUE;
+        Http3ServerConnection http3Connection = new Http3ServerConnection(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize);
+
+        HeadersFrame largeHeaders = new HeadersFrame("superlarge", "*".repeat(1000));
+        byte[] data = largeHeaders.toBytes(new Encoder());
+
+        // When
+        QuicStream quicStream = createMockQuicStream(new ByteArrayInputStream(data), new ByteArrayOutputStream());
+        http3Connection.handleBidirectionalStream(quicStream);
+
+        // Then
+        verify(quicStream).abortReading(anyLong());
     }
 
     private HeadersFrame createHeadersFrame(String method, URI uri) {
@@ -179,6 +198,17 @@ public class Http3ServerConnectionTest {
         }
         QuicStream stream = mock(QuicStream.class);
         when(stream.getOutputStream()).thenReturn(byteArrayOutputStream);
+        return stream;
+    }
+
+    private QuicStream createMockQuicStream(ByteArrayInputStream byteArrayInputStream, ByteArrayOutputStream byteArrayOutputStream) {
+        if (byteArrayOutputStream == null) {
+            byteArrayOutputStream = new ByteArrayOutputStream();
+        }
+
+        QuicStream stream = mock(QuicStream.class);
+        when(stream.getOutputStream()).thenReturn(byteArrayOutputStream);
+        when(stream.getInputStream()).thenReturn(byteArrayInputStream);
         return stream;
     }
 
