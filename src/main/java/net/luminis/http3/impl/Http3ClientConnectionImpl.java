@@ -75,18 +75,6 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
 
         quicConnection.setPeerInitiatedStreamCallback(stream -> doAsync(() -> handleIncomingStream(stream)));
 
-        if (! ((QuicClientConnection) quicConnection).isConnected()) {
-            // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.1
-            // "clients MUST omit or specify a value of zero for the QUIC transport parameter "initial_max_bidi_streams"."
-            quicConnection.setMaxAllowedBidirectionalStreams(0);
-
-            // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.2
-            // "To reduce the likelihood of blocking,
-            //   both clients and servers SHOULD send a value of three or greater for
-            //   the QUIC transport parameter "initial_max_uni_streams","
-            quicConnection.setMaxAllowedUnidirectionalStreams(3);
-        }
-
         qpackEncoder = new Encoder();
 
         settingsFrameReceived = new CountDownLatch(1);
@@ -138,6 +126,15 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         builder.version(determinePreferredQuicVersion());
         builder.connectTimeout(connectTimeout);
         builder.applicationProtocol("h3");
+        // https://www.rfc-editor.org/rfc/rfc9114.html#name-unidirectional-streams
+        // "Therefore, the transport parameters sent by both clients and servers MUST allow the peer to create at least
+        //  three unidirectional streams. These transport parameters SHOULD also provide at least 1,024 bytes of
+        //  flow-control credit to each unidirectional stream."
+        builder.maxOpenPeerInitiatedUnidirectionalStreams(3);
+        // https://www.rfc-editor.org/rfc/rfc9114.html#name-bidirectional-streams
+        // "HTTP/3 does not use server-initiated bidirectional streams, though an extension could define a use for
+        //  these streams."
+        builder.maxOpenPeerInitiatedBidirectionalStreams(0);
         if (disableCertificateCheck) {
             builder.noServerCertificateCheck();
         }
