@@ -24,7 +24,6 @@ import net.luminis.quic.QuicConnection;
 import net.luminis.quic.server.ApplicationProtocolConnection;
 import net.luminis.quic.server.ApplicationProtocolConnectionFactory;
 
-
 import java.io.File;
 
 public class Http3ApplicationProtocolFactory implements ApplicationProtocolConnectionFactory {
@@ -44,4 +43,34 @@ public class Http3ApplicationProtocolFactory implements ApplicationProtocolConne
     public ApplicationProtocolConnection createConnection(String protocol, QuicConnection quicConnection) {
         return new Http3ServerConnection(quicConnection, fileServer);
     }
+
+    @Override
+    public int maxConcurrentPeerInitiatedUnidirectionalStreams() {
+        // https://www.rfc-editor.org/rfc/rfc9114.html#name-unidirectional-streams
+        // "Therefore, the transport parameters sent by both clients and servers MUST allow the peer to create at least
+        //  three unidirectional streams."
+        return 3;
+    }
+
+    @Override
+    public long maxTotalPeerInitiatedUnidirectionalStreams() {
+        // https://www.rfc-editor.org/rfc/rfc9114.html#name-unidirectional-streams
+        // "Therefore, the transport parameters sent by both clients and servers MUST allow the peer to create at least
+        //  three unidirectional streams."
+        return 3;
+    }
+
+    @Override
+    public int maxConcurrentPeerInitiatedBidirectionalStreams() {
+        return Integer.MAX_VALUE;
+    }
+
+    @Override
+    public int minUnidirectionalStreamReceiverBufferSize() {
+        // https://www.rfc-editor.org/rfc/rfc9114.html#name-unidirectional-streams
+        // "These transport parameters SHOULD also provide at least 1,024 bytes of flow-control credit to each
+        //  unidirectional stream."
+        return 1024;
+    }
+
 }
