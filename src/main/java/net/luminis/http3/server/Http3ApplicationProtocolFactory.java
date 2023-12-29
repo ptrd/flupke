@@ -73,4 +73,9 @@ public class Http3ApplicationProtocolFactory implements ApplicationProtocolConne
         return 1024;
     }
 
+    @Override
+    public long maxUnidirectionalStreamReceiverBufferSize() {
+        return 1024;
+    }
+
 }
