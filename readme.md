@@ -17,6 +17,15 @@ Flupke is created and maintained by Peter Doornbosch. The latest greatest can al
 
 ## Usage
 
+Latest release can be found at maven central:
+
+    <dependency>
+        <groupId>tech.kwik</groupId>
+        <artifactId>flupke</artifactId>
+        <version>0.5.3</version>
+    </dependency> 
+
+
 Flupke uses the HTTP Client API introduced with Java 11, e.g. 
 
     HttpClient.Builder clientBuilder = new Http3ClientBuilder();
