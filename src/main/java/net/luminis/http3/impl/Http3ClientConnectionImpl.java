@@ -212,7 +212,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
 
         HttpResponse.BodySubscriber<T> bodySubscriber = responseBodyHandler.apply(responseInfo);
         if (bodySubscriber == null) {
-            httpStream.closeInput(H3_REQUEST_CANCELLED);
+            httpStream.abortReading(H3_REQUEST_CANCELLED);
             throw new IllegalArgumentException("Body handler returned null body subscriber.");
         }
         BodySubscriptionHandler bodySubscriptionHandler = new BodySubscriptionHandler(httpStream, frameSequenceChecker, bodySubscriber, responseInfo);
@@ -310,7 +310,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     }
 
     public void setReceiveBufferSize(long receiveBufferSize) {
-        quicConnection.setDefaultStreamReceiveBufferSize(receiveBufferSize);
+        quicConnection.setDefaultBidirectionalStreamReceiveBufferSize(receiveBufferSize);
     }
 
     @Override
@@ -793,7 +793,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
 
         @Override
         public void cancel() {
-            httpStream.closeInput(H3_REQUEST_CANCELLED);
+            httpStream.abortReading(H3_REQUEST_CANCELLED);
             bodySubscriber.onComplete();
             close();
         }

@@ -172,7 +172,7 @@ public class Http3ConnectionImplTest {
 
         // Then
         verify(quicConnection, never()).close(anyLong(), any());
-        verify(quicStream).closeInput(anyLong());
+        verify(quicStream).abortReading(anyLong());
     }
 
     @Test
@@ -188,7 +188,7 @@ public class Http3ConnectionImplTest {
 
         // Then
         verify(quicConnection, never()).close(anyLong(), any());
-        verify(quicStream, never()).closeInput(anyLong());
+        verify(quicStream, never()).abortReading(anyLong());
     }
 
     @Test
@@ -205,7 +205,7 @@ public class Http3ConnectionImplTest {
 
         // Then
         ArgumentCaptor<Long> errorCodeCaptor = ArgumentCaptor.forClass(Long.class);
-        verify(quicStream).closeInput(errorCodeCaptor.capture());
+        verify(quicStream).abortReading(errorCodeCaptor.capture());
         assertThat(errorCodeCaptor.getValue()).isEqualTo(H3_STREAM_CREATION_ERROR);
     }
 

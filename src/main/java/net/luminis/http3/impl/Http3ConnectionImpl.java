@@ -26,7 +26,11 @@ import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.generic.VariableLengthInteger;
 
-import java.io.*;
+import java.io.EOFException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PushbackInputStream;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.List;
@@ -217,7 +221,7 @@ public class Http3ConnectionImpl implements Http3Connection {
             //  of the stream cannot be consumed as the semantics are unknown. Recipients of unknown stream types MUST
             //  either abort reading of the stream or discard incoming data without further processing. If reading is
             //  aborted, the recipient SHOULD use the H3_STREAM_CREATION_ERROR error code "
-            quicStream.closeInput(H3_STREAM_CREATION_ERROR);
+            quicStream.abortReading(H3_STREAM_CREATION_ERROR);
         }
     }
 
