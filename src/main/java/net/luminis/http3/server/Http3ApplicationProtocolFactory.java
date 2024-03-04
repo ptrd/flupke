@@ -25,23 +25,26 @@ import net.luminis.quic.server.ApplicationProtocolConnection;
 import net.luminis.quic.server.ApplicationProtocolConnectionFactory;
 
 import java.io.File;
+import java.util.Objects;
 
 public class Http3ApplicationProtocolFactory implements ApplicationProtocolConnectionFactory {
 
-    private File wwwDir;
-    private final FileServer fileServer;
+    private final HttpRequestHandler httpRequestHandler;
+
+    public Http3ApplicationProtocolFactory(HttpRequestHandler requestHandler) {
+        this.httpRequestHandler = Objects.requireNonNull(requestHandler);
+    }
 
     public Http3ApplicationProtocolFactory(File wwwDir) {
         if (wwwDir == null) {
             throw new IllegalArgumentException();
         }
-        this.wwwDir = wwwDir;
-        fileServer = new FileServer(wwwDir);
+        httpRequestHandler = new FileServer(wwwDir);
     }
 
     @Override
     public ApplicationProtocolConnection createConnection(String protocol, QuicConnection quicConnection) {
-        return new Http3ServerConnection(quicConnection, fileServer);
+        return new Http3ServerConnection(quicConnection, httpRequestHandler);
     }
 
     @Override
