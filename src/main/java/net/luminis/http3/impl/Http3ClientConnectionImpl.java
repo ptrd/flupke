@@ -29,7 +29,11 @@ import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 
 import java.io.*;
-import java.net.*;
+import java.net.ProtocolException;
+import java.net.SocketException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.UnknownHostException;
 import java.net.http.HttpClient;
 import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
@@ -70,16 +74,6 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         super(quicConnection);
 
         quicConnection.setPeerInitiatedStreamCallback(stream -> doAsync(() -> handleIncomingStream(stream)));
-
-        // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.1
-        // "clients MUST omit or specify a value of zero for the QUIC transport parameter "initial_max_bidi_streams"."
-        quicConnection.setMaxAllowedBidirectionalStreams(0);
-
-        // https://tools.ietf.org/html/draft-ietf-quic-http-20#section-3.2
-        // "To reduce the likelihood of blocking,
-        //   both clients and servers SHOULD send a value of three or greater for
-        //   the QUIC transport parameter "initial_max_uni_streams","
-        quicConnection.setMaxAllowedUnidirectionalStreams(3);
 
         qpackEncoder = new Encoder();
 
@@ -132,6 +126,15 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         builder.version(determinePreferredQuicVersion());
         builder.connectTimeout(connectTimeout);
         builder.applicationProtocol("h3");
+        // https://www.rfc-editor.org/rfc/rfc9114.html#name-unidirectional-streams
+        // "Therefore, the transport parameters sent by both clients and servers MUST allow the peer to create at least
+        //  three unidirectional streams. These transport parameters SHOULD also provide at least 1,024 bytes of
+        //  flow-control credit to each unidirectional stream."
+        builder.maxOpenPeerInitiatedUnidirectionalStreams(3);
+        // https://www.rfc-editor.org/rfc/rfc9114.html#name-bidirectional-streams
+        // "HTTP/3 does not use server-initiated bidirectional streams, though an extension could define a use for
+        //  these streams."
+        builder.maxOpenPeerInitiatedBidirectionalStreams(0);
         if (disableCertificateCheck) {
             builder.noServerCertificateCheck();
         }
@@ -209,7 +212,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
 
         HttpResponse.BodySubscriber<T> bodySubscriber = responseBodyHandler.apply(responseInfo);
         if (bodySubscriber == null) {
-            httpStream.closeInput(H3_REQUEST_CANCELLED);
+            httpStream.abortReading(H3_REQUEST_CANCELLED);
             throw new IllegalArgumentException("Body handler returned null body subscriber.");
         }
         BodySubscriptionHandler bodySubscriptionHandler = new BodySubscriptionHandler(httpStream, frameSequenceChecker, bodySubscriber, responseInfo);
@@ -307,7 +310,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     }
 
     public void setReceiveBufferSize(long receiveBufferSize) {
-        quicConnection.setDefaultStreamReceiveBufferSize(receiveBufferSize);
+        quicConnection.setDefaultBidirectionalStreamReceiveBufferSize(receiveBufferSize);
     }
 
     @Override
@@ -790,7 +793,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
 
         @Override
         public void cancel() {
-            httpStream.closeInput(H3_REQUEST_CANCELLED);
+            httpStream.abortReading(H3_REQUEST_CANCELLED);
             bodySubscriber.onComplete();
             close();
         }

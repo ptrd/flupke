@@ -22,6 +22,7 @@ import net.luminis.http3.impl.Http3ClientConnectionImpl;
 import net.luminis.http3.impl.Http3ConnectionImpl;
 import net.luminis.http3.impl.SettingsFrame;
 import net.luminis.qpack.Decoder;
+import net.luminis.quic.QuicClientConnection;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
 
@@ -63,7 +64,7 @@ public class Http3ClientConnectionBuilder {
 
     public Http3ClientConnectionImpl build() throws Exception {
         if (quicConnection == null) {
-            quicConnection = mock(QuicConnection.class);
+            quicConnection = mock(QuicClientConnection.class);
         }
 
         if (unidirectionalOutputStream != null) {

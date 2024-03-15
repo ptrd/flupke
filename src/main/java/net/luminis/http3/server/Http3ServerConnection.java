@@ -35,6 +35,7 @@ import java.io.OutputStream;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 
 
@@ -52,27 +53,26 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
     private final InetAddress clientAddress;
     private final long maxHeaderSize;
     private final long maxDataSize;
+    private final ExecutorService executor;
 
-
-    public Http3ServerConnection(QuicConnection quicConnection, HttpRequestHandler requestHandler) {
-        this(quicConnection, requestHandler, DEFAULT_MAX_HEADER_SIZE, DEFAULT_MAX_DATA_SIZE);
+    public Http3ServerConnection(QuicConnection quicConnection, HttpRequestHandler requestHandler, ExecutorService executorService) {
+        this(quicConnection, requestHandler, DEFAULT_MAX_HEADER_SIZE, DEFAULT_MAX_DATA_SIZE, executorService);
     }
 
-    public Http3ServerConnection(QuicConnection quicConnection, HttpRequestHandler requestHandler, long maxHeaderSize, long maxDataSize) {
+    public Http3ServerConnection(QuicConnection quicConnection, HttpRequestHandler requestHandler, long maxHeaderSize, long maxDataSize, ExecutorService executorService) {
         super(quicConnection);
         this.requestHandler = requestHandler;
         this.maxHeaderSize = maxHeaderSize;
         this.maxDataSize = maxDataSize;
-
+        this.executor = executorService;
         clientAddress = ((ServerConnection) quicConnection).getInitialClientAddress();
+
         startControlStream();
     }
 
     @Override
     public void acceptPeerInitiatedStream(QuicStream quicStream) {
-        Thread thread = new Thread(() -> handleIncomingStream(quicStream));
-        thread.setName("http-" + threadCount.getAndIncrement());
-        thread.start();
+        executor.execute(() -> handleIncomingStream(quicStream));
     }
 
     @Override
@@ -88,9 +88,11 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
             handleHttpRequest(receivedFrames, quicStream, new Encoder());
         }
         catch (IOException ioError) {
+            quicStream.abortReading(H3_INTERNAL_ERROR);
             sendHttpErrorResponse(500, "", quicStream);
         }
         catch (HttpError httpError) {
+            quicStream.abortReading(H3_REQUEST_REJECTED);
             sendHttpErrorResponse(httpError.getStatusCode(), httpError.getMessage(), quicStream);
         }
     }

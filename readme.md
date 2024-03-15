@@ -17,6 +17,15 @@ Flupke is created and maintained by Peter Doornbosch. The latest greatest can al
 
 ## Usage
 
+Latest release can be found at maven central:
+
+    <dependency>
+        <groupId>tech.kwik</groupId>
+        <artifactId>flupke</artifactId>
+        <version>0.5.3</version>
+    </dependency> 
+
+
 Flupke uses the HTTP Client API introduced with Java 11, e.g. 
 
     HttpClient.Builder clientBuilder = new Http3ClientBuilder();
@@ -28,16 +37,6 @@ class for a working example.
 
 Flupke also supports POST requests, or more generally, HTTP methods that require or use a request body. 
 See the [PostExample](https://bitbucket.org/pjtr/flupke/src/master/src/main/java/net/luminis/http3/sample/PostExample.java) for details.
-
-### Maven
-
-Flupke is available from Maven Central; maven coordinates are
-
-    <dependency>
-        <groupId>net.luminis.networking</groupId>
-        <artifactId>flupke</artifactId>
-        <version>0.5.0</version>
-    </dependency> 
 
 
 ### Work in progress

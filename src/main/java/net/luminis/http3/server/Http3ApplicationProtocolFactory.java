@@ -21,27 +21,70 @@ package net.luminis.http3.server;
 
 import net.luminis.http3.server.file.FileServer;
 import net.luminis.quic.QuicConnection;
+import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.server.ApplicationProtocolConnection;
 import net.luminis.quic.server.ApplicationProtocolConnectionFactory;
 
-
 import java.io.File;
+import java.util.Objects;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class Http3ApplicationProtocolFactory implements ApplicationProtocolConnectionFactory {
 
-    private File wwwDir;
-    private final FileServer fileServer;
+    private final HttpRequestHandler httpRequestHandler;
+    private final ExecutorService executorService;
+
+    public Http3ApplicationProtocolFactory(HttpRequestHandler requestHandler) {
+        this.httpRequestHandler = Objects.requireNonNull(requestHandler);
+        executorService = Executors.newCachedThreadPool(new DaemonThreadFactory("http3-connection"));
+    }
 
     public Http3ApplicationProtocolFactory(File wwwDir) {
         if (wwwDir == null) {
             throw new IllegalArgumentException();
         }
-        this.wwwDir = wwwDir;
-        fileServer = new FileServer(wwwDir);
+        httpRequestHandler = new FileServer(wwwDir);
+        executorService = Executors.newCachedThreadPool(new DaemonThreadFactory("http3-connection"));
     }
 
     @Override
     public ApplicationProtocolConnection createConnection(String protocol, QuicConnection quicConnection) {
-        return new Http3ServerConnection(quicConnection, fileServer);
+        return new Http3ServerConnection(quicConnection, httpRequestHandler, executorService);
     }
+
+    @Override
+    public int maxConcurrentPeerInitiatedUnidirectionalStreams() {
+        // https://www.rfc-editor.org/rfc/rfc9114.html#name-unidirectional-streams
+        // "Therefore, the transport parameters sent by both clients and servers MUST allow the peer to create at least
+        //  three unidirectional streams."
+        return 3;
+    }
+
+    @Override
+    public long maxTotalPeerInitiatedUnidirectionalStreams() {
+        // https://www.rfc-editor.org/rfc/rfc9114.html#name-unidirectional-streams
+        // "Therefore, the transport parameters sent by both clients and servers MUST allow the peer to create at least
+        //  three unidirectional streams."
+        return 3;
+    }
+
+    @Override
+    public int maxConcurrentPeerInitiatedBidirectionalStreams() {
+        return Integer.MAX_VALUE;
+    }
+
+    @Override
+    public int minUnidirectionalStreamReceiverBufferSize() {
+        // https://www.rfc-editor.org/rfc/rfc9114.html#name-unidirectional-streams
+        // "These transport parameters SHOULD also provide at least 1,024 bytes of flow-control credit to each
+        //  unidirectional stream."
+        return 1024;
+    }
+
+    @Override
+    public long maxUnidirectionalStreamReceiverBufferSize() {
+        return 1024;
+    }
+
 }
