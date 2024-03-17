@@ -35,6 +35,7 @@ import java.net.http.HttpRequest;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
 
 import static net.luminis.http3.webtransport.Constants.STREAM_TYPE_WEBTRANSPORT;
@@ -47,6 +48,7 @@ public class SessionFactoryImpl implements SessionFactory {
     private static final long SETTINGS_WEBTRANSPORT_MAX_SESSIONS = 0xc671706aL;
 
     private Map<Long, SessionImpl> sessionRegistry = new ConcurrentHashMap<>();
+    private CountDownLatch sessionCreated = new CountDownLatch(1);
 
     @Override
     public Session createSession(Http3Client httpClient, URI serverUri) throws IOException, HttpError {
@@ -77,6 +79,7 @@ public class SessionFactoryImpl implements SessionFactory {
             long sessionId = connectStream.getStreamId();
             SessionImpl session = new SessionImpl(httpClientConnection, connectStream, unidirectionalStreamHandler, bidirectionalStreamHandler, closedCallback);
             sessionRegistry.put(sessionId, session);
+            sessionCreated.countDown();
             return session;
         }
         catch (InterruptedException e) {
@@ -86,6 +89,8 @@ public class SessionFactoryImpl implements SessionFactory {
 
     void handleUnidirectionalStream(HttpStream httpStream) {
         try {
+            waitForSession();
+
             InputStream inputStream = httpStream.getInputStream();
             long sessionId = VariableLengthInteger.parseLong(inputStream);
             SessionImpl session = sessionRegistry.get(sessionId);
@@ -100,6 +105,8 @@ public class SessionFactoryImpl implements SessionFactory {
 
     private void handleBidirectionalStream(HttpStream httpStream) {
         try {
+            waitForSession();
+
             InputStream inputStream = httpStream.getInputStream();
             long signalValue = VariableLengthInteger.parseLong(inputStream);
             if (signalValue == 0x41) {
@@ -113,5 +120,12 @@ public class SessionFactoryImpl implements SessionFactory {
         catch (IOException e) {
             // Reading session id or signal value failed, nothing to do.
         }
+    }
+
+    private void waitForSession() {
+        try {
+            sessionCreated.await();
+        }
+        catch (InterruptedException e) {}
     }
 }
