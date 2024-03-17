@@ -241,21 +241,21 @@ class SessionImplTest {
         // Nothing (expect no exception)
     }
 
-    private Consumer<HttpStream> captureHttpConnectionUnidirectionalStreamHandler(Http3ClientConnection http3Connection) {
+    static Consumer<HttpStream> captureHttpConnectionUnidirectionalStreamHandler(Http3ClientConnection http3Connection) {
         ArgumentCaptor<Consumer<HttpStream>> handlerCapturer = ArgumentCaptor.forClass(Consumer.class);
         verify(http3Connection).registerUnidirectionalStreamType(longThat(type -> type == 0x54), handlerCapturer.capture());
         Consumer<HttpStream> handler = handlerCapturer.getValue();
         return handler;
     }
 
-    private Consumer<HttpStream> captureHttpConnectionBidirectionalStreamHandler(Http3ClientConnection http3Connection) {
+    static Consumer<HttpStream> captureHttpConnectionBidirectionalStreamHandler(Http3ClientConnection http3Connection) {
         ArgumentCaptor<Consumer<HttpStream>> handlerCapturer = ArgumentCaptor.forClass(Consumer.class);
         verify(http3Connection).registerBidirectionalStreamHandler(handlerCapturer.capture());
         Consumer<HttpStream> handler = handlerCapturer.getValue();
         return handler;
     }
 
-    private HttpStream httpStreamWith(ByteArrayInputStream byteArrayInputStream) {
+    static HttpStream httpStreamWith(ByteArrayInputStream byteArrayInputStream) {
         return new HttpStream() {
             @Override
             public InputStream getInputStream() {
