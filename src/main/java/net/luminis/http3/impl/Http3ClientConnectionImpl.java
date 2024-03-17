@@ -18,6 +18,7 @@
  */
 package net.luminis.http3.impl;
 
+import net.luminis.http3.Http3ConnectionSettings;
 import net.luminis.http3.core.*;
 import net.luminis.qpack.Encoder;
 import net.luminis.quic.QuicClientConnection;
@@ -63,11 +64,11 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     private Consumer<HttpStream> bidirectionalStreamHandler;
 
     public Http3ClientConnectionImpl(String host, int port) throws IOException {
-        this(host, port, DEFAULT_CONNECT_TIMEOUT, false, null);
+        this(host, port, DEFAULT_CONNECT_TIMEOUT, defaultConnectionSettings(), null);
     }
 
-    public Http3ClientConnectionImpl(String host, int port, Duration connectTimeout, boolean disableCertificateCheck, Logger logger) throws IOException {
-        this(createQuicConnection(host, port, connectTimeout, disableCertificateCheck, logger));
+    public Http3ClientConnectionImpl(String host, int port, Duration connectTimeout, Http3ConnectionSettings connectionSettings, Logger logger) throws IOException {
+        this(createQuicConnection(host, port, connectTimeout, connectionSettings, logger));
     }
 
     public Http3ClientConnectionImpl(QuicConnection quicConnection) {
@@ -115,7 +116,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         }
     }
 
-    private static QuicConnection createQuicConnection(String host, int port, Duration connectTimeout, boolean disableCertificateCheck, Logger logger) throws SocketException, UnknownHostException {
+    private static QuicConnection createQuicConnection(String host, int port, Duration connectTimeout, Http3ConnectionSettings connectionSettings, Logger logger) throws SocketException, UnknownHostException {
         QuicClientConnection.Builder builder = QuicClientConnection.newBuilder();
         try {
             builder.uri(new URI("//" + host + ":" + port));
@@ -130,12 +131,12 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         // "Therefore, the transport parameters sent by both clients and servers MUST allow the peer to create at least
         //  three unidirectional streams. These transport parameters SHOULD also provide at least 1,024 bytes of
         //  flow-control credit to each unidirectional stream."
-        builder.maxOpenPeerInitiatedUnidirectionalStreams(3);
+        builder.maxOpenPeerInitiatedUnidirectionalStreams(3 + connectionSettings.maxAdditionalPeerInitiatedUnidirectionalStreams());
         // https://www.rfc-editor.org/rfc/rfc9114.html#name-bidirectional-streams
         // "HTTP/3 does not use server-initiated bidirectional streams, though an extension could define a use for
         //  these streams."
-        builder.maxOpenPeerInitiatedBidirectionalStreams(0);
-        if (disableCertificateCheck) {
+        builder.maxOpenPeerInitiatedBidirectionalStreams(0 + connectionSettings.maxAdditionalPeerInitiatedBidirectionalStreams());
+        if (connectionSettings.disableCertificateCheck()) {
             builder.noServerCertificateCheck();
         }
         builder.logger(logger != null? logger: new NullLogger());
@@ -502,6 +503,25 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
             port = Http3ClientConnectionImpl.DEFAULT_HTTP3_PORT;
         }
         return uri.getHost() + ":" + port;
+    }
+
+    private static Http3ConnectionSettings defaultConnectionSettings() {
+        return new Http3ConnectionSettings() {
+            @Override
+            public boolean disableCertificateCheck() {
+                return false;
+            }
+
+            @Override
+            public int maxAdditionalPeerInitiatedUnidirectionalStreams() {
+                return 0;
+            }
+
+            @Override
+            public int maxAdditionalPeerInitiatedBidirectionalStreams() {
+                return 0;
+            }
+        };
     }
 
     private static class HttpResponseInfo implements HttpResponse.ResponseInfo {

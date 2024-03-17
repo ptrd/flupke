@@ -29,7 +29,7 @@ import java.time.Duration;
 public class Http3SingleConnectionClient extends Http3Client {
 
     public Http3SingleConnectionClient(QuicConnection quicConnection, Duration connectTimeout, Long receiveBufferSize) {
-        super(connectTimeout, receiveBufferSize, false, null);
+        super(connectTimeout, receiveBufferSize, false, 0, 0, null);
 
         http3ConnectionFactory = new Http3SingleConnectionFactory(quicConnection);
     }
