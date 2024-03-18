@@ -19,12 +19,16 @@
 package net.luminis.http3.webtransport.impl;
 
 import net.luminis.http3.Http3Client;
+import net.luminis.http3.core.Capsule;
 import net.luminis.http3.core.CapsuleProtocolStream;
 import net.luminis.http3.core.Http3ClientConnection;
 import net.luminis.http3.core.HttpStream;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.http.HttpRequest;
@@ -51,9 +55,15 @@ public class MockHttpConnectionBuilder {
         return client;
     }
 
-    public MockHttpConnectionBuilder withCapsuleProtocolStream(InputStream input) {
+    public MockHttpConnectionBuilder withCapsuleProtocolStream(InputStream input) throws IOException {
         capsuleProtocolStream = mock(CapsuleProtocolStream.class);
         when(capsuleProtocolStream.getStreamId()).thenReturn(4L);
+        when(capsuleProtocolStream.receive()).then(new Answer<Capsule>() {
+            @Override
+            public Capsule answer(InvocationOnMock invocation) throws Throwable {
+                return new CloseWebtransportSessionCapsule(input);
+            }
+        });
         return this;
     }
 
@@ -90,6 +100,10 @@ public class MockHttpConnectionBuilder {
 
     public Http3ClientConnection getHttp3connection() {
         return http3connection;
+    }
+
+    public CapsuleProtocolStream getCapsuleProtocolStream() {
+        return capsuleProtocolStream;
     }
 }
 

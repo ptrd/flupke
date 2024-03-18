@@ -52,12 +52,12 @@ public class SessionFactoryImpl implements SessionFactory {
 
     @Override
     public Session createSession(Http3Client httpClient, URI serverUri) throws IOException, HttpError {
-        return createSession(httpClient, serverUri, s -> {}, s -> {}, () -> {});
+        return createSession(httpClient, serverUri, s -> {}, s -> {});
     }
 
     @Override
     public Session createSession(Http3Client httpClient, URI serverUri, Consumer<WebTransportStream> unidirectionalStreamHandler,
-                                 Consumer<WebTransportStream> bidirectionalStreamHandler, Runnable closedCallback) throws IOException, HttpError {
+                                 Consumer<WebTransportStream> bidirectionalStreamHandler) throws IOException, HttpError {
         try {
             HttpRequest request = HttpRequest.newBuilder(serverUri).build();
             Http3ClientConnection httpClientConnection = httpClient.createConnection(request);
@@ -77,7 +77,7 @@ public class SessionFactoryImpl implements SessionFactory {
             String schema = "https";
             CapsuleProtocolStream connectStream = httpClientConnection.sendExtendedConnectWithCapsuleProtocol(request, protocol, schema, Duration.ofSeconds(5));
             long sessionId = connectStream.getStreamId();
-            SessionImpl session = new SessionImpl(httpClientConnection, connectStream, unidirectionalStreamHandler, bidirectionalStreamHandler, closedCallback);
+            SessionImpl session = new SessionImpl(httpClientConnection, connectStream, unidirectionalStreamHandler, bidirectionalStreamHandler);
             sessionRegistry.put(sessionId, session);
             sessionCreated.countDown();
             return session;

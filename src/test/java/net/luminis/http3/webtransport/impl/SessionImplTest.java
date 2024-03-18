@@ -21,8 +21,10 @@ package net.luminis.http3.webtransport.impl;
 import net.luminis.http3.Http3Client;
 import net.luminis.http3.core.Http3ClientConnection;
 import net.luminis.http3.core.HttpStream;
+import net.luminis.http3.test.WriteableByteArrayInputStream;
 import net.luminis.http3.webtransport.Session;
 import net.luminis.http3.webtransport.WebTransportStream;
+import net.luminis.tls.util.ByteUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -35,10 +37,13 @@ import java.io.OutputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
-import static org.mockito.ArgumentMatchers.longThat;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 class SessionImplTest {
@@ -161,7 +166,7 @@ class SessionImplTest {
         Consumer<WebTransportStream> unidirectionalStreamHandler = stream -> {
             receivedMessage.set(readStringFrom(stream.getInputStream()));
         };
-        factory.createSession(client, new URI("http://example.com/webtransport"), unidirectionalStreamHandler, s -> {}, () -> {});
+        factory.createSession(client, new URI("http://example.com/webtransport"), unidirectionalStreamHandler, s -> {});
         Consumer<HttpStream> handler = captureHttpConnectionUnidirectionalStreamHandler(builder.getHttp3connection());
 
         // When the peer sends something on a (new) unidirectional stream
@@ -207,7 +212,7 @@ class SessionImplTest {
         Consumer<WebTransportStream> bidirectionalStreamHandler = stream -> {
             receivedMessage.set(readStringFrom(stream.getInputStream()));
         };
-        factory.createSession(client, new URI("http://example.com/webtransport"), s -> {}, bidirectionalStreamHandler, () -> {});
+        factory.createSession(client, new URI("http://example.com/webtransport"), s -> {}, bidirectionalStreamHandler);
         Consumer<HttpStream> handler = captureHttpConnectionBidirectionalStreamHandler(builder.getHttp3connection());
 
         // And When the peer sends something on a (new) bidirectional stream
@@ -239,6 +244,92 @@ class SessionImplTest {
 
         // Then
         // Nothing (expect no exception)
+    }
+
+    @Test
+    void whenSessionIsCreatedCapsuleParserShouldHaveBeenRegistered() throws Exception {
+        // Given
+        Http3Client client = builder
+                .withCapsuleProtocolStream(new WriteableByteArrayInputStream())
+                .buildClient();
+
+        // When
+        factory.createSession(client, defaultWebtransportUri, null, null);
+
+        // Then
+        verify(builder.getCapsuleProtocolStream()).registerCapsuleParser(anyLong(), any(Function.class));
+    }
+
+    @Test
+    void whenReceivingCloseTheCallbackIsCalled() throws Exception {
+        // Given
+        WriteableByteArrayInputStream inputStream = new WriteableByteArrayInputStream();
+        Http3Client client = builder
+                .withCapsuleProtocolStream(inputStream)
+                .buildClient();
+
+        BiConsumer<Long, String> sessionTerminatedEventListener = mock(BiConsumer.class);
+        Session session = factory.createSession(client, defaultWebtransportUri, null, null);
+        session.registerSessionTerminatedEventListener(sessionTerminatedEventListener);
+
+        // When
+        String closeWebtransportSessionCapsuleBinary = "68430400000000";
+        inputStream.write(ByteUtils.hexToBytes(closeWebtransportSessionCapsuleBinary));
+        // Processing connect stream happens async, so give other thread a chance to proces
+        Thread.sleep(10);
+
+        // Then
+        ArgumentCaptor<Long> errorCodeCaptor = ArgumentCaptor.forClass(Long.class);
+        verify(sessionTerminatedEventListener).accept(errorCodeCaptor.capture(), anyString());
+        assertThat(errorCodeCaptor.getValue()).isEqualTo(0L);
+    }
+
+    @Test
+    void whenReadingConnectStreamIsClosedSessionIsClosed() throws Exception {
+        // Given
+        WriteableByteArrayInputStream inputStream = new WriteableByteArrayInputStream();
+        Http3Client client = builder
+                .withCapsuleProtocolStream(inputStream)
+                .buildClient();
+
+        BiConsumer<Long, String> sessionTerminatedEventListener = mock(BiConsumer.class);
+        Session session = factory.createSession(client, defaultWebtransportUri, null, null);
+        session.registerSessionTerminatedEventListener(sessionTerminatedEventListener);
+
+        // When
+        inputStream.close();
+        // Processing connect stream happens async, so give other thread a chance to process
+        Thread.sleep(10);
+
+        // Then
+        ArgumentCaptor<Long> errorCodeCaptor = ArgumentCaptor.forClass(Long.class);
+        verify(sessionTerminatedEventListener).accept(errorCodeCaptor.capture(), anyString());
+        assertThat(errorCodeCaptor.getValue()).isEqualTo(0L);
+    }
+
+    @Test
+    void whenReadingConnectStreamFailsSessionIsClosed() throws Exception {
+        // Given
+        WriteableByteArrayInputStream inputStream = new WriteableByteArrayInputStream();
+        Http3Client client = builder
+                .withCapsuleProtocolStream(inputStream)
+                .buildClient();
+
+        BiConsumer<Long, String> sessionTerminatedEventListener = mock(BiConsumer.class);
+        Session session = factory.createSession(client, defaultWebtransportUri, null, null);
+        session.registerSessionTerminatedEventListener(sessionTerminatedEventListener);
+
+        // When
+        String closeWebtransportSessionCapsuleBinary = "6843040000";  // 2 bytes missing
+        inputStream.write(ByteUtils.hexToBytes(closeWebtransportSessionCapsuleBinary));
+        inputStream.close();
+        // Processing connect stream happens async, so give other thread a chance to process
+        Thread.sleep(10);
+
+        // Then
+        ArgumentCaptor<Long> errorCodeCaptor = ArgumentCaptor.forClass(Long.class);
+        verify(sessionTerminatedEventListener).accept(errorCodeCaptor.capture(), anyString());
+        assertThat(errorCodeCaptor.getValue()).isEqualTo(0L);
     }
 
     static Consumer<HttpStream> captureHttpConnectionUnidirectionalStreamHandler(Http3ClientConnection http3Connection) {

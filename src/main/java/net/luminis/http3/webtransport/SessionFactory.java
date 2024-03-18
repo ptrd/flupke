@@ -42,15 +42,15 @@ public interface SessionFactory {
 
     /**
      * Creates a WebTransport session given a HTTP3 client and a server URI.
-     * @param httpClient  the HTTP3 client used to send the initial HTTP3 (Extended) CONNECT request
-     * @param serverUri   the WebTransport server URI (host, port and path are all relevant)
-     * @param unidirectionalStreamHandler  handler for incoming unidirectional streams
-     * @param bidirectionalStreamHandler   handler for incoming bidirectional streams
-     * @param closedCallback               callback that is called when the session is closed
+     *
+     * @param httpClient                  the HTTP3 client used to send the initial HTTP3 (Extended) CONNECT request
+     * @param serverUri                   the WebTransport server URI (host, port and path are all relevant)
+     * @param unidirectionalStreamHandler handler for incoming unidirectional streams
+     * @param bidirectionalStreamHandler  handler for incoming bidirectional streams
      * @return the WebTransport session
      * @throws IOException
      * @throws HttpError
      */
     Session createSession(Http3Client httpClient, URI serverUri, Consumer<WebTransportStream> unidirectionalStreamHandler,
-                          Consumer<WebTransportStream> bidirectionalStreamHandler, Runnable closedCallback) throws IOException, HttpError;
+                          Consumer<WebTransportStream> bidirectionalStreamHandler) throws IOException, HttpError;
 }

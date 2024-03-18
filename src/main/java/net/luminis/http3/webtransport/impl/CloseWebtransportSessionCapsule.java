@@ -28,6 +28,8 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
+import static net.luminis.http3.webtransport.Constants.CLOSE_WEBTRANSPORT_SESSION;
+
 
 public class CloseWebtransportSessionCapsule implements Capsule {
 
@@ -72,9 +74,9 @@ public class CloseWebtransportSessionCapsule implements Capsule {
     public int write(OutputStream outputStream) throws IOException {
         byte[] msgBytes = applicationErrorMessage.getBytes(StandardCharsets.UTF_8);
         int payloadLength = 4 + msgBytes.length;
-        int totalLength = VariableLengthInteger.bytesNeeded(0x2843) + VariableLengthInteger.bytesNeeded(payloadLength) + payloadLength;
+        int totalLength = VariableLengthInteger.bytesNeeded(CLOSE_WEBTRANSPORT_SESSION) + VariableLengthInteger.bytesNeeded(payloadLength) + payloadLength;
         ByteBuffer buffer = ByteBuffer.allocate(totalLength);
-        VariableLengthInteger.encode(0x2843, buffer);
+        VariableLengthInteger.encode(CLOSE_WEBTRANSPORT_SESSION, buffer);
         VariableLengthInteger.encode(payloadLength, buffer);
         buffer.putInt(applicationErrorCode);
         buffer.put(msgBytes);
@@ -85,6 +87,6 @@ public class CloseWebtransportSessionCapsule implements Capsule {
 
     @Override
     public long getType() {
-        return 0x2843;
+        return CLOSE_WEBTRANSPORT_SESSION;
     }
 }

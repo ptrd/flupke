@@ -20,13 +20,25 @@ package net.luminis.http3.webtransport;
 
 public class Constants {
 
-    // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-stream-type-registration
-    // "Code: 0x54
-    //  Stream Type: WebTransport stream"
+    /**
+     * https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-stream-type-registration
+     * "Code: 0x54
+     *  Stream Type: WebTransport stream"
+     */
     public static final int STREAM_TYPE_WEBTRANSPORT = 0x54;
 
-    // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-frame-type-registration
-    // "Code: 0x41
-    //  Frame Type: WEBTRANSPORT_STREAM"
+    /**
+     * https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-frame-type-registration
+     * "Code: 0x41
+     *  Frame Type: WEBTRANSPORT_STREAM"
+     */
     public static final int FRAME_TYPE_WEBTRANSPORT_STREAM = 0x41;
+
+    /**
+     * https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-capsule-types
+     * "Value: 0x2843
+     *  Capsule Type: CLOSE_WEBTRANSPORT_SESSION"
+     */
+    public static final int CLOSE_WEBTRANSPORT_SESSION = 0x2843;
+
 }

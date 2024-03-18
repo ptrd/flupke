@@ -129,7 +129,7 @@ class SessionFactoryTest {
         Consumer<WebTransportStream> unidirectionalStreamHandler = mock(Consumer.class);
         Consumer<WebTransportStream> bidirectionalStreamHandler = mock(Consumer.class);
         Session session = factory.createSession(client, new URI("http://example.com/webtransport"),
-                unidirectionalStreamHandler, bidirectionalStreamHandler, () -> {});
+                unidirectionalStreamHandler, bidirectionalStreamHandler);
 
         // Then
         Object handler1 = new FieldReader(session, SessionImpl.class, "unidirectionalStreamReceiveHandler").read();
@@ -157,7 +157,7 @@ class SessionFactoryTest {
         createMockHttp3ConnectionForExtendedConnectWithDelayedResponseAfterAction(client, webtransportUnidirectionStreamCreationAction);
 
         Consumer<WebTransportStream> unidirectionalStreamHandler = mock(Consumer.class);
-        factory.createSession(client, new URI("http://example.com/wt"), unidirectionalStreamHandler, mock(Consumer.class), () -> {});
+        factory.createSession(client, new URI("http://example.com/wt"), unidirectionalStreamHandler, mock(Consumer.class));
         handlerDone.await();
 
         // Then: the unidirectionalStreamHandler should be called with the data from the server
@@ -186,7 +186,7 @@ class SessionFactoryTest {
         createMockHttp3ConnectionForExtendedConnectWithDelayedResponseAfterAction(client, webtransportBidirectionStreamCreationAction);
 
         Consumer<WebTransportStream> bidirectionalStreamHandler = mock(Consumer.class);
-        factory.createSession(client, new URI("http://example.com/wt"), mock(Consumer.class), bidirectionalStreamHandler, () -> {});
+        factory.createSession(client, new URI("http://example.com/wt"), mock(Consumer.class), bidirectionalStreamHandler);
         handlerDone.await();
 
         // Then: the bidirectionalStreamHandler should be called with the data from the server

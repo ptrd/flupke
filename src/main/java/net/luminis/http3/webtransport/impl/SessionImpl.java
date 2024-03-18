@@ -18,6 +18,7 @@
  */
 package net.luminis.http3.webtransport.impl;
 
+import net.luminis.http3.core.Capsule;
 import net.luminis.http3.core.CapsuleProtocolStream;
 import net.luminis.http3.core.Http3Connection;
 import net.luminis.http3.core.HttpStream;
@@ -28,9 +29,12 @@ import net.luminis.http3.webtransport.WebTransportStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.UncheckedIOException;
+import java.util.Objects;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
+import static net.luminis.http3.webtransport.Constants.CLOSE_WEBTRANSPORT_SESSION;
 import static net.luminis.http3.webtransport.Constants.FRAME_TYPE_WEBTRANSPORT_STREAM;
 import static net.luminis.http3.webtransport.Constants.STREAM_TYPE_WEBTRANSPORT;
 
@@ -40,15 +44,45 @@ public class SessionImpl implements Session {
     private final long sessionId;
     private Consumer<WebTransportStream> unidirectionalStreamReceiveHandler;
     private Consumer<WebTransportStream> bidirectionalStreamReceiveHandler;
+    private BiConsumer<Long, String> sessionTerminatedEventListener;
 
     SessionImpl(Http3Connection http3Connection, CapsuleProtocolStream connectStream,
-                Consumer<WebTransportStream> unidirectionalStreamHandler, Consumer<WebTransportStream> bidirectionalStreamHandler,
-                Runnable closedCallback) {
+                Consumer<WebTransportStream> unidirectionalStreamHandler, Consumer<WebTransportStream> bidirectionalStreamHandler) {
         this.http3Connection = http3Connection;
         sessionId = connectStream.getStreamId();
 
         unidirectionalStreamReceiveHandler = unidirectionalStreamHandler;
         bidirectionalStreamReceiveHandler = bidirectionalStreamHandler;
+        sessionTerminatedEventListener = (errorCode, errorMessage) -> {};
+
+        connectStream.registerCapsuleParser(CLOSE_WEBTRANSPORT_SESSION, inputStream -> {
+            try {
+                return new CloseWebtransportSessionCapsule(inputStream);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        });
+
+        new Thread(() -> {
+            try {
+                boolean closed = false;
+                while (! closed) {
+                    Capsule receivedCapsule = connectStream.receive();
+                    if (receivedCapsule.getType() == CLOSE_WEBTRANSPORT_SESSION) {
+                        CloseWebtransportSessionCapsule webtransportClose = (CloseWebtransportSessionCapsule) receivedCapsule;
+                        closed(webtransportClose.getApplicationErrorCode(), webtransportClose.getApplicationErrorMessage());
+                        closed = true;
+                    }
+                }
+            }
+            catch (IOException e) {
+                // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-session-termination
+                // "Cleanly terminating a CONNECT stream without a CLOSE_WEBTRANSPORT_SESSION capsule SHALL be
+                //  semantically equivalent to terminating it with a CLOSE_WEBTRANSPORT_SESSION capsule that has an error
+                //  code of 0 and an empty error string."
+                closed(0, "");
+            }
+        }, "webtransport-connectstream-" + sessionId).start();
     }
 
     @Override
@@ -93,7 +127,7 @@ public class SessionImpl implements Session {
 
     @Override
     public void registerSessionTerminatedEventListener(BiConsumer<Long, String> listener) {
-
+        sessionTerminatedEventListener = Objects.requireNonNull(listener);
     }
 
     void handleUnidirectionalStream(InputStream inputStream) {
@@ -102,6 +136,10 @@ public class SessionImpl implements Session {
 
     void handleBidirectionalStream(HttpStream httpStream) {
         bidirectionalStreamReceiveHandler.accept(wrap(httpStream));
+    }
+
+    void closed(long applicationErrorCode, String applicationErrorMessage) {
+        sessionTerminatedEventListener.accept(applicationErrorCode, applicationErrorMessage);
     }
 
     private WebTransportStream wrap(HttpStream httpStream) {
