@@ -41,4 +41,11 @@ public class Constants {
      */
     public static final int CLOSE_WEBTRANSPORT_SESSION = 0x2843;
 
+    /**
+     * https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-http-3-error-code-registrat
+     * "Name: WEBTRANSPORT_SESSION_GONE
+     *  Value: 0x170d7b68
+     *  Description: WebTransport data stream aborted because the associated WebTransport session has been closed."
+     */
+    public static final long WEBTRANSPORT_SESSION_GONE = 0x170d7b68;
 }

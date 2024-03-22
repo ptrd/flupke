@@ -73,6 +73,12 @@ public class MockHttpConnectionBuilder {
         return this;
     }
 
+    public MockHttpConnectionBuilder with(HttpStream httpStream) {
+        unidirectionalStream = httpStream;
+        bidirectionalStream = httpStream;
+        return this;
+    }
+
     public MockHttpConnectionBuilder withBidirectionalStreamInputOuput(InputStream input, OutputStream output) {
         bidirectionalStream = mock(HttpStream.class);
         when(bidirectionalStream.getInputStream()).thenReturn(input);

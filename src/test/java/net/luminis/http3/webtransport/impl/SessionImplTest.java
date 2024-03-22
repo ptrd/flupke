@@ -33,7 +33,6 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicReference;
@@ -43,8 +42,7 @@ import java.util.function.Function;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.*;
 
 class SessionImplTest {
 
@@ -332,6 +330,85 @@ class SessionImplTest {
         assertThat(errorCodeCaptor.getValue()).isEqualTo(0L);
     }
 
+    @Test
+    void whenSessionIsClosedExistingUnidirectionalStreamsAreResetAndAborted() throws Exception {
+        // Given
+        HttpStream unidirectionalHttpStream = mockHttpStream();
+        InputStream connectStream = new WriteableByteArrayInputStream();
+        Http3Client client = builder
+                .withCapsuleProtocolStream(connectStream)
+                .with(unidirectionalHttpStream)
+                .buildClient();
+
+        Session session = factory.createSession(client, defaultWebtransportUri, null, null);
+        session.createUnidirectionalStream();
+
+        // When
+        connectStream.close();
+        // Processing connect stream happens async, so give other thread a chance to process
+        Thread.sleep(10);
+
+        // Then
+        verify(unidirectionalHttpStream).resetStream(anyLong());
+        verify(unidirectionalHttpStream, never()).abortReading(anyLong());
+    }
+
+    @Test
+    void whenSessionIsClosedExistingPeerInitiatedUnidirectionalStreamsAreAborted() throws Exception {
+        // Given
+        InputStream connectStream = new WriteableByteArrayInputStream();
+        Http3Client client = builder
+                .withCapsuleProtocolStream(connectStream)
+                .buildClient();
+
+        Consumer<WebTransportStream> unidirectionalStreamHandler = stream -> {};
+        factory.createSession(client, defaultWebtransportUri, unidirectionalStreamHandler, null);
+        Consumer<HttpStream> handler = captureHttpConnectionUnidirectionalStreamHandler(builder.getHttp3connection());
+
+        // When the peer opens a unidirectional stream
+        String binarySessionId = "\u0004";  // (one byte, just 0x04)
+        HttpStream unidirectionalHttpStream = httpStreamWith(new ByteArrayInputStream((binarySessionId + "Hello from peer!").getBytes(StandardCharsets.UTF_8)));
+        handler.accept(unidirectionalHttpStream);
+
+        // When
+        connectStream.close();
+        // Processing connect stream happens async, so give other thread a chance to process
+        Thread.sleep(100);
+
+        // Then
+        verify(unidirectionalHttpStream).abortReading(anyLong());
+        verify(unidirectionalHttpStream, never()).resetStream(anyLong());
+    }
+
+    @Test
+    void whenSessionIsClosedExistingBidirectionalStreamsAreResetAndAborted() throws Exception {
+        // Given
+        HttpStream bidirectionalHttpStream = mockHttpStream();
+        InputStream connectStream = new WriteableByteArrayInputStream();
+        Http3Client client = builder
+                .withCapsuleProtocolStream(connectStream)
+                .with(bidirectionalHttpStream)
+                .buildClient();
+
+        Session session = factory.createSession(client, defaultWebtransportUri, null, null);
+        session.createBidirectionalStream();
+
+        // When
+        connectStream.close();
+        // Processing connect stream happens async, so give other thread a chance to process
+        Thread.sleep(10);
+
+        // Then
+        verify(bidirectionalHttpStream).resetStream(anyLong());
+        verify(bidirectionalHttpStream).abortReading(anyLong());
+    }
+
+    private static HttpStream mockHttpStream() {
+        HttpStream bidirectionalHttpStream = mock(HttpStream.class);
+        when(bidirectionalHttpStream.getOutputStream()).thenReturn(new ByteArrayOutputStream());
+        return bidirectionalHttpStream;
+    }
+
     static Consumer<HttpStream> captureHttpConnectionUnidirectionalStreamHandler(Http3ClientConnection http3Connection) {
         ArgumentCaptor<Consumer<HttpStream>> handlerCapturer = ArgumentCaptor.forClass(Consumer.class);
         verify(http3Connection).registerUnidirectionalStreamType(longThat(type -> type == 0x54), handlerCapturer.capture());
@@ -347,30 +424,9 @@ class SessionImplTest {
     }
 
     static HttpStream httpStreamWith(ByteArrayInputStream byteArrayInputStream) {
-        return new HttpStream() {
-            @Override
-            public InputStream getInputStream() {
-                return byteArrayInputStream;
-            }
-
-            @Override
-            public long getStreamId() {
-                return 7;
-            }
-
-            @Override
-            public void abortReading(long errorCode) {
-            }
-
-            @Override
-            public void resetStream(long errorCode) {
-            }
-
-            @Override
-            public OutputStream getOutputStream() {
-                return null;
-            }
-        };
+        HttpStream mock = mock(HttpStream.class);
+        when(mock.getInputStream()).thenReturn(byteArrayInputStream);
+        return mock;
     }
 
     private String readStringFrom(InputStream inputStream) {

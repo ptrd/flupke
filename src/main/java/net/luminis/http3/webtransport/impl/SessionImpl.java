@@ -31,12 +31,12 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.util.Objects;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
-import static net.luminis.http3.webtransport.Constants.CLOSE_WEBTRANSPORT_SESSION;
-import static net.luminis.http3.webtransport.Constants.FRAME_TYPE_WEBTRANSPORT_STREAM;
-import static net.luminis.http3.webtransport.Constants.STREAM_TYPE_WEBTRANSPORT;
+import static net.luminis.http3.webtransport.Constants.*;
 
 public class SessionImpl implements Session {
 
@@ -45,6 +45,8 @@ public class SessionImpl implements Session {
     private Consumer<WebTransportStream> unidirectionalStreamReceiveHandler;
     private Consumer<WebTransportStream> bidirectionalStreamReceiveHandler;
     private BiConsumer<Long, String> sessionTerminatedEventListener;
+    private Queue<HttpStream> sendingStreams = new ConcurrentLinkedQueue();
+    private Queue<HttpStream> receivingStreams = new ConcurrentLinkedQueue();
 
     SessionImpl(Http3Connection http3Connection, CapsuleProtocolStream connectStream,
                 Consumer<WebTransportStream> unidirectionalStreamHandler, Consumer<WebTransportStream> bidirectionalStreamHandler) {
@@ -92,6 +94,7 @@ public class SessionImpl implements Session {
         //  followed by the session ID, encoded as a variable-length integer, followed by the user-specified stream data."
         HttpStream httpStream = http3Connection.createUnidirectionalStream(STREAM_TYPE_WEBTRANSPORT);
         VariableLengthIntegerUtil.write(sessionId, httpStream.getOutputStream());
+        sendingStreams.add(httpStream);
         return wrap(httpStream);
     }
 
@@ -102,6 +105,8 @@ public class SessionImpl implements Session {
         // "The signal value, 0x41, is used by clients and servers to open a bidirectional WebTransport stream."
         VariableLengthIntegerUtil.write(FRAME_TYPE_WEBTRANSPORT_STREAM, httpStream.getOutputStream());
         VariableLengthIntegerUtil.write(sessionId, httpStream.getOutputStream());
+        sendingStreams.add(httpStream);
+        receivingStreams.add(httpStream);
         return wrap(httpStream);
     }
 
@@ -131,15 +136,28 @@ public class SessionImpl implements Session {
     }
 
     void handleUnidirectionalStream(HttpStream inputStream) {
+        receivingStreams.add(inputStream);
         unidirectionalStreamReceiveHandler.accept(wrapInputOnly(inputStream));
     }
 
     void handleBidirectionalStream(HttpStream httpStream) {
+        sendingStreams.add(httpStream);
+        receivingStreams.add(httpStream);
         bidirectionalStreamReceiveHandler.accept(wrap(httpStream));
     }
 
     void closed(long applicationErrorCode, String applicationErrorMessage) {
+        resetSenders();
+        abortReading();
         sessionTerminatedEventListener.accept(applicationErrorCode, applicationErrorMessage);
+    }
+
+    private void resetSenders() {
+        sendingStreams.forEach(stream -> stream.resetStream(WEBTRANSPORT_SESSION_GONE));
+    }
+
+    private void abortReading() {
+        receivingStreams.forEach(stream -> stream.abortReading(WEBTRANSPORT_SESSION_GONE));
     }
 
     private WebTransportStream wrap(HttpStream httpStream) {
