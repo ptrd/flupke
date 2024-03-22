@@ -130,8 +130,8 @@ public class SessionImpl implements Session {
         sessionTerminatedEventListener = Objects.requireNonNull(listener);
     }
 
-    void handleUnidirectionalStream(InputStream inputStream) {
-        unidirectionalStreamReceiveHandler.accept(wrap(inputStream));
+    void handleUnidirectionalStream(HttpStream inputStream) {
+        unidirectionalStreamReceiveHandler.accept(wrapInputOnly(inputStream));
     }
 
     void handleBidirectionalStream(HttpStream httpStream) {
@@ -156,7 +156,7 @@ public class SessionImpl implements Session {
         };
     }
 
-    private WebTransportStream wrap(InputStream inputStream) {
+    private WebTransportStream wrapInputOnly(HttpStream inputStream) {
         return new WebTransportStream() {
             @Override
             public OutputStream getOutputStream() {
@@ -165,7 +165,7 @@ public class SessionImpl implements Session {
 
             @Override
             public InputStream getInputStream() {
-                return inputStream;
+                return inputStream.getInputStream();
             }
         };
     }

@@ -95,7 +95,7 @@ public class SessionFactoryImpl implements SessionFactory {
             long sessionId = VariableLengthInteger.parseLong(inputStream);
             SessionImpl session = sessionRegistry.get(sessionId);
             if (session != null) {
-                session.handleUnidirectionalStream(inputStream);
+                session.handleUnidirectionalStream(httpStream);
             }
         }
         catch (IOException e) {
