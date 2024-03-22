@@ -32,4 +32,8 @@ public interface HttpStream {
     InputStream getInputStream();
 
     long getStreamId();
+
+    void abortReading(long errorCode);
+
+    void resetStream(long errorCode);
 }

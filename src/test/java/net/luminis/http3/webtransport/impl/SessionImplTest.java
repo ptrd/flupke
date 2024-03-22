@@ -359,6 +359,14 @@ class SessionImplTest {
             }
 
             @Override
+            public void abortReading(long errorCode) {
+            }
+
+            @Override
+            public void resetStream(long errorCode) {
+            }
+
+            @Override
             public OutputStream getOutputStream() {
                 return null;
             }

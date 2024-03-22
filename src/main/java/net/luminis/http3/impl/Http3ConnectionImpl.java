@@ -157,6 +157,16 @@ public class Http3ConnectionImpl implements Http3Connection {
             public long getStreamId() {
                 return quicStream.getStreamId();
             }
+
+            @Override
+            public void abortReading(long errorCode) {
+                quicStream.abortReading(errorCode);
+            }
+
+            @Override
+            public void resetStream(long errorCode) {
+                quicStream.resetStream(errorCode);
+            }
         };
     }
 
@@ -240,6 +250,16 @@ public class Http3ConnectionImpl implements Http3Connection {
             @Override
             public long getStreamId() {
                 return quicStream.getStreamId();
+            }
+
+            @Override
+            public void abortReading(long errorCode) {
+                quicStream.abortReading(errorCode);
+            }
+
+            @Override
+            public void resetStream(long errorCode) {
+                quicStream.resetStream(errorCode);
             }
         };
     }

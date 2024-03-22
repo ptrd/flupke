@@ -702,6 +702,15 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
             return quicStream.getStreamId();
         }
 
+        @Override
+        public void abortReading(long errorCode) {
+            quicStream.abortReading(errorCode);
+        }
+
+        @Override
+        public void resetStream(long errorCode) {
+            quicStream.resetStream(errorCode);
+        }
     }
 
     private static class ResponseFramesSequenceChecker {
