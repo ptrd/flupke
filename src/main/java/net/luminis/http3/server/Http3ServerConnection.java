@@ -18,6 +18,10 @@
  */
 package net.luminis.http3.server;
 
+import com.jaisocx.constants.Constants;
+import com.jaisocx.http.headers.HttpHeadersEnum;
+import com.jaisocx.http.http3.Http3Handler;
+import java.io.ByteArrayOutputStream;
 import net.luminis.http3.core.HttpError;
 import net.luminis.http3.impl.DataFrame;
 import net.luminis.http3.impl.HeadersFrame;
@@ -33,10 +37,20 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetAddress;
+import java.net.http.HttpHeaders;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Optional;
+import java.util.OptionalLong;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiPredicate;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 
 /**
@@ -55,17 +69,30 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
     private final long maxDataSize;
     private final ExecutorService executor;
 
-    public Http3ServerConnection(QuicConnection quicConnection, HttpRequestHandler requestHandler, ExecutorService executorService) {
+    public Http3ServerConnection(
+            QuicConnection quicConnection, 
+            HttpRequestHandler requestHandler, 
+            ExecutorService executorService
+    ) {
         this(quicConnection, requestHandler, DEFAULT_MAX_HEADER_SIZE, DEFAULT_MAX_DATA_SIZE, executorService);
     }
 
-    public Http3ServerConnection(QuicConnection quicConnection, HttpRequestHandler requestHandler, long maxHeaderSize, long maxDataSize, ExecutorService executorService) {
+    public Http3ServerConnection(
+            QuicConnection quicConnection, 
+            HttpRequestHandler requestHandler, 
+            long maxHeaderSize, 
+            long maxDataSize, 
+            ExecutorService executorService
+    ) {
         super(quicConnection);
         this.requestHandler = requestHandler;
         this.maxHeaderSize = maxHeaderSize;
         this.maxDataSize = maxDataSize;
         this.executor = executorService;
         clientAddress = ((ServerConnection) quicConnection).getInitialClientAddress();
+        ((Http3Handler)requestHandler).setClientSocketAddress(
+            ((ServerConnection) quicConnection).getInitialClientSocketAddress()
+        );
 
         startControlStream();
     }
@@ -141,16 +168,60 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
                 .findFirst()
                 .orElseThrow(() -> new HttpError("", 400));  // TODO
 
+        ByteArrayOutputStream postPayloadBaos = new ByteArrayOutputStream();
+        OptionalLong contentLengthHeaderValue = headersFrame.headers().firstValueAsLong(HttpHeadersEnum.CONTENT_LENGTH2.getValue());
+        if (contentLengthHeaderValue.isPresent() && contentLengthHeaderValue.getAsLong() > 0) {
+            receivedFrames.stream()
+                    .filter(f -> f instanceof DataFrame)
+                    .forEach(f -> {
+                        try {
+                            postPayloadBaos.write(((DataFrame)f).getPayload());
+                        } catch (IOException ex) {
+                            Logger.getLogger(Http3ServerConnection.class.getName()).log(Level.SEVERE, null, ex);
+                        }
+                    });
+        }
+        
         String method = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_METHOD);
         String path = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PATH);
-        HttpServerRequest request = new HttpServerRequest(method, path, null, clientAddress);
+        String[] pseudoheadersToInclude = new String[] {
+            HeadersFrame.PSEUDO_HEADER_AUTHORITY,
+            HeadersFrame.PSEUDO_HEADER_METHOD,
+            HeadersFrame.PSEUDO_HEADER_PATH,
+            HeadersFrame.PSEUDO_HEADER_SCHEME
+        };
+        Map<String, List<String>> headersMap = new ConcurrentHashMap<>();
+        for (String headerName : pseudoheadersToInclude) {
+            headersMap.put(
+                    headerName, 
+                    Arrays.asList(
+                            new String[]{
+                                headersFrame.getPseudoHeader(headerName)
+                            }
+                    )
+            );
+        }
+        for (Map.Entry<String, List<String>> header : headersFrame.headers().map().entrySet()) {
+            headersMap.put(header.getKey(), header.getValue());
+        }
+        BiPredicate<String, String> filter = (key, value) -> {
+            return true; //!key.equalsIgnoreCase("Authorization");
+        };
+        HttpServerRequest request = new HttpServerRequest(
+                method, 
+                path, 
+                HttpHeaders.of(headersMap, filter), 
+                ((ServerConnection) quicConnection).getInitialClientSocketAddress(),
+                postPayloadBaos.toByteArray()
+        );
         HttpServerResponse response = new HttpServerResponse() {
             private boolean outputStarted;
             private DataFrameWriter dataFrameWriter;
 
             @Override
             public OutputStream getOutputStream() {
-                if (!outputStarted) {
+                return quicStream.getOutputStream();
+                /*if (!outputStarted) {
                     HeadersFrame headersFrame = new HeadersFrame(HeadersFrame.PSEUDO_HEADER_STATUS, Integer.toString(status()));
                     OutputStream outputStream = quicStream.getOutputStream();
                     try {
@@ -162,6 +233,7 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
                     dataFrameWriter = new DataFrameWriter(quicStream.getOutputStream());
                 }
                 return dataFrameWriter;
+                */
             }
 
             @Override

@@ -64,7 +64,10 @@ public class Sample {
 
         try {
             long start = System.currentTimeMillis();
-            HttpResponse<String> httpResponse = client.send(request, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> httpResponse = client.send(
+                    request, 
+                    HttpResponse.BodyHandlers.ofString()
+            );
             long end = System.currentTimeMillis();
             reportResult(httpResponse, end - start);
         }
