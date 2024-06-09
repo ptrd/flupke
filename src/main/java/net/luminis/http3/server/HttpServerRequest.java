@@ -19,6 +19,7 @@
 package net.luminis.http3.server;
 
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.HttpHeaders;
 import java.time.Instant;
@@ -30,13 +31,32 @@ public class HttpServerRequest {
     private final String path;
     private final HttpHeaders headers;
     private final InetAddress clientAddress;
+    private final InetSocketAddress clientSocketAddress;
     private final Instant requestTime;
+    private byte[] postPayload;
 
     public HttpServerRequest(String method, String path, HttpHeaders headers, InetAddress clientAddress) {
         this.method = method;
         this.path = path;
         this.headers = headers;
         this.clientAddress = clientAddress;
+        requestTime = Instant.now();
+        this.clientSocketAddress = null;
+    }
+
+    public HttpServerRequest(
+            String method, 
+            String path, 
+            HttpHeaders headers, 
+            InetSocketAddress clientSocketAddress,
+            byte[] postPayload
+    ) {
+        this.method = method;
+        this.path = path;
+        this.headers = headers;
+        this.postPayload = postPayload;
+        this.clientSocketAddress = clientSocketAddress;
+        this.clientAddress = clientSocketAddress.getAddress();
         requestTime = Instant.now();
     }
 
@@ -56,7 +76,15 @@ public class HttpServerRequest {
         return clientAddress;
     }
 
+    public InetSocketAddress clientSocketAddress() {
+        return clientSocketAddress;
+    }
+
     public Instant time() {
         return requestTime;
+    }
+
+    public byte[] getPostPayload() {
+        return postPayload;
     }
 }

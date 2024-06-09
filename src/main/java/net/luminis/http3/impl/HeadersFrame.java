@@ -112,10 +112,16 @@ public class HeadersFrame extends Http3Frame {
 
     private void addHeaders(List<Map.Entry<String, String>> qpackHeaders) {
         httpHeaders.map().entrySet().forEach(entry -> {
-            String value = entry.getValue().stream().collect(Collectors.joining(","));
+            String headerName = entry.getKey().toLowerCase();
+            entry.getValue().forEach(headerValue -> {
+                qpackHeaders.add(new AbstractMap.SimpleEntry<>(headerName, headerValue));
+            });
+            /** Original code */
+            /* *String value = entry.getValue().stream().collect(Collectors.joining(","));
             // https://tools.ietf.org/html/draft-ietf-quic-http-28#4.1.1
             // "As in HTTP/2, characters in field names MUST be converted to lowercase prior to their encoding."
             qpackHeaders.add(new AbstractMap.SimpleEntry<>(entry.getKey().toLowerCase(), value));
+            */
         });
     }
 
