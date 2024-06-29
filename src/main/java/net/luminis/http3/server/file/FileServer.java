@@ -28,7 +28,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.file.Files;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.regex.Matcher;
@@ -36,7 +35,10 @@ import java.util.regex.Pattern;
 
 
 /**
- * A simple file serving http request handler.
+ * A simple file serving http request handler. It serves files from a given 'www' directory.
+ * And when a given request path is a number followed by 'K' or 'M', and is not found in the www directory,
+ * it will respond with a file of the specified size.
+ * Each request is logged in the standard Apache Access Log format to standard out.
  */
 public class FileServer implements HttpRequestHandler {
 
