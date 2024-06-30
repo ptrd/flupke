@@ -19,7 +19,6 @@
 package net.luminis.http3.sample;
 
 import net.luminis.http3.server.Http3ApplicationProtocolFactory;
-import net.luminis.http3.server.file.FileServer;
 import net.luminis.quic.core.Version;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.server.ServerConnectionConfig;

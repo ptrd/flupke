@@ -18,8 +18,8 @@
  */
 package net.luminis.http3.sample.kwik;
 
+import net.luminis.http3.sample.FileServer;
 import net.luminis.http3.server.Http3ApplicationProtocolFactory;
-import net.luminis.http3.server.file.FileServer;
 
 import java.io.File;
 import java.util.Objects;

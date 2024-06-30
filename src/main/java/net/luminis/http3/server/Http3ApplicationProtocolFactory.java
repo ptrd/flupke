@@ -19,7 +19,7 @@
 package net.luminis.http3.server;
 
 
-import net.luminis.http3.server.file.FileServer;
+import net.luminis.http3.sample.FileServer;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.server.ApplicationProtocolConnection;
