@@ -40,6 +40,11 @@ public class Http3ApplicationProtocolFactory implements ApplicationProtocolConne
         executorService = Executors.newCachedThreadPool(new DaemonThreadFactory("http3-connection"));
     }
 
+    /**
+     * @deprecated
+     * @param wwwDir
+     */
+    @Deprecated
     public Http3ApplicationProtocolFactory(File wwwDir) {
         if (wwwDir == null) {
             throw new IllegalArgumentException();
