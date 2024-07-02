@@ -22,7 +22,7 @@ import net.luminis.http3.impl.FlupkeVersion;
 import net.luminis.http3.server.HttpRequestHandler;
 import net.luminis.http3.server.HttpServerRequest;
 import net.luminis.http3.server.HttpServerResponse;
-import net.luminis.quic.run.KwikVersion;
+import net.luminis.quic.KwikVersion;
 
 import java.io.File;
 import java.io.FileInputStream;

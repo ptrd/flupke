@@ -19,7 +19,7 @@
 package net.luminis.http3.sample;
 
 import net.luminis.http3.server.Http3ApplicationProtocolFactory;
-import net.luminis.quic.core.Version;
+import net.luminis.quic.QuicConnection;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.server.ServerConnectionConfig;
 import net.luminis.quic.server.ServerConnector;
@@ -99,7 +99,7 @@ public class Http3FileServer {
         ServerConnector serverConnector = ServerConnector.builder()
                 .withPort(port)
                 .withCertificate(new FileInputStream(certificate), new FileInputStream(key))
-                .withSupportedVersions(List.of(Version.QUIC_version_1))
+                .withSupportedVersions(List.of(QuicConnection.QuicVersion.V1))
                 .withConfiguration(serverConnectionConfig)
                 .withLogger(log)
                 .build();
