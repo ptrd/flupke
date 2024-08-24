@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021, 2022, 2023 Peter Doornbosch
+ * Copyright © 2021, 2022, 2023, 2024 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *
@@ -16,19 +16,18 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.http3.server.file;
+package net.luminis.http3.sample;
 
 import net.luminis.http3.impl.FlupkeVersion;
 import net.luminis.http3.server.HttpRequestHandler;
 import net.luminis.http3.server.HttpServerRequest;
 import net.luminis.http3.server.HttpServerResponse;
-import net.luminis.quic.run.KwikVersion;
+import net.luminis.quic.KwikVersion;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.file.Files;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.regex.Matcher;
@@ -36,7 +35,10 @@ import java.util.regex.Pattern;
 
 
 /**
- * A simple file serving http request handler.
+ * A simple file serving http request handler. It serves files from a given 'www' directory.
+ * And when a given request path is a number followed by 'K' or 'M', and is not found in the www directory,
+ * it will respond with a file of the specified size.
+ * Each request is logged in the standard Apache Access Log format to standard out.
  */
 public class FileServer implements HttpRequestHandler {
 

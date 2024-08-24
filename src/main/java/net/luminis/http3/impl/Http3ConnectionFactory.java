@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020, 2021, 2022, 2023 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021, 2022, 2023, 2024 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *
@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static net.luminis.http3.core.Http3ClientConnection.DEFAULT_CONNECT_TIMEOUT;
 import static net.luminis.http3.core.Http3ClientConnection.DEFAULT_HTTP3_PORT;
 
 
@@ -98,7 +99,7 @@ public class Http3ConnectionFactory {
     private Http3ClientConnection createConnection(UdpAddress address) {
         Http3ClientConnection http3Connection;
         try {
-            Duration connectTimeout = http3Client.connectTimeout().orElse(Http3ClientConnectionImpl.DEFAULT_CONNECT_TIMEOUT);
+            Duration connectTimeout = http3Client.connectTimeout().orElse(DEFAULT_CONNECT_TIMEOUT);
             http3Connection = new Http3ClientConnectionImpl(address.host, address.port, connectTimeout, http3Client, http3Client.getLogger());
         } catch (IOException e) {
             throw new RuntimeException(e);

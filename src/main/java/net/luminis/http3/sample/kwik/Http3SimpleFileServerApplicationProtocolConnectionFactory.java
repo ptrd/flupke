@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021, 2022, 2023, 2024 Peter Doornbosch
+ * Copyright © 2024 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *
@@ -16,21 +16,21 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.http3;
+package net.luminis.http3.sample.kwik;
 
-import net.luminis.http3.impl.Http3SingleConnectionFactory;
-import net.luminis.quic.QuicConnection;
+import net.luminis.http3.sample.FileServer;
+import net.luminis.http3.server.Http3ApplicationProtocolFactory;
 
-import java.time.Duration;
+import java.io.File;
+import java.util.Objects;
 
 /**
- * A Http Client that uses a single QUIC connection for all its HTTP3 requests.
+ * A simple HTTP3 file serving ApplicationProtocolConnectionFactory that serves files from a given 'www' directory.
+ * Is used as a plugin by the Kwik sample server application.
  */
-public class Http3SingleConnectionClient extends Http3Client {
+public class Http3SimpleFileServerApplicationProtocolConnectionFactory extends Http3ApplicationProtocolFactory {
 
-    public Http3SingleConnectionClient(QuicConnection quicConnection, Duration connectTimeout, Long receiveBufferSize) {
-        super(connectTimeout, receiveBufferSize, false, 0, 0, null);
-
-        http3ConnectionFactory = new Http3SingleConnectionFactory(quicConnection);
+    public Http3SimpleFileServerApplicationProtocolConnectionFactory(File wwwDir) {
+        super(new FileServer(Objects.requireNonNull(wwwDir)));
     }
 }

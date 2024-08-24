@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020, 2021, 2022, 2023 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021, 2022, 2023, 2024 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *
@@ -29,6 +29,17 @@ import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.concurrent.Executor;
 
+/**
+ * A builder of  {@linkplain Http3Client HTTP/3 Clients}.
+ * <p>
+ * This builder is intended to work mostly the same as the standard {@link HttpClient.Builder}, but not all methods are
+ * (yet) implemented.
+ * <p>
+ * Notable differences:
+ * <ul>the default connection timeout is 35 seconds; for the standard {@link HttpClient} the default connection
+ * timeout is platform dependent, but typically between 40 and 150 seconds.
+ * </ul>
+ */
 public class Http3ClientBuilder implements HttpClient.Builder {
 
     private Duration connectTimeout;

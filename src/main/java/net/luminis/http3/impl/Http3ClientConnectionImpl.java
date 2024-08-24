@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020, 2021, 2022, 2023 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021, 2022, 2023, 2024 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *
@@ -52,8 +52,6 @@ import java.util.function.Function;
 
 
 public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Http3ClientConnection {
-
-    public static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(5);
 
     private InputStream serverPushStream;
     private Statistics connectionStats;

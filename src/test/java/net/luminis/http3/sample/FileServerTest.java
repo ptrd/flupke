@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021, 2022, 2023 Peter Doornbosch
+ * Copyright © 2021, 2022, 2023, 2024 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *
@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.http3.server.file;
+package net.luminis.http3.sample;
 
 import net.luminis.http3.server.HttpServerRequest;
 import net.luminis.http3.server.HttpServerResponse;

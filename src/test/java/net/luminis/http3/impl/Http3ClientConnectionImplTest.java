@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020, 2021, 2022, 2023 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021, 2022, 2023, 2024 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *
@@ -23,6 +23,7 @@ import net.luminis.http3.core.GenericCapsule;
 import net.luminis.http3.core.Http3ClientConnection;
 import net.luminis.http3.core.HttpError;
 import net.luminis.http3.core.HttpStream;
+import net.luminis.http3.test.ByteUtils;
 import net.luminis.http3.test.FieldSetter;
 import net.luminis.http3.test.Http3ClientConnectionBuilder;
 import net.luminis.qpack.Decoder;
@@ -30,7 +31,6 @@ import net.luminis.qpack.Encoder;
 import net.luminis.quic.QuicClientConnection;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.generic.VariableLengthInteger;
-import net.luminis.tls.util.ByteUtils;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.invocation.InvocationOnMock;

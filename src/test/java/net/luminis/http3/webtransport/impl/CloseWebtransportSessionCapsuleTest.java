@@ -18,7 +18,7 @@
  */
 package net.luminis.http3.webtransport.impl;
 
-import net.luminis.tls.util.ByteUtils;
+import net.luminis.http3.test.ByteUtils;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;

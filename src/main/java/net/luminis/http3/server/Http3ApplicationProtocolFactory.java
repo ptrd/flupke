@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021, 2022, 2023 Peter Doornbosch
+ * Copyright © 2021, 2022, 2023, 2024 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *
@@ -19,7 +19,7 @@
 package net.luminis.http3.server;
 
 
-import net.luminis.http3.server.file.FileServer;
+import net.luminis.http3.sample.FileServer;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.server.ApplicationProtocolConnection;
@@ -40,6 +40,11 @@ public class Http3ApplicationProtocolFactory implements ApplicationProtocolConne
         executorService = Executors.newCachedThreadPool(new DaemonThreadFactory("http3-connection"));
     }
 
+    /**
+     * @deprecated
+     * @param wwwDir
+     */
+    @Deprecated
     public Http3ApplicationProtocolFactory(File wwwDir) {
         if (wwwDir == null) {
             throw new IllegalArgumentException();

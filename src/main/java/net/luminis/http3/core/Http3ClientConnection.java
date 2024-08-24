@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023 Peter Doornbosch
+ * Copyright © 2023, 2024 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *
@@ -28,7 +28,17 @@ import java.util.function.Consumer;
 
 public interface Http3ClientConnection extends Http3Connection {
 
-    static final int DEFAULT_HTTP3_PORT = 443;
+    /**
+     * The default connect timeout for HTTP/3 connections.
+     * <p>
+     * The default connect timeout for the standard {@link java.net.http.HttpClient} is platform dependent, but
+     * typically between 40 and 150 seconds.
+     * QUIC handshakes start with a PTO of 1 second, so probes are sent at approx. 1, 3, 7, 15, 31, 63, 127, ...
+     * seconds after the first packet is sent; the value of 35 seconds is chosen to allow for 5 probes.
+     */
+    Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(35);
+
+    int DEFAULT_HTTP3_PORT = 443;
 
     void setReceiveBufferSize(long receiveBufferSize);
 
