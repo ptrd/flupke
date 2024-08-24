@@ -52,8 +52,6 @@ import java.util.function.Function;
 
 public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Http3ClientConnection {
 
-    public static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(5);
-
     private InputStream serverPushStream;
     private Statistics connectionStats;
     private boolean initialized;

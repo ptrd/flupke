@@ -59,7 +59,7 @@ public class Sample {
 
         HttpClient client = ((Http3ClientBuilder) Http3Client.newBuilder())
                 .logger(stdoutLogger)
-                .connectTimeout(Duration.ofSeconds(3))
+                .connectTimeout(Duration.ofSeconds(4))
                 .build();
 
         try {
