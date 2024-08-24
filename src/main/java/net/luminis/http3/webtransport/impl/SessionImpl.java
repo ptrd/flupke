@@ -40,8 +40,14 @@ import static net.luminis.http3.webtransport.Constants.*;
 
 public class SessionImpl implements Session {
 
+    private enum State {
+        OPEN,
+        CLOSED
+    }
+
     private final Http3Connection http3Connection;
     private final long sessionId;
+    private State state;
     private Consumer<WebTransportStream> unidirectionalStreamReceiveHandler;
     private Consumer<WebTransportStream> bidirectionalStreamReceiveHandler;
     private BiConsumer<Long, String> sessionTerminatedEventListener;
@@ -52,6 +58,8 @@ public class SessionImpl implements Session {
                 Consumer<WebTransportStream> unidirectionalStreamHandler, Consumer<WebTransportStream> bidirectionalStreamHandler) {
         this.http3Connection = http3Connection;
         sessionId = connectStream.getStreamId();
+
+        state = State.OPEN;
 
         unidirectionalStreamReceiveHandler = unidirectionalStreamHandler;
         bidirectionalStreamReceiveHandler = bidirectionalStreamHandler;
@@ -89,6 +97,8 @@ public class SessionImpl implements Session {
 
     @Override
     public WebTransportStream createUnidirectionalStream() throws IOException {
+        checkState();
+
         // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-unidirectional-streams
         // "The HTTP/3 unidirectional stream type SHALL be 0x54. The body of the stream SHALL be the stream type,
         //  followed by the session ID, encoded as a variable-length integer, followed by the user-specified stream data."
@@ -100,6 +110,8 @@ public class SessionImpl implements Session {
 
     @Override
     public WebTransportStream createBidirectionalStream() throws IOException {
+        checkState();
+
         HttpStream httpStream = http3Connection.createBidirectionalStream();
         // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-bidirectional-streams
         // "The signal value, 0x41, is used by clients and servers to open a bidirectional WebTransport stream."
@@ -108,6 +120,12 @@ public class SessionImpl implements Session {
         sendingStreams.add(httpStream);
         receivingStreams.add(httpStream);
         return wrap(httpStream);
+    }
+
+    private void checkState() throws IOException {
+        if (state != State.OPEN) {
+            throw new IOException("Session is closed");
+        }
     }
 
     @Override
@@ -147,9 +165,18 @@ public class SessionImpl implements Session {
     }
 
     void closed(long applicationErrorCode, String applicationErrorMessage) {
+        // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-session-termination
+        // "Upon learning that the session has been terminated, the endpoint MUST reset the send side and abort reading
+        //  on the receive side of all of the streams associated with the session (see Section 2.4 of [RFC9000]) using
+        //  the WEBTRANSPORT_SESSION_GONE error code; it MUST NOT send any new datagrams or open any new streams."
+        stopSending();
         resetSenders();
         abortReading();
         sessionTerminatedEventListener.accept(applicationErrorCode, applicationErrorMessage);
+    }
+
+    private void stopSending() {
+        state = State.CLOSED;
     }
 
     private void resetSenders() {

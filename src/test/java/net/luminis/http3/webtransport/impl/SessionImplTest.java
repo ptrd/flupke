@@ -41,6 +41,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -401,6 +402,68 @@ class SessionImplTest {
         // Then
         verify(bidirectionalHttpStream).resetStream(anyLong());
         verify(bidirectionalHttpStream).abortReading(anyLong());
+    }
+
+    @Test
+    void onSessionUnidirectionalStreamCanBeOpened() throws Exception {
+        // Given
+        InputStream connectStream = new WriteableByteArrayInputStream();
+        Http3Client client = builder
+                .withCapsuleProtocolStream(connectStream)
+                .buildClient();
+        Session session = factory.createSession(client, defaultWebtransportUri);
+        // Processing connect stream happens async, so give other thread a chance to process
+        Thread.sleep(10);
+
+        // When
+        WebTransportStream unidirectionalStream = session.createUnidirectionalStream();
+
+        // Then
+        assertThat(unidirectionalStream).isNotNull();
+    }
+
+    @Test
+    void withClosedSessionNoNewUnidirectionalStreamCanBeOpened() throws Exception {
+        // Given
+        InputStream connectStream = new WriteableByteArrayInputStream();
+        Http3Client client = builder
+                .withCapsuleProtocolStream(connectStream)
+                .buildClient();
+        Session session = factory.createSession(client, defaultWebtransportUri);
+        // Processing connect stream happens async, so give other thread a chance to process
+        Thread.sleep(10);
+
+        // When
+        connectStream.close();
+        // Processing connect stream happens async, so give other thread a chance to process
+        Thread.sleep(10);
+
+        // Then
+        assertThatThrownBy(() -> session.createUnidirectionalStream())
+                .isInstanceOf(IOException.class)
+                .hasMessage("Session is closed");
+    }
+
+    @Test
+    void withClosedSessionNoNewBidirectionalStreamCanBeOpened() throws Exception {
+        // Given
+        InputStream connectStream = new WriteableByteArrayInputStream();
+        Http3Client client = builder
+                .withCapsuleProtocolStream(connectStream)
+                .buildClient();
+        Session session = factory.createSession(client, defaultWebtransportUri);
+        // Processing connect stream happens async, so give other thread a chance to process
+        Thread.sleep(10);
+
+        // When
+        connectStream.close();
+        // Processing connect stream happens async, so give other thread a chance to process
+        Thread.sleep(10);
+
+        // Then
+        assertThatThrownBy(() -> session.createBidirectionalStream())
+                .isInstanceOf(IOException.class)
+                .hasMessage("Session is closed");
     }
 
     private static HttpStream mockHttpStream() {
