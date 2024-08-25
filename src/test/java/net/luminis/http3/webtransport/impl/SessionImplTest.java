@@ -480,6 +480,26 @@ class SessionImplTest {
         verify(builder.getCapsuleProtocolStream()).sendAndClose(argThat(capsule ->
                 ((CloseWebtransportSessionCapsule) capsule).getApplicationErrorCode() == 0));
     }
+
+    @Test
+    void whenReceivingCloseConnectStreamMustBeClosed() throws Exception {
+        // Given
+        WriteableByteArrayInputStream connectStream = new WriteableByteArrayInputStream();
+        Http3Client client = builder
+                .withCapsuleProtocolStream(connectStream)
+                .buildClient();
+
+        Session session = factory.createSession(client, defaultWebtransportUri, null, null);
+
+        // When
+        String closeWebtransportSessionCapsuleBinary = "68430400000000";
+        connectStream.write(ByteUtils.hexToBytes(closeWebtransportSessionCapsuleBinary));
+        // Processing connect stream happens async, so give other thread a chance to process
+        Thread.sleep(10);
+
+        // Then
+        verify(builder.getCapsuleProtocolStream()).close();
+    }
     
     private static HttpStream mockHttpStream() {
         HttpStream bidirectionalHttpStream = mock(HttpStream.class);

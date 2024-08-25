@@ -192,6 +192,13 @@ public class SessionImpl implements Session {
         stopSending();
         resetSenders();
         abortReading();
+        // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-session-termination
+        // "The recipient MUST close the stream upon receiving a FIN. "
+        try {
+            connectStream.close();
+        }
+        catch (IOException e) {}
+
         sessionTerminatedEventListener.accept(applicationErrorCode, applicationErrorMessage);
     }
 
