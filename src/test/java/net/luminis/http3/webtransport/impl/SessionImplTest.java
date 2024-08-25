@@ -20,6 +20,7 @@ package net.luminis.http3.webtransport.impl;
 
 import net.luminis.http3.Http3Client;
 import net.luminis.http3.core.Http3ClientConnection;
+import net.luminis.http3.core.HttpError;
 import net.luminis.http3.core.HttpStream;
 import net.luminis.http3.test.ByteUtils;
 import net.luminis.http3.test.WriteableByteArrayInputStream;
@@ -53,8 +54,7 @@ class SessionImplTest {
 
     @BeforeEach
     void setupDefaults() {
-        defaultWebtransportUri = URI.create("https://example.com/webtransport");
-        factory = new SessionFactoryImpl();
+        defaultWebtransportUri = URI.create("https://example.com:443/webtransport");
         builder = new MockHttpConnectionBuilder();
     }
 
@@ -63,7 +63,7 @@ class SessionImplTest {
         // Given
         Http3Client client = builder
                 .buildClient();
-        Session session = factory.createSession(client, defaultWebtransportUri);
+        Session session = createSessionWith(client);
 
         // When
         WebTransportStream wtUnidirectionalStream = session.createUnidirectionalStream();
@@ -80,7 +80,7 @@ class SessionImplTest {
         Http3Client client = builder
                 .withUnidirectionalStreamInputOuput(output)
                 .buildClient();
-        Session session = factory.createSession(client, defaultWebtransportUri);
+        Session session = createSessionWith(client);
 
         // When
         WebTransportStream wtUnidirectionalStream = session.createUnidirectionalStream();
@@ -99,7 +99,7 @@ class SessionImplTest {
                 .withBidirectionalStreamInputOuput(new ByteArrayInputStream(new byte[0]), output)
                 .buildClient();
 
-        Session session = factory.createSession(client, defaultWebtransportUri);
+        Session session = createSessionWith(client);
 
         // When
         WebTransportStream wtUnidirectionalStream = session.createBidirectionalStream();
@@ -120,7 +120,7 @@ class SessionImplTest {
                 .withBidirectionalStreamInputOuput(new ByteArrayInputStream(new byte[0]), output)
                 .buildClient();
 
-        Session session = factory.createSession(client, defaultWebtransportUri);
+        Session session = createSessionWith(client);
 
         // When
         WebTransportStream wtUnidirectionalStream = session.createBidirectionalStream();
@@ -137,7 +137,7 @@ class SessionImplTest {
         Http3Client client = builder
                 .withCapsuleProtocolStream(createOpenInputStream())
                 .buildClient();
-        Session session = factory.createSession(client, defaultWebtransportUri);
+        Session session = createSessionWith(client);
 
         Consumer<HttpStream> handler = captureHttpConnectionUnidirectionalStreamHandler(builder.getHttp3connection());
 
@@ -167,7 +167,7 @@ class SessionImplTest {
         Consumer<WebTransportStream> unidirectionalStreamHandler = stream -> {
             receivedMessage.set(readStringFrom(stream.getInputStream()));
         };
-        factory.createSession(client, new URI("http://example.com/webtransport"), unidirectionalStreamHandler, s -> {});
+        createSessionWith(client, unidirectionalStreamHandler, s -> {});
         Consumer<HttpStream> handler = captureHttpConnectionUnidirectionalStreamHandler(builder.getHttp3connection());
 
         // When the peer sends something on a (new) unidirectional stream
@@ -186,7 +186,7 @@ class SessionImplTest {
                 .buildClient();
 
         AtomicReference<String> receivedMessage = new AtomicReference<>();
-        Session session = factory.createSession(client, defaultWebtransportUri);
+        Session session = createSessionWith(client);
         Consumer<HttpStream> handler = captureHttpConnectionBidirectionalStreamHandler(builder.getHttp3connection());
 
         // When session registers a handler for bidirectional streams
@@ -215,7 +215,7 @@ class SessionImplTest {
         Consumer<WebTransportStream> bidirectionalStreamHandler = stream -> {
             receivedMessage.set(readStringFrom(stream.getInputStream()));
         };
-        factory.createSession(client, new URI("http://example.com/webtransport"), s -> {}, bidirectionalStreamHandler);
+        createSessionWith(client, s -> {}, bidirectionalStreamHandler);
         Consumer<HttpStream> handler = captureHttpConnectionBidirectionalStreamHandler(builder.getHttp3connection());
 
         // And When the peer sends something on a (new) bidirectional stream
@@ -233,7 +233,7 @@ class SessionImplTest {
         // Given
         Http3Client client = builder
                 .buildClient();
-        factory.createSession(client, defaultWebtransportUri);
+        Session session = createSessionWith(client);
 
         Consumer<HttpStream> handler = captureHttpConnectionUnidirectionalStreamHandler(builder.getHttp3connection());
 
@@ -257,7 +257,7 @@ class SessionImplTest {
                 .buildClient();
 
         // When
-        factory.createSession(client, defaultWebtransportUri, null, null);
+        Session session = createSessionWith(client);
 
         // Then
         verify(builder.getCapsuleProtocolStream()).registerCapsuleParser(anyLong(), any(Function.class));
@@ -272,7 +272,7 @@ class SessionImplTest {
                 .buildClient();
 
         BiConsumer<Long, String> sessionTerminatedEventListener = mock(BiConsumer.class);
-        Session session = factory.createSession(client, defaultWebtransportUri, null, null);
+        Session session = createSessionWith(client);
         session.registerSessionTerminatedEventListener(sessionTerminatedEventListener);
 
         // When
@@ -294,9 +294,9 @@ class SessionImplTest {
         Http3Client client = builder
                 .withCapsuleProtocolStream(inputStream)
                 .buildClient();
+        Session session = createSessionWith(client);
 
         BiConsumer<Long, String> sessionTerminatedEventListener = mock(BiConsumer.class);
-        Session session = factory.createSession(client, defaultWebtransportUri, null, null);
         session.registerSessionTerminatedEventListener(sessionTerminatedEventListener);
 
         // When
@@ -317,9 +317,9 @@ class SessionImplTest {
         Http3Client client = builder
                 .withCapsuleProtocolStream(inputStream)
                 .buildClient();
+        Session session = createSessionWith(client);
 
         BiConsumer<Long, String> sessionTerminatedEventListener = mock(BiConsumer.class);
-        Session session = factory.createSession(client, defaultWebtransportUri, null, null);
         session.registerSessionTerminatedEventListener(sessionTerminatedEventListener);
 
         // When
@@ -344,8 +344,8 @@ class SessionImplTest {
                 .withCapsuleProtocolStream(connectStream)
                 .with(unidirectionalHttpStream)
                 .buildClient();
+        Session session = createSessionWith(client);
 
-        Session session = factory.createSession(client, defaultWebtransportUri, null, null);
         session.createUnidirectionalStream();
 
         // When
@@ -367,7 +367,7 @@ class SessionImplTest {
                 .buildClient();
 
         Consumer<WebTransportStream> unidirectionalStreamHandler = stream -> {};
-        factory.createSession(client, defaultWebtransportUri, unidirectionalStreamHandler, null);
+        createSessionWith(client, unidirectionalStreamHandler, null);
         Consumer<HttpStream> handler = captureHttpConnectionUnidirectionalStreamHandler(builder.getHttp3connection());
 
         // When the peer opens a unidirectional stream
@@ -395,7 +395,7 @@ class SessionImplTest {
                 .with(bidirectionalHttpStream)
                 .buildClient();
 
-        Session session = factory.createSession(client, defaultWebtransportUri, null, null);
+        Session session = createSessionWith(client, null, null);
         session.createBidirectionalStream();
 
         // When
@@ -415,7 +415,7 @@ class SessionImplTest {
         Http3Client client = builder
                 .withCapsuleProtocolStream(connectStream)
                 .buildClient();
-        Session session = factory.createSession(client, defaultWebtransportUri);
+        Session session = createSessionWith(client);
         // Processing connect stream happens async, so give other thread a chance to process
         Thread.sleep(10);
 
@@ -433,7 +433,7 @@ class SessionImplTest {
         Http3Client client = builder
                 .withCapsuleProtocolStream(connectStream)
                 .buildClient();
-        Session session = factory.createSession(client, defaultWebtransportUri);
+        Session session = createSessionWith(client);
         // Processing connect stream happens async, so give other thread a chance to process
         Thread.sleep(10);
 
@@ -455,7 +455,7 @@ class SessionImplTest {
         Http3Client client = builder
                 .withCapsuleProtocolStream(connectStream)
                 .buildClient();
-        Session session = factory.createSession(client, defaultWebtransportUri);
+        Session session = createSessionWith(client);
         // Processing connect stream happens async, so give other thread a chance to process
         Thread.sleep(10);
 
@@ -477,7 +477,7 @@ class SessionImplTest {
                 .withCapsuleProtocolStream(createOpenInputStream())
                 .buildClient();
         Consumer<WebTransportStream> unidirectionalStreamHandler = mock(Consumer.class);
-        SessionImpl session = (SessionImpl) factory.createSession(client, defaultWebtransportUri, unidirectionalStreamHandler, null);
+        SessionImpl session = (SessionImpl) createSessionWith(client, unidirectionalStreamHandler, null);
         session.close();
 
         // When
@@ -496,7 +496,7 @@ class SessionImplTest {
                 .withCapsuleProtocolStream(createOpenInputStream())
                 .buildClient();
         Consumer<WebTransportStream> bidirectionalStreamHandler = mock(Consumer.class);
-        SessionImpl session = (SessionImpl) factory.createSession(client, defaultWebtransportUri, null, bidirectionalStreamHandler);
+        SessionImpl session = (SessionImpl) createSessionWith(client, null, bidirectionalStreamHandler);
         session.close();
 
         // When
@@ -514,7 +514,7 @@ class SessionImplTest {
         // Given
         Http3Client client = builder
                 .buildClient();
-        Session session = factory.createSession(client, defaultWebtransportUri);
+        Session session = createSessionWith(client);
 
         // When
         session.close(0, "bye");
@@ -531,8 +531,7 @@ class SessionImplTest {
         Http3Client client = builder
                 .withCapsuleProtocolStream(connectStream)
                 .buildClient();
-
-        Session session = factory.createSession(client, defaultWebtransportUri, null, null);
+        Session session = createSessionWith(client);
 
         // When
         String closeWebtransportSessionCapsuleBinary = "68430400000000";
@@ -549,7 +548,7 @@ class SessionImplTest {
         // Given
         Http3Client client = builder
                 .buildClient();
-        Session session = factory.createSession(client, defaultWebtransportUri);
+        Session session = createSessionWith(client);
 
         // When
         session.close(0, "bye");
@@ -567,10 +566,18 @@ class SessionImplTest {
         return new WriteableByteArrayInputStream();
     }
 
+    private Session createSessionWith(Http3Client client) throws Exception {
+        return new SessionFactoryImpl(defaultWebtransportUri, client).createSession(defaultWebtransportUri);
+    }
+
     private static HttpStream mockHttpStream() {
         HttpStream bidirectionalHttpStream = mock(HttpStream.class);
         when(bidirectionalHttpStream.getOutputStream()).thenReturn(new ByteArrayOutputStream());
         return bidirectionalHttpStream;
+    }
+
+    private Session createSessionWith(Http3Client client, Consumer<WebTransportStream> unidirectionalStreamHandler, Consumer<WebTransportStream> bidirectionalStreamHandler) throws IOException, HttpError {
+        return new SessionFactoryImpl(defaultWebtransportUri, client).createSession(defaultWebtransportUri, unidirectionalStreamHandler, bidirectionalStreamHandler);
     }
 
     static Consumer<HttpStream> captureHttpConnectionUnidirectionalStreamHandler(Http3ClientConnection http3Connection) {

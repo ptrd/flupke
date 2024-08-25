@@ -31,6 +31,7 @@ import net.luminis.quic.generic.VariableLengthInteger;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.http.HttpRequest;
 import java.time.Duration;
 import java.util.Map;
@@ -40,6 +41,10 @@ import java.util.function.Consumer;
 
 import static net.luminis.http3.webtransport.Constants.STREAM_TYPE_WEBTRANSPORT;
 
+/**
+ * A factory for creating WebTransport sessions for a given server.
+ * All sessions created by this factory are associated with a single HTTP/3 connection, that is created by this factory.
+ */
 public class SessionFactoryImpl implements SessionFactory {
 
     // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-http-3-settings-parameter-r
@@ -47,20 +52,44 @@ public class SessionFactoryImpl implements SessionFactory {
     //  WebTransport-capable and the number of concurrent sessions it is willing to receive."
     private static final long SETTINGS_WEBTRANSPORT_MAX_SESSIONS = 0xc671706aL;
 
+    private final String server;
+    private final int serverPort;
+    private final Http3ClientConnection httpClientConnection;
     private Map<Long, SessionImpl> sessionRegistry = new ConcurrentHashMap<>();
     private CountDownLatch sessionCreated = new CountDownLatch(1);
 
-    @Override
-    public Session createSession(Http3Client httpClient, URI serverUri) throws IOException, HttpError {
-        return createSession(httpClient, serverUri, s -> {}, s -> {});
+    /**
+     * Creates a new WebTransport session factory for a given server.
+     * @param serverUri     server URI, only the host and port are used (i.e. path etc. is ignored)
+     * @param httpClient    the client to use for creating the HTTP/3 connection
+     * @throws IOException  if the connection to the server cannot be established
+     */
+    public SessionFactoryImpl(URI serverUri, Http3Client httpClient) throws IOException {
+        this.server = serverUri.getHost();
+        this.serverPort = serverUri.getPort();
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder(new URI("https://" + server + ":" + serverPort)).build();
+            httpClientConnection = httpClient.createConnection(request);
+        }
+        catch (URISyntaxException e) {
+            throw new IOException("Invalid server URI: " + server);
+        }
     }
 
     @Override
-    public Session createSession(Http3Client httpClient, URI serverUri, Consumer<WebTransportStream> unidirectionalStreamHandler,
+    public Session createSession(URI serverUri) throws IOException, HttpError {
+        return createSession(serverUri, s -> {}, s -> {});
+    }
+
+    @Override
+    public Session createSession(URI webTransportUri, Consumer<WebTransportStream> unidirectionalStreamHandler,
                                  Consumer<WebTransportStream> bidirectionalStreamHandler) throws IOException, HttpError {
+        if (!server.equals(webTransportUri.getHost()) || serverPort != webTransportUri.getPort()) {
+            throw new IllegalArgumentException("WebTransport URI must have the same host and port as the server URI used with the constructor");
+        }
+
         try {
-            HttpRequest request = HttpRequest.newBuilder(serverUri).build();
-            Http3ClientConnection httpClientConnection = httpClient.createConnection(request);
             // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-extended-connect-in-http-3
             // "To use WebTransport over HTTP/3, clients MUST send the SETTINGS_ENABLE_CONNECT_PROTOCOL setting with a value of "1"."
             httpClientConnection.addSettingsParameter(SETTINGS_WEBTRANSPORT_MAX_SESSIONS, 1);
@@ -75,6 +104,7 @@ public class SessionFactoryImpl implements SessionFactory {
             //  The :scheme field MUST be https. "
             String protocol = "webtransport";
             String schema = "https";
+            HttpRequest request = HttpRequest.newBuilder(webTransportUri).build();
             CapsuleProtocolStream connectStream = httpClientConnection.sendExtendedConnectWithCapsuleProtocol(request, protocol, schema, Duration.ofSeconds(5));
             long sessionId = connectStream.getStreamId();
             SessionImpl session = new SessionImpl(httpClientConnection, connectStream, unidirectionalStreamHandler, bidirectionalStreamHandler);
@@ -85,6 +115,11 @@ public class SessionFactoryImpl implements SessionFactory {
         catch (InterruptedException e) {
             throw new HttpError("HTTP CONNECT request was interrupted");
         }
+    }
+
+    @Override
+    public URI getServerUri() {
+        return URI.create("https://" + server + ":" + serverPort);
     }
 
     void handleUnidirectionalStream(HttpStream httpStream) {

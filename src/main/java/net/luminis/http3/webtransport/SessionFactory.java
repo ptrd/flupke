@@ -18,7 +18,6 @@
  */
 package net.luminis.http3.webtransport;
 
-import net.luminis.http3.Http3Client;
 import net.luminis.http3.core.HttpError;
 
 import java.io.IOException;
@@ -32,18 +31,17 @@ public interface SessionFactory {
 
     /**
      * Creates a WebTransport session given a HTTP3 client and a server URI.
-     * @param httpClient  the HTTP3 client used to send the initial HTTP3 (Extended) CONNECT request
-     * @param serverUri   the WebTransport server URI (host, port and path are all relevant)
+     *
+     * @param serverUri the WebTransport server URI (host, port and path are all relevant)
      * @return the WebTransport session
      * @throws IOException
      * @throws HttpError
      */
-    Session createSession(Http3Client httpClient, URI serverUri) throws IOException, HttpError;
+    Session createSession(URI serverUri) throws IOException, HttpError;
 
     /**
      * Creates a WebTransport session given a HTTP3 client and a server URI.
      *
-     * @param httpClient                  the HTTP3 client used to send the initial HTTP3 (Extended) CONNECT request
      * @param serverUri                   the WebTransport server URI (host, port and path are all relevant)
      * @param unidirectionalStreamHandler handler for incoming unidirectional streams
      * @param bidirectionalStreamHandler  handler for incoming bidirectional streams
@@ -51,6 +49,12 @@ public interface SessionFactory {
      * @throws IOException
      * @throws HttpError
      */
-    Session createSession(Http3Client httpClient, URI serverUri, Consumer<WebTransportStream> unidirectionalStreamHandler,
+    Session createSession(URI serverUri, Consumer<WebTransportStream> unidirectionalStreamHandler,
                           Consumer<WebTransportStream> bidirectionalStreamHandler) throws IOException, HttpError;
+
+    /**
+     * Returns the URI of the server this factory connects with.
+     * @return  server URI
+     */
+    URI getServerUri();
 }
