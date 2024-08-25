@@ -46,6 +46,7 @@ public class SessionImpl implements Session {
     }
 
     private final Http3Connection http3Connection;
+    private final CapsuleProtocolStream connectStream;
     private final long sessionId;
     private State state;
     private Consumer<WebTransportStream> unidirectionalStreamReceiveHandler;
@@ -57,6 +58,7 @@ public class SessionImpl implements Session {
     SessionImpl(Http3Connection http3Connection, CapsuleProtocolStream connectStream,
                 Consumer<WebTransportStream> unidirectionalStreamHandler, Consumer<WebTransportStream> bidirectionalStreamHandler) {
         this.http3Connection = http3Connection;
+        this.connectStream = connectStream;
         sessionId = connectStream.getStreamId();
 
         state = State.OPEN;
@@ -139,13 +141,31 @@ public class SessionImpl implements Session {
     }
 
     @Override
-    public void close(long applicationErrorCode, String applicationErrorMessage) {
+    public void close(long applicationErrorCode, String applicationErrorMessage) throws IOException {
+        // https://www.ietf.org/archive/id/draft-ietf-webtrans-overview-07.html#name-session-wide-features
+        // "Terminate the session while communicating to the peer an unsigned 32-bit error code and an error reason
+        //  string of at most 1024 bytes."
+        if (applicationErrorCode < 0 || applicationErrorCode > 0xffffffffL) {
+            throw new IllegalArgumentException("Application error code must be a 32-bit unsigned integer");
+        }
+        if (applicationErrorMessage.getBytes().length > 1024) {
+            throw new IllegalArgumentException("Error message must not be longer than 1024 bytes");
+        }
 
+        CloseWebtransportSessionCapsule capsule = new CloseWebtransportSessionCapsule((int) applicationErrorCode, applicationErrorMessage);
+        connectStream.sendAndClose(capsule);
+        stopSending();
+        resetSenders();
+        abortReading();
     }
 
     @Override
-    public void close() {
-
+    public void close() throws IOException {
+        // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-session-termination
+        // "Cleanly terminating a CONNECT stream without a CLOSE_WEBTRANSPORT_SESSION capsule SHALL be semantically
+        //  equivalent to terminating it with a CLOSE_WEBTRANSPORT_SESSION capsule that has an error code of 0 and an
+        //  empty error string."
+        close(0, "");
     }
 
     @Override

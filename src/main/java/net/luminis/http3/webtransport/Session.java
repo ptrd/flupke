@@ -71,17 +71,22 @@ public interface Session {
     void setBidirectionalStreamReceiveHandler(Consumer<WebTransportStream> handler);
 
     /**
-     * Close the session.
+     * Close the session with an error.
      * https://www.ietf.org/archive/id/draft-ietf-webtrans-overview-06.html#name-session-wide-features
      * "Any WebTransport protocol SHALL provide the following operations on the session:
-     *  terminate a session"
+     *  terminate a session: Terminate the session while communicating to the peer an unsigned 32-bit error code and an
+     *  error reason string of at most 1024 bytes."
      */
-    void close(long applicationErrorCode, String applicationErrorMessage);
+    void close(long applicationErrorCode, String applicationErrorMessage) throws IOException;
 
     /**
-     * Close the session with error code 0 and empty string as error message.
+     * Close the session with no error.
+     * https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-session-termination
+     * "Cleanly terminating a CONNECT stream without a CLOSE_WEBTRANSPORT_SESSION capsule SHALL be semantically
+     *  equivalent to terminating it with a CLOSE_WEBTRANSPORT_SESSION capsule that has an error code of 0 and an
+     *  empty error string."
      */
-    void close();
+    void close() throws IOException;
 
     /**
      * Register a listener for the session terminated event.

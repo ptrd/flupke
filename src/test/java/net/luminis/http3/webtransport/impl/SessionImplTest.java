@@ -466,6 +466,21 @@ class SessionImplTest {
                 .hasMessage("Session is closed");
     }
 
+    @Test
+    void closingSessionShouldSendCloseWebtransportSessionCapsule() throws Exception {
+        // Given
+        Http3Client client = builder
+                .buildClient();
+        Session session = factory.createSession(client, defaultWebtransportUri);
+
+        // When
+        session.close(0, "bye");
+
+        // Then
+        verify(builder.getCapsuleProtocolStream()).sendAndClose(argThat(capsule ->
+                ((CloseWebtransportSessionCapsule) capsule).getApplicationErrorCode() == 0));
+    }
+    
     private static HttpStream mockHttpStream() {
         HttpStream bidirectionalHttpStream = mock(HttpStream.class);
         when(bidirectionalHttpStream.getOutputStream()).thenReturn(new ByteArrayOutputStream());
