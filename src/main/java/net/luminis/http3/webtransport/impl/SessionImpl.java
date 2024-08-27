@@ -174,14 +174,31 @@ public class SessionImpl implements Session {
     }
 
     void handleUnidirectionalStream(HttpStream inputStream) {
-        receivingStreams.add(inputStream);
-        unidirectionalStreamReceiveHandler.accept(wrapInputOnly(inputStream));
+        if (state == State.OPEN) {
+            receivingStreams.add(inputStream);
+            unidirectionalStreamReceiveHandler.accept(wrapInputOnly(inputStream));
+        }
+        else {
+            // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-session-termination
+            // "Upon learning that the session has been terminated, the endpoint MUST reset the send side and abort
+            //  reading on the receive side of all of the streams associated with the session"
+            inputStream.abortReading(WEBTRANSPORT_SESSION_GONE);
+        }
     }
 
     void handleBidirectionalStream(HttpStream httpStream) {
-        sendingStreams.add(httpStream);
-        receivingStreams.add(httpStream);
-        bidirectionalStreamReceiveHandler.accept(wrap(httpStream));
+        if (state == State.OPEN) {
+            sendingStreams.add(httpStream);
+            receivingStreams.add(httpStream);
+            bidirectionalStreamReceiveHandler.accept(wrap(httpStream));
+        }
+        else {
+            // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-session-termination
+            // "Upon learning that the session has been terminated, the endpoint MUST reset the send side and abort
+            //  reading on the receive side of all of the streams associated with the session"
+            httpStream.abortReading(WEBTRANSPORT_SESSION_GONE);
+            httpStream.resetStream(WEBTRANSPORT_SESSION_GONE);
+        }
     }
 
     void closed(long applicationErrorCode, String applicationErrorMessage) {

@@ -135,6 +135,7 @@ class SessionImplTest {
     void whenSettingUnidirectionalStreamHandlerTheSessionStreamHandlerWillReceiveIt() throws Exception {
         // Given
         Http3Client client = builder
+                .withCapsuleProtocolStream(createOpenInputStream())
                 .buildClient();
         Session session = factory.createSession(client, defaultWebtransportUri);
 
@@ -159,6 +160,7 @@ class SessionImplTest {
     void whenCreatingSessionWithUnidirectionalStreamHandlerTheSessionStreamHandlerWillReceive() throws Exception {
         // Given
         Http3Client client = builder
+                .withCapsuleProtocolStream(createOpenInputStream())
                 .buildClient();
 
         AtomicReference<String> receivedMessage = new AtomicReference<>();
@@ -180,6 +182,7 @@ class SessionImplTest {
     void whenSettingBidirectionalStreamHandlerTheSessionStreamHandlerWillReceiveIt() throws Exception {
         // Given
         Http3Client client = builder
+                .withCapsuleProtocolStream(createOpenInputStream())
                 .buildClient();
 
         AtomicReference<String> receivedMessage = new AtomicReference<>();
@@ -205,6 +208,7 @@ class SessionImplTest {
     void whenCreatingSessionWithBidirectionalStreamHandlerTheSessionStreamHandlerWillReceive() throws Exception {
         // Given
         Http3Client client = builder
+                .withCapsuleProtocolStream(createOpenInputStream())
                 .buildClient();
 
         AtomicReference<String> receivedMessage = new AtomicReference<>();
@@ -467,6 +471,45 @@ class SessionImplTest {
     }
 
     @Test
+    void whenClosedUnidirectionalStreamHandlerIsNotCalledAnymoreWhenPeerOpensStream() throws Exception {
+        // Given
+        Http3Client client = builder
+                .withCapsuleProtocolStream(createOpenInputStream())
+                .buildClient();
+        Consumer<WebTransportStream> unidirectionalStreamHandler = mock(Consumer.class);
+        SessionImpl session = (SessionImpl) factory.createSession(client, defaultWebtransportUri, unidirectionalStreamHandler, null);
+        session.close();
+
+        // When
+        HttpStream incomingUnidirectionalStream = httpStreamWith(new ByteArrayInputStream(new byte[0]));
+        session.handleUnidirectionalStream(incomingUnidirectionalStream);
+
+        // Then
+        verify(unidirectionalStreamHandler, never()).accept(any());
+        verify(incomingUnidirectionalStream).abortReading(anyLong());
+    }
+
+    @Test
+    void whenClosedBidirectionalStreamHandlerIsNotCalledAnymoreWhenPeerOpensStream() throws Exception {
+        // Given
+        Http3Client client = builder
+                .withCapsuleProtocolStream(createOpenInputStream())
+                .buildClient();
+        Consumer<WebTransportStream> bidirectionalStreamHandler = mock(Consumer.class);
+        SessionImpl session = (SessionImpl) factory.createSession(client, defaultWebtransportUri, null, bidirectionalStreamHandler);
+        session.close();
+
+        // When
+        HttpStream incomingBidirectionalStream = httpStreamWith(new ByteArrayInputStream(new byte[0]));
+        session.handleBidirectionalStream(incomingBidirectionalStream);
+
+        // Then
+        verify(bidirectionalStreamHandler, never()).accept(any());
+        verify(incomingBidirectionalStream).abortReading(anyLong());
+        verify(incomingBidirectionalStream).resetStream(anyLong());
+    }
+
+    @Test
     void closingSessionShouldSendCloseWebtransportSessionCapsule() throws Exception {
         // Given
         Http3Client client = builder
@@ -500,7 +543,15 @@ class SessionImplTest {
         // Then
         verify(builder.getCapsuleProtocolStream()).close();
     }
-    
+
+    /**
+     * Returns an input stream that is open but empty, so any read will block forever.
+     * @return
+     */
+    private static InputStream createOpenInputStream() {
+        return new WriteableByteArrayInputStream();
+    }
+
     private static HttpStream mockHttpStream() {
         HttpStream bidirectionalHttpStream = mock(HttpStream.class);
         when(bidirectionalHttpStream.getOutputStream()).thenReturn(new ByteArrayOutputStream());
