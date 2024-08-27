@@ -703,6 +703,11 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         }
 
         @Override
+        public boolean isBidirectional() {
+            return quicStream.isBidirectional();
+        }
+
+        @Override
         public void abortReading(long errorCode) {
             quicStream.abortReading(errorCode);
         }

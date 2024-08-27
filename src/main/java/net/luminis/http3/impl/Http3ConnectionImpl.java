@@ -159,6 +159,11 @@ public class Http3ConnectionImpl implements Http3Connection {
             }
 
             @Override
+            public boolean isBidirectional() {
+                return false;
+            }
+
+            @Override
             public void abortReading(long errorCode) {
                 quicStream.abortReading(errorCode);
             }
@@ -250,6 +255,11 @@ public class Http3ConnectionImpl implements Http3Connection {
             @Override
             public long getStreamId() {
                 return quicStream.getStreamId();
+            }
+
+            @Override
+            public boolean isBidirectional() {
+                return quicStream.isBidirectional();
             }
 
             @Override

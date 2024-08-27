@@ -33,6 +33,12 @@ public interface HttpStream {
 
     long getStreamId();
 
+    default boolean isUnidirectional() {
+        return !isBidirectional();
+    }
+
+    boolean isBidirectional();
+
     void abortReading(long errorCode);
 
     void resetStream(long errorCode);
