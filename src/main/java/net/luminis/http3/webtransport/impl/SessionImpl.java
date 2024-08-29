@@ -42,13 +42,14 @@ public class SessionImpl implements Session {
 
     private enum State {
         OPEN,
+        CLOSING,
         CLOSED
     }
 
     private final Http3Connection http3Connection;
     private final CapsuleProtocolStream connectStream;
     private final long sessionId;
-    private State state;
+    private volatile State state;
     private Consumer<WebTransportStream> unidirectionalStreamReceiveHandler;
     private Consumer<WebTransportStream> bidirectionalStreamReceiveHandler;
     private BiConsumer<Long, String> sessionTerminatedEventListener;
@@ -82,7 +83,7 @@ public class SessionImpl implements Session {
                     Capsule receivedCapsule = connectStream.receive();
                     if (receivedCapsule.getType() == CLOSE_WEBTRANSPORT_SESSION) {
                         CloseWebtransportSessionCapsule webtransportClose = (CloseWebtransportSessionCapsule) receivedCapsule;
-                        closed(webtransportClose.getApplicationErrorCode(), webtransportClose.getApplicationErrorMessage());
+                        closedByPeer(webtransportClose.getApplicationErrorCode(), webtransportClose.getApplicationErrorMessage());
                         closed = true;
                     }
                 }
@@ -92,7 +93,7 @@ public class SessionImpl implements Session {
                 // "Cleanly terminating a CONNECT stream without a CLOSE_WEBTRANSPORT_SESSION capsule SHALL be
                 //  semantically equivalent to terminating it with a CLOSE_WEBTRANSPORT_SESSION capsule that has an error
                 //  code of 0 and an empty error string."
-                closed(0, "");
+                closedByPeer(0, "");
             }
         }, "webtransport-connectstream-" + sessionId).start();
     }
@@ -142,6 +143,11 @@ public class SessionImpl implements Session {
 
     @Override
     public void close(long applicationErrorCode, String applicationErrorMessage) throws IOException {
+        if (state != State.OPEN) {
+            return;
+        }
+        state = State.CLOSING;
+
         // https://www.ietf.org/archive/id/draft-ietf-webtrans-overview-07.html#name-session-wide-features
         // "Terminate the session while communicating to the peer an unsigned 32-bit error code and an error reason
         //  string of at most 1024 bytes."
@@ -201,7 +207,12 @@ public class SessionImpl implements Session {
         }
     }
 
-    void closed(long applicationErrorCode, String applicationErrorMessage) {
+    void closedByPeer(long applicationErrorCode, String applicationErrorMessage) {
+        if (state != State.OPEN) {
+            return;
+        }
+        state = State.CLOSING;
+
         // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-session-termination
         // "Upon learning that the session has been terminated, the endpoint MUST reset the send side and abort reading
         //  on the receive side of all of the streams associated with the session (see Section 2.4 of [RFC9000]) using

@@ -544,6 +544,21 @@ class SessionImplTest {
         verify(builder.getCapsuleProtocolStream()).close();
     }
 
+    @Test
+    void callingCloseWhenAlreadyClosedShouldDoNothing() throws Exception {
+        // Given
+        Http3Client client = builder
+                .buildClient();
+        Session session = factory.createSession(client, defaultWebtransportUri);
+
+        // When
+        session.close(0, "bye");
+        session.close(0, "bye");
+
+        // Then
+        verify(builder.getCapsuleProtocolStream(), times(1)).sendAndClose(any());
+    }
+
     /**
      * Returns an input stream that is open but empty, so any read will block forever.
      * @return
