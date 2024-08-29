@@ -50,6 +50,7 @@ public class SessionImpl implements Session {
     private final CapsuleProtocolStream connectStream;
     private final long sessionId;
     private volatile State state;
+    private final Thread capsuleProcessorThread;
     private Consumer<WebTransportStream> unidirectionalStreamReceiveHandler;
     private Consumer<WebTransportStream> bidirectionalStreamReceiveHandler;
     private BiConsumer<Long, String> sessionTerminatedEventListener;
@@ -76,7 +77,8 @@ public class SessionImpl implements Session {
             }
         });
 
-        new Thread(() -> receiveAndProcessCapsules(connectStream), "webtransport-connectstream-" + sessionId).start();
+        capsuleProcessorThread = new Thread(() -> receiveAndProcessCapsules(connectStream), "webtransport-connectstream-" + sessionId);
+        capsuleProcessorThread.start();
     }
 
     private void receiveAndProcessCapsules(CapsuleProtocolStream connectStream) {
@@ -165,6 +167,11 @@ public class SessionImpl implements Session {
         stopSending();
         resetSenders();
         abortReading();
+        stopReceivingCapsules();
+    }
+
+    private void stopReceivingCapsules() {
+        capsuleProcessorThread.interrupt();
     }
 
     @Override
