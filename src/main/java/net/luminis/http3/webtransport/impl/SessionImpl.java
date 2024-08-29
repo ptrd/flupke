@@ -76,26 +76,28 @@ public class SessionImpl implements Session {
             }
         });
 
-        new Thread(() -> {
-            try {
-                boolean closed = false;
-                while (! closed) {
-                    Capsule receivedCapsule = connectStream.receive();
-                    if (receivedCapsule.getType() == CLOSE_WEBTRANSPORT_SESSION) {
-                        CloseWebtransportSessionCapsule webtransportClose = (CloseWebtransportSessionCapsule) receivedCapsule;
-                        closedByPeer(webtransportClose.getApplicationErrorCode(), webtransportClose.getApplicationErrorMessage());
-                        closed = true;
-                    }
+        new Thread(() -> receiveAndProcessCapsules(connectStream), "webtransport-connectstream-" + sessionId).start();
+    }
+
+    private void receiveAndProcessCapsules(CapsuleProtocolStream connectStream) {
+        try {
+            boolean closed = false;
+            while (! closed) {
+                Capsule receivedCapsule = connectStream.receive();
+                if (receivedCapsule.getType() == CLOSE_WEBTRANSPORT_SESSION) {
+                    CloseWebtransportSessionCapsule webtransportClose = (CloseWebtransportSessionCapsule) receivedCapsule;
+                    closedByPeer(webtransportClose.getApplicationErrorCode(), webtransportClose.getApplicationErrorMessage());
+                    closed = true;
                 }
             }
-            catch (IOException e) {
-                // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-session-termination
-                // "Cleanly terminating a CONNECT stream without a CLOSE_WEBTRANSPORT_SESSION capsule SHALL be
-                //  semantically equivalent to terminating it with a CLOSE_WEBTRANSPORT_SESSION capsule that has an error
-                //  code of 0 and an empty error string."
-                closedByPeer(0, "");
-            }
-        }, "webtransport-connectstream-" + sessionId).start();
+        }
+        catch (IOException e) {
+            // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-session-termination
+            // "Cleanly terminating a CONNECT stream without a CLOSE_WEBTRANSPORT_SESSION capsule SHALL be
+            //  semantically equivalent to terminating it with a CLOSE_WEBTRANSPORT_SESSION capsule that has an error
+            //  code of 0 and an empty error string."
+            closedByPeer(0, "");
+        }
     }
 
     @Override
