@@ -34,12 +34,15 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.http.HttpRequest;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 
 import static net.luminis.http3.webtransport.Constants.STREAM_TYPE_WEBTRANSPORT;
+import static net.luminis.http3.webtransport.Constants.WEBTRANSPORT_BUFFERED_STREAM_REJECTED;
 
 /**
  * A factory for creating WebTransport sessions for a given server.
@@ -55,8 +58,11 @@ public class SessionFactoryImpl implements SessionFactory {
     private final String server;
     private final int serverPort;
     private final Http3ClientConnection httpClientConnection;
-    private Map<Long, SessionImpl> sessionRegistry = new ConcurrentHashMap<>();
-    private CountDownLatch sessionCreated = new CountDownLatch(1);
+    private final Map<Long, SessionImpl> sessionRegistry = new ConcurrentHashMap<>();
+    private final ReentrantLock registrationLock = new ReentrantLock();
+    private final Map<Long, List<HttpStream>> streamQueue = new ConcurrentHashMap<>();
+    private volatile int streamsQueued;
+    private final int maxStreamsQueued = 3;
 
     /**
      * Creates a new WebTransport session factory for a given server.
@@ -106,10 +112,8 @@ public class SessionFactoryImpl implements SessionFactory {
             String schema = "https";
             HttpRequest request = HttpRequest.newBuilder(webTransportUri).build();
             CapsuleProtocolStream connectStream = httpClientConnection.sendExtendedConnectWithCapsuleProtocol(request, protocol, schema, Duration.ofSeconds(5));
-            long sessionId = connectStream.getStreamId();
             SessionImpl session = new SessionImpl(httpClientConnection, connectStream, unidirectionalStreamHandler, bidirectionalStreamHandler);
-            sessionRegistry.put(sessionId, session);
-            sessionCreated.countDown();
+            registerSession(session);
             return session;
         }
         catch (InterruptedException e) {
@@ -124,43 +128,71 @@ public class SessionFactoryImpl implements SessionFactory {
 
     void handleUnidirectionalStream(HttpStream httpStream) {
         try {
-            waitForSession();
-
             InputStream inputStream = httpStream.getInputStream();
             long sessionId = VariableLengthInteger.parseLong(inputStream);
-            SessionImpl session = sessionRegistry.get(sessionId);
-            if (session != null) {
-                session.handleUnidirectionalStream(httpStream);
-            }
+
+            attachStreamToSessionOrQueue(sessionId, httpStream);
         }
         catch (IOException e) {
-            // Reading session id failed, nothing to do.
+            // Reading session id failed. Can only happen when QUIC connection is prematurely closed (and then it's all over).
+        }
+        catch (BufferedStreamsLimitExceededException e) {
+            httpStream.abortReading(WEBTRANSPORT_BUFFERED_STREAM_REJECTED);
         }
     }
 
     private void handleBidirectionalStream(HttpStream httpStream) {
         try {
-            waitForSession();
-
             InputStream inputStream = httpStream.getInputStream();
             long signalValue = VariableLengthInteger.parseLong(inputStream);
             if (signalValue == 0x41) {
                 long sessionId = VariableLengthInteger.parseLong(inputStream);
-                SessionImpl session = sessionRegistry.get(sessionId);
-                if (session != null) {
-                    session.handleBidirectionalStream(httpStream);
-                }
+                attachStreamToSessionOrQueue(sessionId, httpStream);
             }
         }
         catch (IOException e) {
-            // Reading session id or signal value failed, nothing to do.
+            // Reading session id failed. Can only happen when QUIC connection is prematurely closed (and then it's all over).
+        }
+        catch (BufferedStreamsLimitExceededException e) {
+            httpStream.abortReading(WEBTRANSPORT_BUFFERED_STREAM_REJECTED);
+            httpStream.resetStream(WEBTRANSPORT_BUFFERED_STREAM_REJECTED);
         }
     }
 
-    private void waitForSession() {
+    private void registerSession(SessionImpl session) {
+        registrationLock.lock();
         try {
-            sessionCreated.await();
+            sessionRegistry.put(session.getSessionId(), session);
+            // Check queue for streams that are waiting for this session
+            List<HttpStream> bufferedStreams = streamQueue.get(session.getSessionId());
+            if (bufferedStreams != null) {
+                bufferedStreams.forEach(session::handleStream);
+                streamsQueued -= bufferedStreams.size();
+            }
         }
-        catch (InterruptedException e) {}
+        finally {
+            registrationLock.unlock();
+        }
+    }
+
+    private void attachStreamToSessionOrQueue(long sessionId, HttpStream httpStream) throws BufferedStreamsLimitExceededException {
+        registrationLock.lock();
+        try {
+            SessionImpl session = sessionRegistry.get(sessionId);
+            if (session != null) {
+                session.handleStream(httpStream);
+            }
+            else {
+                if (streamsQueued >= maxStreamsQueued) {
+                    throw new BufferedStreamsLimitExceededException();
+                }
+                // Session not yet created, queue the stream
+                streamQueue.computeIfAbsent(sessionId, k -> new ArrayList<>()).add(httpStream);
+                streamsQueued++;
+            }
+        }
+        finally {
+            registrationLock.unlock();
+        }
     }
 }

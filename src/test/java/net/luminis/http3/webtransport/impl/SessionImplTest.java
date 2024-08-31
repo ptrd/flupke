@@ -150,7 +150,7 @@ class SessionImplTest {
 
         // And When the peer sends something on a (new) unidirectional stream
         String binarySessionId = "\u0004";  // (one byte, just 0x04)
-        handler.accept(httpStreamWith(new ByteArrayInputStream((binarySessionId + "Hello from peer!").getBytes(StandardCharsets.UTF_8))));
+        handler.accept(unidirectionalHttpStreamWith(new ByteArrayInputStream((binarySessionId + "Hello from peer!").getBytes(StandardCharsets.UTF_8))));
 
         // Then the session handler receives it
         assertThat(receivedMessage.get()).isEqualTo("Hello from peer!");
@@ -172,7 +172,7 @@ class SessionImplTest {
 
         // When the peer sends something on a (new) unidirectional stream
         String binarySessionId = "\u0004";  // (one byte, just 0x04)
-        handler.accept(httpStreamWith(new ByteArrayInputStream((binarySessionId + "Hello from peer!").getBytes(StandardCharsets.UTF_8))));
+        handler.accept(unidirectionalHttpStreamWith(new ByteArrayInputStream((binarySessionId + "Hello from peer!").getBytes(StandardCharsets.UTF_8))));
 
         // Then the session handler receives it
         assertThat(receivedMessage.get()).isEqualTo("Hello from peer!");
@@ -372,7 +372,7 @@ class SessionImplTest {
 
         // When the peer opens a unidirectional stream
         String binarySessionId = "\u0004";  // (one byte, just 0x04)
-        HttpStream unidirectionalHttpStream = httpStreamWith(new ByteArrayInputStream((binarySessionId + "Hello from peer!").getBytes(StandardCharsets.UTF_8)));
+        HttpStream unidirectionalHttpStream = unidirectionalHttpStreamWith(new ByteArrayInputStream((binarySessionId + "Hello from peer!").getBytes(StandardCharsets.UTF_8)));
         handler.accept(unidirectionalHttpStream);
 
         // When
@@ -594,9 +594,19 @@ class SessionImplTest {
         return handler;
     }
 
+    static HttpStream unidirectionalHttpStreamWith(ByteArrayInputStream byteArrayInputStream) {
+        HttpStream mock = mock(HttpStream.class);
+        when(mock.getInputStream()).thenReturn(byteArrayInputStream);
+        when(mock.isUnidirectional()).thenReturn(true);
+        when(mock.isBidirectional()).thenReturn(false);
+
+        return mock;
+    }
     static HttpStream httpStreamWith(ByteArrayInputStream byteArrayInputStream) {
         HttpStream mock = mock(HttpStream.class);
         when(mock.getInputStream()).thenReturn(byteArrayInputStream);
+        when(mock.isUnidirectional()).thenReturn(false);
+        when(mock.isBidirectional()).thenReturn(true);
         return mock;
     }
 

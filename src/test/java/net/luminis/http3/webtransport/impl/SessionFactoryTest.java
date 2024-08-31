@@ -37,12 +37,9 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.nio.charset.StandardCharsets;
-import java.util.concurrent.CountDownLatch;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import static net.luminis.http3.webtransport.impl.SessionImplTest.captureHttpConnectionBidirectionalStreamHandler;
-import static net.luminis.http3.webtransport.impl.SessionImplTest.captureHttpConnectionUnidirectionalStreamHandler;
 import static net.luminis.http3.webtransport.impl.SessionImplTest.httpStreamWith;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -145,61 +142,51 @@ class SessionFactoryTest {
     }
 
     @Test
-    void whenWebtransportServerSendsDataOnUnidirectionalStreamBeforeBeforeReturningTheConnectResponseDataShouldBeReceived() throws Exception {
-        // Given
-        CountDownLatch handlerDone = new CountDownLatch(1);  // To make the test wait for the handler to be finished.
-
-        // The action that the server will perform during the extended CONNECT request handling: (asynchronously) start a unidirectional stream and send data on it.
-        BiConsumer<Http3ClientConnection, CountDownLatch> webtransportUnidirectionStreamCreationAction = (connection, started) -> {
-            Consumer<HttpStream> handler = captureHttpConnectionUnidirectionalStreamHandler(connection);
-            String binarySessionId = "\u0004";  // (one byte, just 0x04)
-            started.countDown();
-            handler.accept(httpStreamWith(new ByteArrayInputStream((binarySessionId + "Hello uni from fast server!").getBytes(StandardCharsets.UTF_8))));
-            handlerDone.countDown();
-        };
-
-        // When: during the extended CONNECT request handling, the server immediately starts a stream and sends data on it before returning the CONNECT response
-        createMockHttp3ConnectionForExtendedConnectWithDelayedResponseAfterAction(client, webtransportUnidirectionStreamCreationAction);
-        factory = new SessionFactoryImpl(URI.create("https://example.com:443/"), client);
-
-        Consumer<WebTransportStream> unidirectionalStreamHandler = mock(Consumer.class);
-        factory.createSession(new URI("https://example.com:443/wt"), unidirectionalStreamHandler, mock(Consumer.class));
-        handlerDone.await();
-
-        // Then: the unidirectionalStreamHandler should be called with the data from the server
-        ArgumentCaptor<WebTransportStream> unidirectionalStreamHandlerCaptor = ArgumentCaptor.forClass(WebTransportStream.class);
-        verify(unidirectionalStreamHandler).accept(unidirectionalStreamHandlerCaptor.capture());
-        assertThat(new String(unidirectionalStreamHandlerCaptor.getValue().getInputStream().readAllBytes())).isEqualTo("Hello uni from fast server!");
-    }
-
-    @Test
-    void whenWebtransportServerSendsDataOnBidirectionalStreamBeforeBeforeReturningTheConnectResponseDataShouldBeReceived() throws Exception {
-        // Given
-        CountDownLatch handlerDone = new CountDownLatch(1);  // To make the test wait for the handler to be finished.
-
+    void whenWebtransportServerSendsDataBeforeBeforeReturningTheConnectResponseDataShouldBeReceived() throws Exception {
         // The action that the server will perform during the extended CONNECT request handling: (asynchronously) start a bidirectional stream and send data on it.
-        BiConsumer<Http3ClientConnection, CountDownLatch> webtransportBidirectionStreamCreationAction = (connection, started) -> {
+        Consumer<Http3ClientConnection> webtransportStreamCreationAction = (connection) -> {
             Consumer<HttpStream> handler = captureHttpConnectionBidirectionalStreamHandler(connection);
             // 0x41 is the signal value for bidirectional streams; encoded as variable length integer it is 0x4041!
             String binarySignalValue = "\u0040\u0041";
             String binarySessionId = "\u0004";  // (one byte, just 0x04)
-            started.countDown();
             handler.accept(httpStreamWith(new ByteArrayInputStream((binarySignalValue + binarySessionId + "Hello bi from fast server!").getBytes(StandardCharsets.UTF_8))));
-            handlerDone.countDown();
         };
 
         // When: during the extended CONNECT request handling, the server immediately starts a stream and sends data on it before returning the CONNECT response
-        createMockHttp3ConnectionForExtendedConnectWithDelayedResponseAfterAction(client, webtransportBidirectionStreamCreationAction);
+        createMockHttp3ConnectionForExtendedConnectWithDelayedResponseAfterAction(client, webtransportStreamCreationAction);
         factory = new SessionFactoryImpl(URI.create("https://example.com:443/"), client);
 
         Consumer<WebTransportStream> bidirectionalStreamHandler = mock(Consumer.class);
         factory.createSession(new URI("https://example.com:443/wt"), mock(Consumer.class), bidirectionalStreamHandler);
-        handlerDone.await();
 
         // Then: the bidirectionalStreamHandler should be called with the data from the server
         ArgumentCaptor<WebTransportStream> bidirectionalStreamHandlerCaptor = ArgumentCaptor.forClass(WebTransportStream.class);
         verify(bidirectionalStreamHandler).accept(bidirectionalStreamHandlerCaptor.capture());
         assertThat(new String(bidirectionalStreamHandlerCaptor.getValue().getInputStream().readAllBytes())).isEqualTo("Hello bi from fast server!");
+    }
+
+    @Test
+    void limitNumberOfStreamsIsBufferedWhenThereIsYetNoSession() throws Exception {
+        int numberOfStreams = 5;
+        Consumer<Http3ClientConnection> webtransportStreamCreationAction = (connection) -> {
+            Consumer<HttpStream> handler = captureHttpConnectionBidirectionalStreamHandler(connection);
+            for (int i = 0; i < numberOfStreams; i++) {
+                // 0x41 is the signal value for bidirectional streams; encoded as variable length integer it is 0x4041!
+                String binarySignalValue = "\u0040\u0041";
+                String binarySessionId = "\u0004";  // (one byte, just 0x04)
+                handler.accept(httpStreamWith(new ByteArrayInputStream((binarySignalValue + binarySessionId + "Hello bi from fast server!").getBytes(StandardCharsets.UTF_8))));
+            }
+        };
+
+        // When: during the extended CONNECT request handling, the server immediately starts a stream and sends data on it before returning the CONNECT response
+        createMockHttp3ConnectionForExtendedConnectWithDelayedResponseAfterAction(client, webtransportStreamCreationAction);
+        factory = new SessionFactoryImpl(URI.create("https://example.com:443/"), client);
+
+        Consumer<WebTransportStream> bidirectionalStreamHandler = mock(Consumer.class);
+        factory.createSession(new URI("https://example.com:443/wt"), mock(Consumer.class), bidirectionalStreamHandler);
+
+        int maxStreamsBuffered = 3;
+        verify(bidirectionalStreamHandler, times(maxStreamsBuffered)).accept(any(WebTransportStream.class));
     }
 
     private static Http3ClientConnection createMockHttp3ConnectionForExtendedConnect(Http3Client client) throws Exception {
@@ -210,7 +197,7 @@ class SessionFactoryTest {
         return http3connection;
     }
 
-    private Http3ClientConnection createMockHttp3ConnectionForExtendedConnectWithDelayedResponseAfterAction(Http3Client client, BiConsumer<Http3ClientConnection, CountDownLatch> action) throws Exception {
+    private Http3ClientConnection createMockHttp3ConnectionForExtendedConnectWithDelayedResponseAfterAction(Http3Client client, Consumer<Http3ClientConnection> action) throws Exception {
         // Create a simple mock connection that will return a CapsuleProtocolStream after the action has been started.
         Http3ClientConnection http3connection = mock(Http3ClientConnection.class);
         when(client.createConnection(any())).thenReturn(http3connection);
@@ -219,13 +206,8 @@ class SessionFactoryTest {
         when(http3connection.sendExtendedConnectWithCapsuleProtocol(any(), any(), any(), any())).thenReturn(capsuleProtocolStream);
 
         // Simulate the server performing the action asynchronously before returning the response to the extended CONNECT request.
-        CountDownLatch actionStartedFlag = new CountDownLatch(1);
         when(http3connection.sendExtendedConnectWithCapsuleProtocol(any(), any(), any(), any())).thenAnswer(invocation -> {
-            new Thread(() -> {
-                action.accept(http3connection, actionStartedFlag);
-            }).start();
-            actionStartedFlag.await();
-            Thread.sleep(5); // Just to "be sure" that the handler accept has reached the await() in SessionFactoryImpl.handleUnidirectionalStream()
+            action.accept(http3connection);
             return capsuleProtocolStream;
         });
         return http3connection;

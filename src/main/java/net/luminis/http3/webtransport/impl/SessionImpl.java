@@ -188,6 +188,15 @@ public class SessionImpl implements Session {
         sessionTerminatedEventListener = Objects.requireNonNull(listener);
     }
 
+    void handleStream(HttpStream httpStream) {
+        if (httpStream.isUnidirectional()) {
+            handleUnidirectionalStream(httpStream);
+        }
+        else {
+            handleBidirectionalStream(httpStream);
+        }
+    }
+
     void handleUnidirectionalStream(HttpStream inputStream) {
         if (state == State.OPEN) {
             receivingStreams.add(inputStream);
@@ -277,5 +286,9 @@ public class SessionImpl implements Session {
                 return inputStream.getInputStream();
             }
         };
+    }
+
+    public long getSessionId() {
+        return sessionId;
     }
 }

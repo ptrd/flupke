@@ -48,4 +48,12 @@ public class Constants {
      *  Description: WebTransport data stream aborted because the associated WebTransport session has been closed."
      */
     public static final long WEBTRANSPORT_SESSION_GONE = 0x170d7b68;
+
+    /**
+     * https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-http-3-error-code-registrat
+     * "WEBTRANSPORT_BUFFERED_STREAM_REJECTED
+     *  Value: 0x3994bd84
+     *  Description: WebTransport data stream rejected due to lack of associated session.
+     */
+    public static final long WEBTRANSPORT_BUFFERED_STREAM_REJECTED = 0x3994bd84;
 }
