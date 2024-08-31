@@ -112,7 +112,7 @@ public class SessionFactoryImpl implements SessionFactory {
             String schema = "https";
             HttpRequest request = HttpRequest.newBuilder(webTransportUri).build();
             CapsuleProtocolStream connectStream = httpClientConnection.sendExtendedConnectWithCapsuleProtocol(request, protocol, schema, Duration.ofSeconds(5));
-            SessionImpl session = new SessionImpl(httpClientConnection, connectStream, unidirectionalStreamHandler, bidirectionalStreamHandler);
+            SessionImpl session = new SessionImpl(httpClientConnection, connectStream, unidirectionalStreamHandler, bidirectionalStreamHandler, this);
             registerSession(session);
             return session;
         }
@@ -163,6 +163,15 @@ public class SessionFactoryImpl implements SessionFactory {
         registrationLock.lock();
         try {
             sessionRegistry.put(session.getSessionId(), session);
+        }
+        finally {
+            registrationLock.unlock();
+        }
+    }
+
+    void startSession(SessionImpl session) {
+        registrationLock.lock();
+        try {
             // Check queue for streams that are waiting for this session
             List<HttpStream> bufferedStreams = streamQueue.get(session.getSessionId());
             if (bufferedStreams != null) {

@@ -49,6 +49,7 @@ public class SessionImpl implements Session {
     private final Http3Connection http3Connection;
     private final CapsuleProtocolStream connectStream;
     private final long sessionId;
+    private final SessionFactoryImpl sessionFactory;
     private volatile State state;
     private final Thread capsuleProcessorThread;
     private Consumer<WebTransportStream> unidirectionalStreamReceiveHandler;
@@ -58,10 +59,12 @@ public class SessionImpl implements Session {
     private Queue<HttpStream> receivingStreams = new ConcurrentLinkedQueue();
 
     SessionImpl(Http3Connection http3Connection, CapsuleProtocolStream connectStream,
-                Consumer<WebTransportStream> unidirectionalStreamHandler, Consumer<WebTransportStream> bidirectionalStreamHandler) {
+                Consumer<WebTransportStream> unidirectionalStreamHandler, Consumer<WebTransportStream> bidirectionalStreamHandler,
+                SessionFactoryImpl sessionFactory) {
         this.http3Connection = http3Connection;
         this.connectStream = connectStream;
         sessionId = connectStream.getStreamId();
+        this.sessionFactory = sessionFactory;
 
         state = State.OPEN;
 
@@ -79,6 +82,11 @@ public class SessionImpl implements Session {
 
         capsuleProcessorThread = new Thread(() -> receiveAndProcessCapsules(connectStream), "webtransport-connectstream-" + sessionId);
         capsuleProcessorThread.start();
+    }
+
+    @Override
+    public void open() {
+        sessionFactory.startSession(this);
     }
 
     private void receiveAndProcessCapsules(CapsuleProtocolStream connectStream) {

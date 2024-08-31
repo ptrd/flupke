@@ -32,6 +32,8 @@ import java.util.function.Consumer;
  */
 public interface Session {
 
+    void open();
+
     /**
      * Create a unidirectional stream.
      * https://www.ietf.org/archive/id/draft-ietf-webtrans-overview-06.html#name-streams
