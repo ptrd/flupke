@@ -220,10 +220,35 @@ class SessionFactoryTest {
         assertThat(streamHandlerCalled.get()).isTrue();
     }
 
+    @Test
+    void whenReceivingStreamForSessionThatIsAlreadyClosedTheStreamShouldBeIgnored() throws Exception {
+        // Given
+        Http3ClientConnection http3connection = createMockHttp3ConnectionForExtendedConnect(client);
+        factory = new SessionFactoryImpl(URI.create("https://example.com:443/"), client);
+        Session session1 = factory.createSession(new URI("https://example.com:443/wt"));
+        session1.open();
+        session1.close();
+
+        Consumer<HttpStream> handler = captureHttpConnectionBidirectionalStreamHandler(http3connection);
+        // 0x41 is the signal value for bidirectional streams; encoded as variable length integer it is 0x4041!
+        String binarySignalValue = "\u0040\u0041";
+        String binarySessionId = "\u0004";  // (one byte, just 0x04)
+
+        // When
+        HttpStream httpStream = httpStreamWith(new ByteArrayInputStream((binarySignalValue + binarySessionId + "Hi from server!").getBytes(StandardCharsets.UTF_8)));
+        handler.accept(httpStream);
+
+        // Then
+        assertThat(session1.getSessionId()).isEqualTo(4L);
+        verify(httpStream).resetStream(anyLong());
+        verify(httpStream).abortReading(anyLong());
+    }
+
     private static Http3ClientConnection createMockHttp3ConnectionForExtendedConnect(Http3Client client) throws Exception {
         Http3ClientConnection http3connection = mock(Http3ClientConnection.class);
         when(client.createConnection(any())).thenReturn(http3connection);
         CapsuleProtocolStream capsuleProtocolStream = mock(CapsuleProtocolStream.class);
+        when(capsuleProtocolStream.getStreamId()).thenReturn(4L);  // Control stream stream ID
         when(http3connection.sendExtendedConnectWithCapsuleProtocol(any(), any(), any(), any())).thenReturn(capsuleProtocolStream);
         return http3connection;
     }

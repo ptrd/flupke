@@ -43,6 +43,7 @@ import java.util.function.Consumer;
 
 import static net.luminis.http3.webtransport.Constants.STREAM_TYPE_WEBTRANSPORT;
 import static net.luminis.http3.webtransport.Constants.WEBTRANSPORT_BUFFERED_STREAM_REJECTED;
+import static net.luminis.http3.webtransport.Constants.WEBTRANSPORT_SESSION_GONE;
 
 /**
  * A factory for creating WebTransport sessions for a given server.
@@ -63,6 +64,7 @@ public class SessionFactoryImpl implements SessionFactory {
     private final Map<Long, List<HttpStream>> streamQueue = new ConcurrentHashMap<>();
     private volatile int streamsQueued;
     private final int maxStreamsQueued = 3;
+    private volatile long latestSessionId = -1;
 
     /**
      * Creates a new WebTransport session factory for a given server.
@@ -162,6 +164,7 @@ public class SessionFactoryImpl implements SessionFactory {
     private void registerSession(SessionImpl session) {
         registrationLock.lock();
         try {
+            latestSessionId = session.getSessionId();
             sessionRegistry.put(session.getSessionId(), session);
         }
         finally {
@@ -192,6 +195,14 @@ public class SessionFactoryImpl implements SessionFactory {
                 session.handleStream(httpStream);
             }
             else {
+                if (sessionId <= latestSessionId) {
+                    // Session already closed, ignore the stream
+                    httpStream.abortReading(WEBTRANSPORT_SESSION_GONE);
+                    if (httpStream.isBidirectional()) {
+                        httpStream.resetStream(WEBTRANSPORT_SESSION_GONE);
+                    }
+                    return;
+                }
                 if (streamsQueued >= maxStreamsQueued) {
                     throw new BufferedStreamsLimitExceededException();
                 }
@@ -199,6 +210,17 @@ public class SessionFactoryImpl implements SessionFactory {
                 streamQueue.computeIfAbsent(sessionId, k -> new ArrayList<>()).add(httpStream);
                 streamsQueued++;
             }
+        }
+        finally {
+            registrationLock.unlock();
+        }
+    }
+
+    void removeSession(SessionImpl session) {
+        registrationLock.lock();
+        try {
+            sessionRegistry.remove(session.getSessionId());
+            streamQueue.remove(session.getSessionId());
         }
         finally {
             registrationLock.unlock();

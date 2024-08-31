@@ -187,6 +187,7 @@ public class SessionImpl implements Session {
         resetSenders();
         abortReading();
         stopReceivingCapsules();
+        sessionFactory.removeSession(this);
     }
 
     private void stopReceivingCapsules() {
@@ -265,6 +266,7 @@ public class SessionImpl implements Session {
         catch (IOException e) {}
 
         sessionTerminatedEventListener.accept(applicationErrorCode, applicationErrorMessage);
+        sessionFactory.removeSession(this);
     }
 
     private void stopSending() {
@@ -307,6 +309,7 @@ public class SessionImpl implements Session {
         };
     }
 
+    @Override
     public long getSessionId() {
         return sessionId;
     }

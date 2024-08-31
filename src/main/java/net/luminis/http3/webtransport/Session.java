@@ -103,4 +103,10 @@ public interface Session {
      * @param listener   event listener for the session terminated event
      */
     void registerSessionTerminatedEventListener(BiConsumer<Long, String> listener);
+
+    /**
+     * Gets the session id.
+     * @return  the session id
+     */
+    long getSessionId();
 }
