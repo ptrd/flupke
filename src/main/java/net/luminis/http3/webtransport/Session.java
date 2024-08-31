@@ -32,6 +32,10 @@ import java.util.function.Consumer;
  */
 public interface Session {
 
+    /**
+     * Opens the session, i.e. enables streams to be created and received.
+     * Must be called prior to creating streams or closing the session.
+     */
     void open();
 
     /**

@@ -567,7 +567,9 @@ class SessionImplTest {
     }
 
     private Session createSessionWith(Http3Client client) throws Exception {
-        return new SessionFactoryImpl(defaultWebtransportUri, client).createSession(defaultWebtransportUri);
+        Session session = new SessionFactoryImpl(defaultWebtransportUri, client).createSession(defaultWebtransportUri);
+        session.open();
+        return session;
     }
 
     private static HttpStream mockHttpStream() {
@@ -577,7 +579,9 @@ class SessionImplTest {
     }
 
     private Session createSessionWith(Http3Client client, Consumer<WebTransportStream> unidirectionalStreamHandler, Consumer<WebTransportStream> bidirectionalStreamHandler) throws IOException, HttpError {
-        return new SessionFactoryImpl(defaultWebtransportUri, client).createSession(defaultWebtransportUri, unidirectionalStreamHandler, bidirectionalStreamHandler);
+        Session session = new SessionFactoryImpl(defaultWebtransportUri, client).createSession(defaultWebtransportUri, unidirectionalStreamHandler, bidirectionalStreamHandler);
+        session.open();
+        return session;
     }
 
     static Consumer<HttpStream> captureHttpConnectionUnidirectionalStreamHandler(Http3ClientConnection http3Connection) {

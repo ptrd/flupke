@@ -41,6 +41,7 @@ import static net.luminis.http3.webtransport.Constants.*;
 public class SessionImpl implements Session {
 
     private enum State {
+        CREATED,
         OPEN,
         CLOSING,
         CLOSED
@@ -66,7 +67,7 @@ public class SessionImpl implements Session {
         sessionId = connectStream.getStreamId();
         this.sessionFactory = sessionFactory;
 
-        state = State.OPEN;
+        state = State.CREATED;
 
         unidirectionalStreamReceiveHandler = unidirectionalStreamHandler;
         bidirectionalStreamReceiveHandler = bidirectionalStreamHandler;
@@ -86,6 +87,10 @@ public class SessionImpl implements Session {
 
     @Override
     public void open() {
+        if (state != State.CREATED) {
+            throw new IllegalStateException("Session is already openend");
+        }
+        state = State.OPEN;
         sessionFactory.startSession(this);
     }
 
@@ -138,6 +143,9 @@ public class SessionImpl implements Session {
     }
 
     private void checkState() throws IOException {
+        if (state == State.CREATED) {
+            throw new IllegalStateException("Session is not opened yet");
+        }
         if (state != State.OPEN) {
             throw new IOException("Session is closed");
         }
@@ -155,6 +163,9 @@ public class SessionImpl implements Session {
 
     @Override
     public void close(long applicationErrorCode, String applicationErrorMessage) throws IOException {
+        if (state == State.CREATED) {
+            throw new IllegalStateException("Session is not opened yet");
+        }
         if (state != State.OPEN) {
             return;
         }
