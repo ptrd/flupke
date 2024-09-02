@@ -79,6 +79,14 @@ public class SessionFactoryImpl implements SessionFactory {
         try {
             HttpRequest request = HttpRequest.newBuilder(new URI("https://" + server + ":" + serverPort)).build();
             httpClientConnection = httpClient.createConnection(request);
+
+            // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-extended-connect-in-http-3
+            // "To use WebTransport over HTTP/3, clients MUST send the SETTINGS_ENABLE_CONNECT_PROTOCOL setting with a value of "1"."
+            httpClientConnection.addSettingsParameter(SETTINGS_WEBTRANSPORT_MAX_SESSIONS, 1);
+            httpClientConnection.connect();
+
+            httpClientConnection.registerUnidirectionalStreamType(STREAM_TYPE_WEBTRANSPORT, this::handleUnidirectionalStream);
+            httpClientConnection.registerBidirectionalStreamHandler(this::handleBidirectionalStream);
         }
         catch (URISyntaxException e) {
             throw new IOException("Invalid server URI: " + server);
@@ -98,13 +106,6 @@ public class SessionFactoryImpl implements SessionFactory {
         }
 
         try {
-            // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-extended-connect-in-http-3
-            // "To use WebTransport over HTTP/3, clients MUST send the SETTINGS_ENABLE_CONNECT_PROTOCOL setting with a value of "1"."
-            httpClientConnection.addSettingsParameter(SETTINGS_WEBTRANSPORT_MAX_SESSIONS, 1);
-            httpClientConnection.connect();
-
-            httpClientConnection.registerUnidirectionalStreamType(STREAM_TYPE_WEBTRANSPORT, this::handleUnidirectionalStream);
-            httpClientConnection.registerBidirectionalStreamHandler(this::handleBidirectionalStream);
 
             // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-creating-a-new-session
             // "In order to create a new WebTransport session, a client can send an HTTP CONNECT request.
