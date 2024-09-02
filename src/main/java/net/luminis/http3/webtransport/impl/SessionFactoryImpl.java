@@ -139,6 +139,9 @@ public class SessionFactoryImpl implements SessionFactory {
             // Reading session id failed. Can only happen when QUIC connection is prematurely closed (and then it's all over).
         }
         catch (BufferedStreamsLimitExceededException e) {
+            // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-buffering-incoming-streams-
+            // "When the number of buffered streams is exceeded, a stream SHALL be closed by sending a RESET_STREAM
+            //  and/or STOP_SENDING with the WEBTRANSPORT_BUFFERED_STREAM_REJECTED error code."
             httpStream.abortReading(WEBTRANSPORT_BUFFERED_STREAM_REJECTED);
         }
     }
@@ -156,6 +159,9 @@ public class SessionFactoryImpl implements SessionFactory {
             // Reading session id failed. Can only happen when QUIC connection is prematurely closed (and then it's all over).
         }
         catch (BufferedStreamsLimitExceededException e) {
+            // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-buffering-incoming-streams-
+            // "When the number of buffered streams is exceeded, a stream SHALL be closed by sending a RESET_STREAM
+            //  and/or STOP_SENDING with the WEBTRANSPORT_BUFFERED_STREAM_REJECTED error code."
             httpStream.abortReading(WEBTRANSPORT_BUFFERED_STREAM_REJECTED);
             httpStream.resetStream(WEBTRANSPORT_BUFFERED_STREAM_REJECTED);
         }
@@ -176,7 +182,7 @@ public class SessionFactoryImpl implements SessionFactory {
         registrationLock.lock();
         try {
             // Check queue for streams that are waiting for this session
-            List<HttpStream> bufferedStreams = streamQueue.get(session.getSessionId());
+            List<HttpStream> bufferedStreams = streamQueue.remove(session.getSessionId());
             if (bufferedStreams != null) {
                 bufferedStreams.forEach(session::handleStream);
                 streamsQueued -= bufferedStreams.size();
@@ -203,6 +209,11 @@ public class SessionFactoryImpl implements SessionFactory {
                     }
                     return;
                 }
+                // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-buffering-incoming-streams-
+                // "Similarly, a client may receive a server-initiated stream or a datagram before receiving the CONNECT
+                //  response headers from the server. To handle this case, WebTransport endpoints SHOULD buffer streams
+                //  and datagrams until those can be associated with an established session. To avoid resource exhaustion,
+                //  the endpoints MUST limit the number of buffered streams and datagrams."
                 if (streamsQueued >= maxStreamsQueued) {
                     throw new BufferedStreamsLimitExceededException();
                 }
