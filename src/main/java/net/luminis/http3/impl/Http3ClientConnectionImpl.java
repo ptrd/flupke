@@ -44,11 +44,12 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Function;
+
+import static net.luminis.http3.impl.SettingsFrame.SETTINGS_ENABLE_CONNECT_PROTOCOL;
 
 
 public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Http3ClientConnection {
@@ -57,8 +58,6 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     private Statistics connectionStats;
     private boolean initialized;
     private Encoder qpackEncoder;
-    private final CountDownLatch settingsFrameReceived;
-    private boolean settingsEnableConnectProtocol;
     private Consumer<HttpStream> bidirectionalStreamHandler;
 
     public Http3ClientConnectionImpl(String host, int port) throws IOException {
@@ -75,8 +74,6 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         quicConnection.setPeerInitiatedStreamCallback(stream -> doAsync(() -> handleIncomingStream(stream)));
 
         qpackEncoder = new Encoder();
-
-        settingsFrameReceived = new CountDownLatch(1);
     }
 
     public Http3ClientConnectionImpl(String host, int port, Encoder encoder) throws IOException {
@@ -267,20 +264,6 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         serverPushStream = stream;
     }
 
-    @Override
-    protected SettingsFrame processControlStream(InputStream controlStream) {
-        SettingsFrame settingsFrame = super.processControlStream(controlStream);
-        if (settingsFrame != null) {
-            // Read settings that only apply to client role.
-            settingsEnableConnectProtocol = settingsFrame.isSettingsEnableConnectProtocol();
-        }
-
-        // Unblock who is waiting for settings frame to be received.
-        settingsFrameReceived.countDown();
-
-        return settingsFrame;
-    }
-
     private void doAsync(Runnable task) {
         new Thread(task).start();
     }
@@ -336,7 +319,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         if (! settingsFrameReceived.await(settingsFrameTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
             throw new HttpError("No SETTINGS frame received in time.");
         }
-        if (! settingsEnableConnectProtocol) {
+        if (! isEnableConnectProtocol()) {
             throw new HttpError("Server does not support Extended Connect (RFC 9220).");
         }
 
@@ -356,12 +339,16 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         return new HttpStreamImpl(createHttpStream(headersFrame));
     }
 
+    private boolean isEnableConnectProtocol() {
+        return getSettingsParameter(SETTINGS_ENABLE_CONNECT_PROTOCOL).orElse(0L) == 1L;
+    }
+
     @Override
     public CapsuleProtocolStream sendExtendedConnectWithCapsuleProtocol(HttpRequest request, String protocol, String scheme, Duration settingsFrameTimeout) throws InterruptedException, HttpError, IOException {
         if (! settingsFrameReceived.await(settingsFrameTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
             throw new HttpError("No SETTINGS frame received in time.");
         }
-        if (! settingsEnableConnectProtocol) {
+        if (! isEnableConnectProtocol()) {
             throw new HttpError("Server does not support Extended Connect (RFC 9220).");
         }
 

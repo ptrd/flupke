@@ -35,6 +35,8 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
 
 import static net.luminis.http3.impl.SettingsFrame.QPACK_BLOCKED_STREAMS;
@@ -104,6 +106,7 @@ public class Http3ConnectionImpl implements Http3Connection {
     protected Map<Long, Consumer<HttpStream>> unidirectionalStreamHandler = new HashMap<>();
     protected final Decoder qpackDecoder;
     protected final Map<Long, Long> settingsParameters;
+    protected final CountDownLatch settingsFrameReceived;
     private final List<Long> internalSettingsParameterIds = List.of(
             (long) QPACK_MAX_TABLE_CAPACITY,
             (long) QPACK_BLOCKED_STREAMS,
@@ -115,6 +118,10 @@ public class Http3ConnectionImpl implements Http3Connection {
         this.quicConnection = quicConnection;
         qpackDecoder = new Decoder();
         settingsParameters = new HashMap<>();
+        settingsParameters.put((long) QPACK_MAX_TABLE_CAPACITY, 0L);
+        settingsParameters.put((long) QPACK_BLOCKED_STREAMS, 0L);
+
+        settingsFrameReceived = new CountDownLatch(1);
 
         registerStandardStreamHandlers();
     }
@@ -189,6 +196,11 @@ public class Http3ConnectionImpl implements Http3Connection {
             throw new IllegalArgumentException("Cannot overwrite internal settings parameter");
         }
         settingsParameters.put(identifier, value);
+    }
+
+    @Override
+    public Optional<Long> getSettingsParameter(long identifier) {
+        return Optional.ofNullable(settingsParameters.get(identifier));
     }
 
     private boolean isReservedStreamType(long streamType) {
@@ -283,7 +295,7 @@ public class Http3ConnectionImpl implements Http3Connection {
             OutputStream clientControlOutput = clientControlStream.getOutputStream();
             clientControlOutput.write(STREAM_TYPE_CONTROL_STREAM);
 
-            SettingsFrame settingsFrame = new SettingsFrame(0, 0);
+            SettingsFrame settingsFrame = new SettingsFrame();
             settingsFrame.addParameters(settingsParameters);
             ByteBuffer serializedSettings = settingsFrame.getBytes();
             clientControlStream.getOutputStream().write(serializedSettings.array(), 0, serializedSettings.limit());
@@ -300,7 +312,7 @@ public class Http3ConnectionImpl implements Http3Connection {
         }
     }
 
-    protected SettingsFrame processControlStream(InputStream controlStream) {
+    protected void processControlStream(InputStream controlStream) {
         try {
             // https://www.rfc-editor.org/rfc/rfc9114.html#name-control-streams
             // "Each side MUST initiate a single control stream at the beginning of the connection and send its SETTINGS
@@ -310,7 +322,6 @@ public class Http3ConnectionImpl implements Http3Connection {
             //  of type H3_MISSING_SETTINGS."
             if (frameType != (long) FRAME_TYPE_SETTINGS) {
                 connectionError(H3_MISSING_SETTINGS);
-                return null;
             }
             int frameLength = VariableLengthInteger.parse(controlStream);
             byte[] payload = readExact(controlStream, frameLength);
@@ -318,12 +329,13 @@ public class Http3ConnectionImpl implements Http3Connection {
             SettingsFrame settingsFrame = new SettingsFrame().parsePayload(ByteBuffer.wrap(payload));
             peerQpackMaxTableCapacity = settingsFrame.getQpackMaxTableCapacity();
             peerQpackBlockedStreams = settingsFrame.getQpackBlockedStreams();
-            return settingsFrame;
-        } catch (IOException e) {
+            settingsParameters.putAll(settingsFrame.getAllParameters());
+            settingsFrameReceived.countDown();
+        }
+        catch (IOException e) {
             // "If either control stream is closed at any point, this MUST be treated as a connection error of type
             //  H3_CLOSED_CRITICAL_STREAM."
             connectionError(H3_CLOSED_CRITICAL_STREAM);
-            return null;
         }
     }
 
