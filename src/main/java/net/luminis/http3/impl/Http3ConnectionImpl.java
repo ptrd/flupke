@@ -284,7 +284,7 @@ public class Http3ConnectionImpl implements Http3Connection {
             clientControlOutput.write(STREAM_TYPE_CONTROL_STREAM);
 
             SettingsFrame settingsFrame = new SettingsFrame(0, 0);
-            settingsFrame.addAdditionalSettings(settingsParameters);
+            settingsFrame.addParameters(settingsParameters);
             ByteBuffer serializedSettings = settingsFrame.getBytes();
             clientControlStream.getOutputStream().write(serializedSettings.array(), 0, serializedSettings.limit());
             // https://www.rfc-editor.org/rfc/rfc9114.html#name-control-streams

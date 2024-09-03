@@ -42,7 +42,7 @@ public class SettingsFrame extends Http3Frame {
     private int qpackMaxTableCapacity;
     private int qpackBlockedStreams;
     private boolean settingsEnableConnectProtocol;
-    private Map<Long, Long> additionalSettings;
+    private Map<Long, Long> settings;
 
     public SettingsFrame(int qpackMaxTableCapacity, int qpackBlockedStreams) {
         this(qpackMaxTableCapacity, qpackBlockedStreams, false);
@@ -52,7 +52,10 @@ public class SettingsFrame extends Http3Frame {
         this.qpackMaxTableCapacity = qpackMaxTableCapacity;
         this.qpackBlockedStreams = qpackBlockedStreams;
         this.settingsEnableConnectProtocol = enableConnectProtocol;
-        this.additionalSettings = new HashMap<>();
+        settings = new HashMap<>();
+        settings.put((long) QPACK_MAX_TABLE_CAPACITY, (long) qpackMaxTableCapacity);
+        settings.put((long) QPACK_BLOCKED_STREAMS, (long) qpackBlockedStreams);
+        settings.put((long) SETTINGS_ENABLE_CONNECT_PROTOCOL, enableConnectProtocol ? 1L : 0L);
     }
 
     public SettingsFrame() {
@@ -85,11 +88,7 @@ public class SettingsFrame extends Http3Frame {
                         settingsEnableConnectProtocol = true;
                     }
                 }
-                else {
-                    // https://www.rfc-editor.org/rfc/rfc9114.html#name-settings
-                    // "An implementation MUST ignore any parameter with an identifier it does not understand."
-                    additionalSettings.put(identifier, value);
-                }
+                settings.put(identifier, value);
             }
             catch (InvalidIntegerEncodingException e) {
                 throw new IOException(e);
@@ -99,22 +98,19 @@ public class SettingsFrame extends Http3Frame {
     }
 
     public ByteBuffer getBytes() {
-        ByteBuffer serializedParams = ByteBuffer.allocate(3 * 8);
+        int nrOfParams = settings.size();
+        int maxPossibleSize = nrOfParams * 2 * 8;
+        ByteBuffer serializedParams = ByteBuffer.allocate(maxPossibleSize);
 
-        serializedParams.put((byte) QPACK_MAX_TABLE_CAPACITY);
-        VariableLengthInteger.encode(qpackMaxTableCapacity, serializedParams);
-
-        serializedParams.put((byte) QPACK_BLOCKED_STREAMS);
-        VariableLengthInteger.encode(qpackBlockedStreams, serializedParams);
-
-        if (settingsEnableConnectProtocol) {
-            serializedParams.put((byte) SETTINGS_ENABLE_CONNECT_PROTOCOL);
-            VariableLengthInteger.encode(1, serializedParams);
-        }
-        additionalSettings.entrySet().forEach(entry -> {
-            VariableLengthInteger.encode(entry.getKey(), serializedParams);
-            VariableLengthInteger.encode(entry.getValue(), serializedParams);
-        });
+        settings.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .forEach(entry -> {
+                    // Only write the SETTINGS_ENABLE_CONNECT_PROTOCOL parameter if it is set to 1.
+                    if (entry.getKey() != SETTINGS_ENABLE_CONNECT_PROTOCOL || entry.getValue() == 1) {
+                        VariableLengthInteger.encode(entry.getKey(), serializedParams);
+                        VariableLengthInteger.encode(entry.getValue(), serializedParams);
+                    }
+                });
 
         int paramLength = serializedParams.position();
         ByteBuffer buffer = ByteBuffer.allocate(1 + VariableLengthInteger.bytesNeeded(paramLength) + paramLength);
@@ -136,11 +132,19 @@ public class SettingsFrame extends Http3Frame {
         return settingsEnableConnectProtocol;
     }
 
-    public void addAdditionalSettings(Map<Long, Long> settingsParameters) {
-        this.additionalSettings = settingsParameters;
+    public void addParameters(Map<Long, Long> settingsParameters) {
+        this.settings.putAll(settingsParameters);
     }
 
     public Long getParameter(long identifier) {
-        return additionalSettings.get(identifier);
+        return settings.get(identifier);
+    }
+
+    public Map<Long, Long> getAllParameters() {
+        return settings;
+    }
+
+    public void putParameter(long identifier, long value) {
+        settings.put(identifier, value);
     }
 }
