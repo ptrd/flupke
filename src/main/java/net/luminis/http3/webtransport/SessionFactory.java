@@ -57,4 +57,10 @@ public interface SessionFactory {
      * @return  server URI
      */
     URI getServerUri();
+
+    /**
+     * Returns the maximum number of concurrent sessions that the server allows.
+     * @return
+     */
+    int getMaxConcurrentSessions();
 }

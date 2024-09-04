@@ -37,10 +37,12 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.nio.charset.StandardCharsets;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
+import static net.luminis.http3.webtransport.impl.SessionFactoryImpl.SETTINGS_WEBTRANSPORT_MAX_SESSIONS;
 import static net.luminis.http3.webtransport.impl.SessionImplTest.captureHttpConnectionBidirectionalStreamHandler;
 import static net.luminis.http3.webtransport.impl.SessionImplTest.httpStreamWith;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -63,7 +65,7 @@ class SessionFactoryTest {
     @Test
     void createWebTransportSessionShouldSendExtendedConnect() throws Exception {
         // Given
-        Http3ClientConnection http3connection = createMockHttp3ConnectionForExtendedConnect(client);
+        Http3ClientConnection http3connection = createMockHttp3ConnectionForExtendedConnect(client, 10);
         factory = new SessionFactoryImpl(URI.create("https://example.com:443/"), client);
 
         // When
@@ -81,7 +83,7 @@ class SessionFactoryTest {
     @Test
     void whenExtendedConnectFailsWith404AnHttpErrorIsThrown() throws Exception {
         // Given
-        Http3ClientConnection http3connection = createMockHttp3ConnectionForExtendedConnect(client);
+        Http3ClientConnection http3connection = createMockHttp3ConnectionForExtendedConnect(client, 10);
         when(http3connection.sendExtendedConnectWithCapsuleProtocol(any(), any(), any(), any())).thenThrow(new HttpError("", 404));
         factory = new SessionFactoryImpl(URI.create("https://example.com:443/"), client);
 
@@ -96,7 +98,7 @@ class SessionFactoryTest {
     @Test
     void createWebTransportSessionShouldSetParameterBeforeHttpConnect() throws Exception {
         // Given
-        Http3ClientConnection http3connection = createMockHttp3ConnectionForExtendedConnect(client);
+        Http3ClientConnection http3connection = createMockHttp3ConnectionForExtendedConnect(client, 10);
         InOrder inOrder = inOrder(http3connection);
         factory = new SessionFactoryImpl(URI.create("https://example.com:443/"), client);
 
@@ -113,7 +115,7 @@ class SessionFactoryTest {
     @Test
     void whenCreatingSessionWebtransportStreamTypeIsRegistered() throws Exception {
         // Given
-        Http3ClientConnection http3connection = createMockHttp3ConnectionForExtendedConnect(client);
+        Http3ClientConnection http3connection = createMockHttp3ConnectionForExtendedConnect(client, 10);
         factory = new SessionFactoryImpl(URI.create("https://example.com:443/"), client);
 
         // When
@@ -124,9 +126,23 @@ class SessionFactoryTest {
     }
 
     @Test
+    void whenCreatingSessionSessionLimitShouldBeRespected() throws Exception {
+        // Given
+        Http3ClientConnection http3connection = createMockHttp3ConnectionForExtendedConnect(client, 1);
+        factory = new SessionFactoryImpl(URI.create("https://example.com:443/"), client);
+        factory.createSession(new URI("https://example.com:443/webtransport"));
+
+        assertThatThrownBy(() ->
+                // When
+                factory.createSession(new URI("https://example.com:443/webtransport")))
+                // Then
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
     void whenCreatingSessionWithHandlersTheseAreUsed() throws Exception {
         // Given
-        createMockHttp3ConnectionForExtendedConnect(client);
+        createMockHttp3ConnectionForExtendedConnect(client, 10);
         factory = new SessionFactoryImpl(URI.create("https://example.com:443/"), client);
 
         // When
@@ -223,7 +239,7 @@ class SessionFactoryTest {
     @Test
     void whenReceivingStreamForSessionThatIsAlreadyClosedTheStreamShouldBeIgnored() throws Exception {
         // Given
-        Http3ClientConnection http3connection = createMockHttp3ConnectionForExtendedConnect(client);
+        Http3ClientConnection http3connection = createMockHttp3ConnectionForExtendedConnect(client, 10);
         factory = new SessionFactoryImpl(URI.create("https://example.com:443/"), client);
         Session session1 = factory.createSession(new URI("https://example.com:443/wt"));
         session1.open();
@@ -244,12 +260,13 @@ class SessionFactoryTest {
         verify(httpStream).abortReading(anyLong());
     }
 
-    private static Http3ClientConnection createMockHttp3ConnectionForExtendedConnect(Http3Client client) throws Exception {
+    private static Http3ClientConnection createMockHttp3ConnectionForExtendedConnect(Http3Client client, long maxWebTransportSessions) throws Exception {
         Http3ClientConnection http3connection = mock(Http3ClientConnection.class);
         when(client.createConnection(any())).thenReturn(http3connection);
         CapsuleProtocolStream capsuleProtocolStream = mock(CapsuleProtocolStream.class);
         when(capsuleProtocolStream.getStreamId()).thenReturn(4L);  // Control stream stream ID
         when(http3connection.sendExtendedConnectWithCapsuleProtocol(any(), any(), any(), any())).thenReturn(capsuleProtocolStream);
+        when(http3connection.getSettingsParameter(SETTINGS_WEBTRANSPORT_MAX_SESSIONS)).thenReturn(Optional.of(maxWebTransportSessions));
         return http3connection;
     }
 
@@ -260,6 +277,7 @@ class SessionFactoryTest {
         CapsuleProtocolStream capsuleProtocolStream = mock(CapsuleProtocolStream.class);
         when(capsuleProtocolStream.getStreamId()).thenReturn(4L);  // Control stream stream ID
         when(http3connection.sendExtendedConnectWithCapsuleProtocol(any(), any(), any(), any())).thenReturn(capsuleProtocolStream);
+        when(http3connection.getSettingsParameter(SETTINGS_WEBTRANSPORT_MAX_SESSIONS)).thenReturn(Optional.of(10L));
 
         // Simulate the server performing the action asynchronously before returning the response to the extended CONNECT request.
         when(http3connection.sendExtendedConnectWithCapsuleProtocol(any(), any(), any(), any())).thenAnswer(invocation -> {

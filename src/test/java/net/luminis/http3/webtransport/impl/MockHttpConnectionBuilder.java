@@ -33,7 +33,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.http.HttpRequest;
 import java.time.Duration;
+import java.util.Optional;
 
+import static net.luminis.http3.webtransport.impl.SessionFactoryImpl.SETTINGS_WEBTRANSPORT_MAX_SESSIONS;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -52,6 +54,7 @@ public class MockHttpConnectionBuilder {
         Http3ClientConnection http3connection = buildHttp3Connection();
         Http3Client client = mock(Http3Client.class);
         when(client.createConnection(any(HttpRequest.class))).thenReturn(http3connection);
+        when(http3connection.getSettingsParameter(SETTINGS_WEBTRANSPORT_MAX_SESSIONS)).thenReturn(Optional.of(10L));
         return client;
     }
 

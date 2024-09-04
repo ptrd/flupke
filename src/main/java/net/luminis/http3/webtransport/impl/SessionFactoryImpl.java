@@ -54,7 +54,7 @@ public class SessionFactoryImpl implements SessionFactory {
     // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-http-3-settings-parameter-r
     // "The SETTINGS_WEBTRANSPORT_MAX_SESSIONS parameter indicates that the specified HTTP/3 endpoint is
     //  WebTransport-capable and the number of concurrent sessions it is willing to receive."
-    private static final long SETTINGS_WEBTRANSPORT_MAX_SESSIONS = 0xc671706aL;
+    static final long SETTINGS_WEBTRANSPORT_MAX_SESSIONS = 0xc671706aL;
 
     private final String server;
     private final int serverPort;
@@ -62,6 +62,7 @@ public class SessionFactoryImpl implements SessionFactory {
     private final Map<Long, SessionImpl> sessionRegistry = new ConcurrentHashMap<>();
     private final ReentrantLock registrationLock = new ReentrantLock();
     private final Map<Long, List<HttpStream>> streamQueue = new ConcurrentHashMap<>();
+    private final long maxSessions;
     private volatile int streamsQueued;
     private final int maxStreamsQueued = 3;
     private volatile long latestSessionId = -1;
@@ -85,6 +86,8 @@ public class SessionFactoryImpl implements SessionFactory {
             httpClientConnection.addSettingsParameter(SETTINGS_WEBTRANSPORT_MAX_SESSIONS, 1);
             httpClientConnection.connect();
 
+            maxSessions = httpClientConnection.getSettingsParameter(SETTINGS_WEBTRANSPORT_MAX_SESSIONS).orElse(0L);
+
             httpClientConnection.registerUnidirectionalStreamType(STREAM_TYPE_WEBTRANSPORT, this::handleUnidirectionalStream);
             httpClientConnection.registerBidirectionalStreamHandler(this::handleBidirectionalStream);
         }
@@ -103,6 +106,11 @@ public class SessionFactoryImpl implements SessionFactory {
                                  Consumer<WebTransportStream> bidirectionalStreamHandler) throws IOException, HttpError {
         if (!server.equals(webTransportUri.getHost()) || serverPort != webTransportUri.getPort()) {
             throw new IllegalArgumentException("WebTransport URI must have the same host and port as the server URI used with the constructor");
+        }
+        // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-limiting-the-number-of-simu
+        // "The client MUST NOT open more sessions than indicated in the server SETTINGS parameters. "
+        if (sessionRegistry.size() >= maxSessions) {
+            throw new IllegalStateException("Maximum number of sessions reached");
         }
 
         try {
@@ -127,6 +135,11 @@ public class SessionFactoryImpl implements SessionFactory {
     @Override
     public URI getServerUri() {
         return URI.create("https://" + server + ":" + serverPort);
+    }
+
+    @Override
+    public int getMaxConcurrentSessions() {
+        return (int) maxSessions;
     }
 
     void handleUnidirectionalStream(HttpStream httpStream) {
