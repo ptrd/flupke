@@ -31,6 +31,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.BiConsumer;
@@ -69,8 +70,12 @@ public class SessionImpl implements Session {
 
         state = State.CREATED;
 
-        unidirectionalStreamReceiveHandler = unidirectionalStreamHandler;
-        bidirectionalStreamReceiveHandler = bidirectionalStreamHandler;
+        unidirectionalStreamReceiveHandler = Optional.ofNullable(unidirectionalStreamHandler).orElse(stream -> {
+            System.err.println("No handler set for incoming unidirectional stream.");
+        });
+        bidirectionalStreamReceiveHandler = Optional.ofNullable(bidirectionalStreamHandler).orElse(stream -> {
+            System.err.println("No handler set for incoming bidirectional stream.");
+        });
         sessionTerminatedEventListener = (errorCode, errorMessage) -> {};
 
         connectStream.registerCapsuleParser(CLOSE_WEBTRANSPORT_SESSION, inputStream -> {
@@ -153,12 +158,12 @@ public class SessionImpl implements Session {
 
     @Override
     public void setUnidirectionalStreamReceiveHandler(Consumer<WebTransportStream> handler) {
-        unidirectionalStreamReceiveHandler = handler;
+        unidirectionalStreamReceiveHandler = Objects.requireNonNull(handler);
     }
 
     @Override
     public void setBidirectionalStreamReceiveHandler(Consumer<WebTransportStream> handler) {
-        bidirectionalStreamReceiveHandler = handler;
+        bidirectionalStreamReceiveHandler = Objects.requireNonNull(handler);
     }
 
     @Override

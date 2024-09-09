@@ -157,6 +157,21 @@ class SessionImplTest {
     }
 
     @Test
+    void settingHandlerToNullValueShouldBePrevented() throws Exception {
+        // Given
+        Http3Client client = builder
+                .withCapsuleProtocolStream(createOpenInputStream())
+                .buildClient();
+        Session session = createSessionWith(client);
+
+        assertThatThrownBy(() ->
+                // When
+                session.setUnidirectionalStreamReceiveHandler(null))
+                // Then
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
     void whenCreatingSessionWithUnidirectionalStreamHandlerTheSessionStreamHandlerWillReceive() throws Exception {
         // Given
         Http3Client client = builder
