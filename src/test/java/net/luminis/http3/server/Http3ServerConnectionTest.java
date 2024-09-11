@@ -32,6 +32,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -59,16 +60,22 @@ public class Http3ServerConnectionTest {
 
     @Test
     void handlerIsCalledWithMethodAndPathFromHeadersFrame() throws Exception {
+        // Given
         HttpRequestHandler handler = mock(HttpRequestHandler.class);
-        Http3ServerConnection http3Connection = new Http3ServerConnection(createMockQuicConnection(), handler, executor);
+        Http3ServerConnection http3Connection = new HttpConnectionBuilder()
+                .withHeaders(Map.of(":method", "GET", ":authority", "www.example.com:443", ":path", "/index.html"))
+                .withHandler(handler)
+                .buildServerConnection();
+        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData());
 
-        HeadersFrame headersFrame = createHeadersFrame("GET", new URI("https://www.example.com/index.html"));
-        http3Connection.handleHttpRequest(List.of(headersFrame), createMockQuicStream(null), new NoOpEncoder());
+        // When
+        http3Connection.handleBidirectionalStream(requestResponseStream);
 
-        verify(handler).handleRequest(argThat(req ->
-                req.method().equals("GET") &&
-                req.path().equals("/index.html")
-        ), any(HttpServerResponse.class));
+        // Then
+        verify(handler).handleRequest(
+                argThat(req ->
+                        req.method().equals("GET") && req.path().equals("/index.html")),
+                any(HttpServerResponse.class));
     }
 
     @Test
@@ -176,6 +183,22 @@ public class Http3ServerConnectionTest {
 
         // Then
         verify(quicStream).abortReading(anyLong());
+    }
+
+    private QuicStream mockQuicStreamWithInputData(byte[] inputData) {
+        QuicStream quicStream = mock(QuicStream.class);
+        when(quicStream.getInputStream()).thenReturn(new ByteArrayInputStream(inputData));
+        when(quicStream.getOutputStream()).thenReturn(mock(OutputStream.class));
+        return quicStream;
+    }
+
+    private byte[] fakeHeadersFrameData() {
+        return new byte[] {
+                0x01,
+                0x02,
+                (byte) 0xfa,
+                0x1e
+        };
     }
 
     private HeadersFrame createHeadersFrame(String method, URI uri) {
