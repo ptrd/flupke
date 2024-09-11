@@ -399,9 +399,21 @@ public class Http3ConnectionImpl implements Http3Connection {
         return frame;
     }
 
-    // https://www.rfc-editor.org/rfc/rfc9114.html#name-error-handling
-    protected void connectionError(int http3ErrorCode) {
+    protected void connectionError(long http3ErrorCode) {
+        // https://www.rfc-editor.org/rfc/rfc9114.html#name-error-handling
+        // "If an entire connection needs to be terminated, QUIC similarly provides mechanisms to communicate a reason;
+        //  see Section 5.3 of [QUIC-TRANSPORT]. This is referred to as a "connection error". Similar to stream errors,
+        //  an HTTP/3 implementation can terminate a QUIC connection and communicate the reason using an error code
+        //  from Section 8.1."
         quicConnection.close(http3ErrorCode, null);
+    }
+
+    protected void streamError(long http3ErrorCode, QuicStream quicStream) {
+        // https://www.rfc-editor.org/rfc/rfc9114.html#name-error-handling
+        // "When a stream cannot be completed successfully, QUIC allows the application to abruptly terminate (reset)
+        //  that stream and communicate a reason; see Section 2.4 of [QUIC-TRANSPORT]. This is referred to as a
+        //  "stream error". An HTTP/3 implementation can decide to close a QUIC stream and communicate the type of error."
+        quicStream.resetStream(http3ErrorCode);
     }
 
     protected byte[] readExact(InputStream inputStream, int length) throws IOException {

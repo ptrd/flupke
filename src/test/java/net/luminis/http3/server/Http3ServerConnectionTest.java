@@ -48,9 +48,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 
 public class Http3ServerConnectionTest {
@@ -63,7 +61,7 @@ public class Http3ServerConnectionTest {
         // Given
         HttpRequestHandler handler = mock(HttpRequestHandler.class);
         Http3ServerConnection http3Connection = new HttpConnectionBuilder()
-                .withHeaders(Map.of(":method", "GET", ":authority", "www.example.com:443", ":path", "/index.html"))
+                .withHeaders(Map.of(":method", "GET", ":scheme", "https", ":authority", "example.com", ":path", "/index.html"))
                 .withHandler(handler)
                 .buildServerConnection();
         QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData());
@@ -76,6 +74,108 @@ public class Http3ServerConnectionTest {
                 argThat(req ->
                         req.method().equals("GET") && req.path().equals("/index.html")),
                 any(HttpServerResponse.class));
+    }
+
+    @Test
+    void whenMandatoryPseudoHeaderMethodIsMissingResetStreamShouldBeCalled() throws Exception {
+        // Given
+        HttpRequestHandler handler = mock(HttpRequestHandler.class);
+        Http3ServerConnection http3Connection = new HttpConnectionBuilder()
+                .withHeaders(Map.of(":scheme", "https",":authority", "www.example.com:443", ":path", "/index.html"))
+                .withHandler(handler)
+                .buildServerConnection();
+        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData());
+
+        // When
+        http3Connection.handleBidirectionalStream(requestResponseStream);
+
+        // Then
+        verify(requestResponseStream).resetStream(anyLong());
+    }
+
+    @Test
+    void whenMandatoryPseudoHeaderSchemeIsMissingResetStreamShouldBeCalled() throws Exception {
+        // Given
+        HttpRequestHandler handler = mock(HttpRequestHandler.class);
+        Http3ServerConnection http3Connection = new HttpConnectionBuilder()
+                .withHeaders(Map.of(":method", "GET",":authority", "www.example.com:443", ":path", "/index.html"))
+                .withHandler(handler)
+                .buildServerConnection();
+        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData());
+
+        // When
+        http3Connection.handleBidirectionalStream(requestResponseStream);
+
+        // Then
+        verify(requestResponseStream).resetStream(anyLong());
+    }
+
+    @Test
+    void whenMandatoryPseudoHeaderPathIsMissingResetStreamShouldBeCalled() throws Exception {
+        // Given
+        HttpRequestHandler handler = mock(HttpRequestHandler.class);
+        Http3ServerConnection http3Connection = new HttpConnectionBuilder()
+                .withHeaders(Map.of(":method", "GET", ":scheme", "https", ":authority", "example.com"))
+                .withHandler(handler)
+                .buildServerConnection();
+        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData());
+
+        // When
+        http3Connection.handleBidirectionalStream(requestResponseStream);
+
+        // Then
+        verify(requestResponseStream).resetStream(anyLong());
+    }
+
+    @Test
+    void whenPseudoHeaderAuthorityIsMissingResetStreamShouldBeCalled() throws Exception {
+        // Given
+        HttpRequestHandler handler = mock(HttpRequestHandler.class);
+        Http3ServerConnection http3Connection = new HttpConnectionBuilder()
+                .withHeaders(Map.of(":method", "GET", ":scheme", "https", ":path", "/index.html"))
+                .withHandler(handler)
+                .buildServerConnection();
+        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData());
+
+        // When
+        http3Connection.handleBidirectionalStream(requestResponseStream);
+
+        // Then
+        verify(requestResponseStream).resetStream(anyLong());
+    }
+
+    @Test
+    void whenPseudoHeaderAuthorityIsMissingButHostHeaderIsPresentResetStreamShouldNotBeCalled() throws Exception {
+        // Given
+        HttpRequestHandler handler = mock(HttpRequestHandler.class);
+        Http3ServerConnection http3Connection = new HttpConnectionBuilder()
+                .withHeaders(Map.of("Host","example.com", ":method", "GET", ":scheme", "https", ":path", "/index.html"))
+                .withHandler(handler)
+                .buildServerConnection();
+        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData());
+
+        // When
+        http3Connection.handleBidirectionalStream(requestResponseStream);
+
+        // Then
+        verify(requestResponseStream, never()).resetStream(anyLong());
+    }
+
+    @Test
+    void whenPseudoHeaderAuthorityIsMissingForConnectMethodResetStreamShouldBeCalled() throws Exception {
+        // Given
+        HttpRequestHandler handler = mock(HttpRequestHandler.class);
+        Http3ServerConnection http3Connection = new HttpConnectionBuilder()
+                .withHeaders(Map.of(":method", "CONNECT"))
+                .withHandler(handler)
+                .buildServerConnection();
+        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData());
+
+        // When
+        http3Connection.handleBidirectionalStream(requestResponseStream);
+
+        // Then
+        verify(requestResponseStream).resetStream(anyLong());
     }
 
     @Test

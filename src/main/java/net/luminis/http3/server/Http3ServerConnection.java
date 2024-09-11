@@ -19,13 +19,11 @@
 package net.luminis.http3.server;
 
 import net.luminis.http3.core.HttpError;
-import net.luminis.http3.impl.DataFrame;
-import net.luminis.http3.impl.HeadersFrame;
-import net.luminis.http3.impl.Http3ConnectionImpl;
-import net.luminis.http3.impl.Http3Frame;
+import net.luminis.http3.impl.*;
 import net.luminis.qpack.Encoder;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
+import net.luminis.quic.generic.VariableLengthInteger;
 import net.luminis.quic.server.ApplicationProtocolConnection;
 import net.luminis.quic.server.ServerConnection;
 
@@ -36,7 +34,6 @@ import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.atomic.AtomicInteger;
 
 
 /**
@@ -46,8 +43,6 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
 
     public static int DEFAULT_MAX_HEADER_SIZE = 10 * 1024;
     public static int DEFAULT_MAX_DATA_SIZE = 10 * 1024 * 1024;
-
-    private static final AtomicInteger threadCount = new AtomicInteger();
 
     private final HttpRequestHandler requestHandler;
     private final InetAddress clientAddress;
@@ -77,15 +72,20 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
 
     @Override
     protected void handleBidirectionalStream(QuicStream quicStream) {
-        // https://tools.ietf.org/html/draft-ietf-quic-http-34#section-6.1
+        // https://www.rfc-editor.org/rfc/rfc9114.html#name-bidirectional-streams
         // "All client-initiated bidirectional streams are used for HTTP requests and responses."
-        // https://tools.ietf.org/html/draft-ietf-quic-http-34#section-4.1
-        // "A client sends an HTTP request on a request stream, which is a client-initiated bidirectional QUIC
-        //  stream; see Section 6.1. A client MUST send only a single request on a given stream."
         InputStream requestStream = quicStream.getInputStream();
         try {
-            List<Http3Frame> receivedFrames = parseHttp3Frames(requestStream);
-            handleHttpRequest(receivedFrames, quicStream, new Encoder());
+            HeadersFrame headersFrame = readRequestHeadersFrame(requestStream, maxHeaderSize);
+            String httpMethod = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_METHOD);
+            if (httpMethod.equals("CONNECT")) {
+                handleConnectMethod(quicStream, headersFrame);
+            }
+            else {
+                List<Http3Frame> receivedFrames = parseHttp3Frames(requestStream);
+                receivedFrames.add(headersFrame);
+                handleHttpRequest(receivedFrames, quicStream, new Encoder());
+            }
         }
         catch (IOException ioError) {
             quicStream.abortReading(H3_INTERNAL_ERROR);
@@ -94,6 +94,69 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
         catch (HttpError httpError) {
             quicStream.abortReading(H3_REQUEST_REJECTED);
             sendHttpErrorResponse(httpError.getStatusCode(), httpError.getMessage(), quicStream);
+        }
+        catch (StreamError e) {
+            streamError(e.getHttp3ErrorCode(), quicStream);
+        }
+        catch (ConnectionError e) {
+            connectionError(e.getHttp3ErrorCode());
+        }
+    }
+
+    private void handleConnectMethod(QuicStream quicStream, HeadersFrame headersFrame) {
+
+    }
+
+    HeadersFrame readRequestHeadersFrame(InputStream inputStream, long maxHeadersSize) throws IOException, HttpError, ConnectionError, StreamError {
+        long frameType = VariableLengthInteger.parseLong(inputStream);
+        // https://www.rfc-editor.org/rfc/rfc9114.html#name-expressing-http-semantics-i
+        // "An HTTP message (request or response) consists of:
+        //  the header section, including message control data, sent as a single HEADERS frame, (...)"
+        // "Receipt of an invalid sequence of frames MUST be treated as a connection error of type H3_FRAME_UNEXPECTED."
+        if (frameType != FRAME_TYPE_HEADERS) {
+            throw new ConnectionError(H3_FRAME_UNEXPECTED);
+        }
+        int payloadLength = VariableLengthInteger.parse(inputStream);
+        if (payloadLength > maxHeadersSize) {
+            throw new HttpError("max header size exceeded", 431);
+        }
+        HeadersFrame headersFrame = new HeadersFrame().parsePayload(readExact(inputStream, payloadLength), qpackDecoder);
+        String method = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_METHOD);
+        String scheme = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_SCHEME);
+        String path = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PATH);
+        if (method == null ||
+                (!method.equals("CONNECT") &&
+                        (scheme == null || path == null || !hasValidAuthorityHeader(headersFrame))) ||
+                (method.equals("CONNECT") &&
+                        headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_AUTHORITY) == null)) {
+            // https://www.rfc-editor.org/rfc/rfc9114.html#name-request-pseudo-header-field
+            // "All HTTP/3 requests MUST include exactly one value for the :method, :scheme, and :path pseudo-header \
+            //  fields, unless the request is a CONNECT request; see Section 4.4."
+            // https://www.rfc-editor.org/rfc/rfc9114.html#name-request-pseudo-header-field
+            // "An HTTP request that omits mandatory pseudo-header fields or contains invalid values for those
+            //  pseudo-header fields is malformed."
+            // https://www.rfc-editor.org/rfc/rfc9114.html#name-malformed-requests-and-resp
+            // "Malformed requests or responses that are detected MUST be treated as a stream error of type H3_MESSAGE_ERROR."
+            throw new StreamError(H3_MESSAGE_ERROR);
+        }
+        return headersFrame;
+    }
+
+    private boolean hasValidAuthorityHeader(HeadersFrame headersFrame) {
+        // https://www.rfc-editor.org/rfc/rfc9114.html#name-request-pseudo-header-field
+        // "If the :scheme pseudo-header field identifies a scheme that has a mandatory authority component
+        //  (including "http" and "https"), the request MUST contain either an :authority pseudo-header field or a
+        //  Host header field."
+        String scheme = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_SCHEME);
+        if (scheme.equals("http") || scheme.equals("https")) {
+            String authority = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_AUTHORITY);
+            if (authority == null) {
+                authority = headersFrame.headers().firstValue("host").orElse(null);
+            }
+            return authority != null && !authority.isBlank();
+        }
+        else {
+            return true;
         }
     }
 
