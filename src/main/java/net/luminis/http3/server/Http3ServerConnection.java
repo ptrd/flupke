@@ -49,6 +49,7 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
     private final long maxHeaderSize;
     private final long maxDataSize;
     private final ExecutorService executor;
+    private final Encoder encoder = new Encoder();
 
     public Http3ServerConnection(QuicConnection quicConnection, HttpRequestHandler requestHandler, ExecutorService executorService) {
         this(quicConnection, requestHandler, DEFAULT_MAX_HEADER_SIZE, DEFAULT_MAX_DATA_SIZE, executorService);
@@ -84,7 +85,7 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
             else {
                 List<Http3Frame> receivedFrames = parseHttp3Frames(requestStream);
                 receivedFrames.add(headersFrame);
-                handleHttpRequest(receivedFrames, quicStream, new Encoder());
+                handleHttpRequest(receivedFrames, quicStream, encoder);
             }
         }
         catch (IOException ioError) {
@@ -104,7 +105,23 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
     }
 
     private void handleConnectMethod(QuicStream quicStream, HeadersFrame headersFrame) {
+        if (headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PROTOCOL) != null) {
+            handleExtendedConnectMethod(quicStream, headersFrame);
+        }
+        else {
+            // https://www.rfc-editor.org/rfc/rfc9110#section-9
+            // "An origin server that receives a request method that is unrecognized or not implemented SHOULD respond
+            // with the 501 (Not Implemented) status code. "
+            sendHttpErrorResponse(501, "", quicStream);
+        }
+    }
 
+    private void handleExtendedConnectMethod(QuicStream quicStream, HeadersFrame headersFrame) {
+        // https://www.rfc-editor.org/rfc/rfc9220.html#name-websockets-upgrade-over-htt
+        // "If a server advertises support for Extended CONNECT but receives an Extended CONNECT request with a
+        //  ":protocol" value that is unknown or is not supported, the server SHOULD respond to the request with a 501
+        //  (Not Implemented) status code"
+        sendHttpErrorResponse(501, "", quicStream);
     }
 
     HeadersFrame readRequestHeadersFrame(InputStream inputStream, long maxHeadersSize) throws IOException, HttpError, ConnectionError, StreamError {
@@ -249,7 +266,7 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
 
     private void sendStatus(int statusCode, OutputStream outputStream) throws IOException {
         HeadersFrame headersFrame = new HeadersFrame(HeadersFrame.PSEUDO_HEADER_STATUS, Integer.toString(statusCode));
-        outputStream.write(headersFrame.toBytes(new Encoder()));
+        outputStream.write(headersFrame.toBytes(encoder));
     }
 
 }

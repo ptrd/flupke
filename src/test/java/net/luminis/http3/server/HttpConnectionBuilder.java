@@ -22,6 +22,7 @@ import net.luminis.http3.core.Http3Connection;
 import net.luminis.http3.impl.Http3ConnectionImpl;
 import net.luminis.http3.test.FieldSetter;
 import net.luminis.qpack.Decoder;
+import net.luminis.qpack.Encoder;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.server.ServerConnection;
 import org.mockito.invocation.InvocationOnMock;
@@ -44,6 +45,7 @@ public class HttpConnectionBuilder {
 
     private Map<String, String> headers;
     private HttpRequestHandler handler;
+    private Encoder encoder;
 
     public HttpConnectionBuilder withHeaders(Map<String, String> headers) {
         this.headers = headers;
@@ -52,6 +54,11 @@ public class HttpConnectionBuilder {
 
     public HttpConnectionBuilder withHandler(HttpRequestHandler handler) {
         this.handler = handler;
+        return this;
+    }
+
+    public HttpConnectionBuilder withEncoder(Encoder encoder) {
+        this.encoder = encoder;
         return this;
     }
 
@@ -65,6 +72,9 @@ public class HttpConnectionBuilder {
         ServerConnection quicConnection = mock(ServerConnection.class);
         when(quicConnection.createStream(anyBoolean())).thenReturn(httpControlStream);
         Http3ServerConnection http3Connection = new Http3ServerConnection(quicConnection, handler, executor);
+        if (encoder != null) {
+            FieldSetter.setField(http3Connection, Http3ServerConnection.class.getDeclaredField("encoder"), encoder);
+        }
         mockDecoderWithHeaders(http3Connection, headers);
         return http3Connection;
     }

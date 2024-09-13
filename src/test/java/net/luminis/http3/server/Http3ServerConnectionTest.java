@@ -21,6 +21,7 @@ package net.luminis.http3.server;
 import net.luminis.http3.core.HttpError;
 import net.luminis.http3.impl.DataFrame;
 import net.luminis.http3.impl.HeadersFrame;
+import net.luminis.http3.test.CapturingEncoder;
 import net.luminis.qpack.Decoder;
 import net.luminis.qpack.Encoder;
 import net.luminis.quic.QuicConnection;
@@ -56,6 +57,7 @@ public class Http3ServerConnectionTest {
     private List<Map.Entry<String, String>> mockEncoderCompressedHeaders = new ArrayList<>();
     private ExecutorService executor = Executors.newSingleThreadExecutor();
 
+    //region request handling
     @Test
     void handlerIsCalledWithMethodAndPathFromHeadersFrame() throws Exception {
         // Given
@@ -75,7 +77,9 @@ public class Http3ServerConnectionTest {
                         req.method().equals("GET") && req.path().equals("/index.html")),
                 any(HttpServerResponse.class));
     }
+    //endregion
 
+    //region request correctness
     @Test
     void whenMandatoryPseudoHeaderMethodIsMissingResetStreamShouldBeCalled() throws Exception {
         // Given
@@ -177,7 +181,9 @@ public class Http3ServerConnectionTest {
         // Then
         verify(requestResponseStream).resetStream(anyLong());
     }
+    //endregion
 
+    //region response handling
     @Test
     void statusReturnedByHandlerIsWrittenToHeadersFrame() throws Exception {
         // Given
@@ -226,7 +232,9 @@ public class Http3ServerConnectionTest {
         DataFrame dataFrame = new DataFrame().parse(dataBytes);
         assertThat(dataFrame.getPayload()).isEqualTo("Hello World!".getBytes());
     }
+    //endregion
 
+    //region request limits
     @Test
     void requestDataLargerThanMaxIsNotAccepted() {
         // Given
@@ -284,7 +292,49 @@ public class Http3ServerConnectionTest {
         // Then
         verify(quicStream).abortReading(anyLong());
     }
+    //endregion
 
+    //region CONNECT method
+    @Test
+    void methodConnectShouldReturnStatus501() throws Exception {
+        // Given
+        HttpRequestHandler handler = mock(HttpRequestHandler.class);
+        CapturingEncoder encoder = new CapturingEncoder();
+        Http3ServerConnection http3Connection = new HttpConnectionBuilder()
+                .withHeaders(Map.of(":method", "CONNECT", ":authority", "example.com"))
+                .withHandler(handler)
+                .withEncoder(encoder)
+                .buildServerConnection();
+        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData());
+
+        // When
+        http3Connection.handleBidirectionalStream(requestResponseStream);
+
+        // Then
+        assertThat(encoder.getCapturedHeaders().get(":status")).isEqualTo("501");
+    }
+
+    @Test
+    void extendedConnectWithUnsupportProtocolShouldReturnStatus501() throws Exception {
+        // Given
+        HttpRequestHandler handler = mock(HttpRequestHandler.class);
+        CapturingEncoder encoder = new CapturingEncoder();
+        Http3ServerConnection http3Connection = new HttpConnectionBuilder()
+                .withHeaders(Map.of(":method", "CONNECT", ":protocol", "websockets", ":authority", "example.com"))
+                .withHandler(handler)
+                .withEncoder(encoder)
+                .buildServerConnection();
+        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData());
+
+        // When
+        http3Connection.handleBidirectionalStream(requestResponseStream);
+
+        // Then
+        assertThat(encoder.getCapturedHeaders().get(":status")).isEqualTo("501");
+    }
+    //endregion
+
+    //region helper methods
     private QuicStream mockQuicStreamWithInputData(byte[] inputData) {
         QuicStream quicStream = mock(QuicStream.class);
         when(quicStream.getInputStream()).thenReturn(new ByteArrayInputStream(inputData));
@@ -353,4 +403,5 @@ public class Http3ServerConnectionTest {
             return mockEncoderCompressedHeaders;
         }
     }
+    //endregion
 }
