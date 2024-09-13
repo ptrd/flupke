@@ -33,7 +33,10 @@ import java.io.OutputStream;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.locks.ReentrantLock;
 
 
 /**
@@ -50,20 +53,26 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
     private final long maxDataSize;
     private final ExecutorService executor;
     private final Encoder encoder = new Encoder();
+    private final Map<String, Http3ServerExtensionFactory> extensionFactories;
+    private final Map<String, Http3ServerExtension> instantiatedExtensions;
+    private final ReentrantLock extensionInstantiationLock;
 
-    public Http3ServerConnection(QuicConnection quicConnection, HttpRequestHandler requestHandler, ExecutorService executorService) {
-        this(quicConnection, requestHandler, DEFAULT_MAX_HEADER_SIZE, DEFAULT_MAX_DATA_SIZE, executorService);
+    public Http3ServerConnection(QuicConnection quicConnection, HttpRequestHandler requestHandler, ExecutorService executorService, Map<String, Http3ServerExtensionFactory> extensions) {
+        this(quicConnection, requestHandler, DEFAULT_MAX_HEADER_SIZE, DEFAULT_MAX_DATA_SIZE, executorService, extensions);
     }
 
-    public Http3ServerConnection(QuicConnection quicConnection, HttpRequestHandler requestHandler, long maxHeaderSize, long maxDataSize, ExecutorService executorService) {
+    public Http3ServerConnection(QuicConnection quicConnection, HttpRequestHandler requestHandler, long maxHeaderSize, long maxDataSize, ExecutorService executorService, Map<String, Http3ServerExtensionFactory> extensions) {
         super(quicConnection);
         this.requestHandler = requestHandler;
         this.maxHeaderSize = maxHeaderSize;
         this.maxDataSize = maxDataSize;
         this.executor = executorService;
+        this.extensionFactories = extensions;
+        this.instantiatedExtensions = new ConcurrentHashMap<>();
         clientAddress = ((ServerConnection) quicConnection).getInitialClientAddress();
 
         startControlStream();
+        extensionInstantiationLock = new ReentrantLock();
     }
 
     @Override
@@ -117,11 +126,43 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
     }
 
     private void handleExtendedConnectMethod(QuicStream quicStream, HeadersFrame headersFrame) {
-        // https://www.rfc-editor.org/rfc/rfc9220.html#name-websockets-upgrade-over-htt
-        // "If a server advertises support for Extended CONNECT but receives an Extended CONNECT request with a
-        //  ":protocol" value that is unknown or is not supported, the server SHOULD respond to the request with a 501
-        //  (Not Implemented) status code"
-        sendHttpErrorResponse(501, "", quicStream);
+        String extensionType = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PROTOCOL);
+        Http3ServerExtension http3ServerExtension = getHttp3ServerExtension(extensionType);
+
+        if (http3ServerExtension != null) {
+            String authority = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_AUTHORITY);
+            String path = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PATH);
+            int statusCode = http3ServerExtension.handleExtendedConnect(headersFrame.headers(), extensionType, authority, path, quicStream);
+            sendHttpErrorResponse(statusCode, null, quicStream);
+        }
+        else {
+            // https://www.rfc-editor.org/rfc/rfc9220.html#name-websockets-upgrade-over-htt
+            // "If a server advertises support for Extended CONNECT but receives an Extended CONNECT request with a
+            //  ":protocol" value that is unknown or is not supported, the server SHOULD respond to the request with a 501
+            //  (Not Implemented) status code"
+            sendHttpErrorResponse(501, "", quicStream);
+        }
+    }
+
+    private Http3ServerExtension getHttp3ServerExtension(String extensionType) {
+        extensionInstantiationLock.lock();
+        try {
+            if (instantiatedExtensions.get(extensionType) != null) {
+                return instantiatedExtensions.get(extensionType);
+            }
+
+            if (extensionFactories.get(extensionType) != null) {
+                Http3ServerExtension http3ServerExtension = extensionFactories.get(extensionType).createExtension(this);
+                instantiatedExtensions.put(extensionType, http3ServerExtension);
+                return http3ServerExtension;
+            }
+            else {
+                return null;
+            }
+        }
+        finally {
+            extensionInstantiationLock.unlock();
+        }
     }
 
     HeadersFrame readRequestHeadersFrame(InputStream inputStream, long maxHeadersSize) throws IOException, HttpError, ConnectionError, StreamError {

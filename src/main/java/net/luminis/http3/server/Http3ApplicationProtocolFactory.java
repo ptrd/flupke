@@ -26,6 +26,7 @@ import net.luminis.quic.server.ApplicationProtocolConnection;
 import net.luminis.quic.server.ApplicationProtocolConnectionFactory;
 
 import java.io.File;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -34,9 +35,16 @@ public class Http3ApplicationProtocolFactory implements ApplicationProtocolConne
 
     private final HttpRequestHandler httpRequestHandler;
     private final ExecutorService executorService;
+    private Map<String, Http3ServerExtensionFactory> extensions;
 
     public Http3ApplicationProtocolFactory(HttpRequestHandler requestHandler) {
         this.httpRequestHandler = Objects.requireNonNull(requestHandler);
+        executorService = Executors.newCachedThreadPool(new DaemonThreadFactory("http3-connection"));
+    }
+
+    public Http3ApplicationProtocolFactory(HttpRequestHandler requestHandler, Map<String, Http3ServerExtensionFactory> extensions) {
+        this.httpRequestHandler = Objects.requireNonNull(requestHandler);
+        this.extensions = Objects.requireNonNull(extensions);
         executorService = Executors.newCachedThreadPool(new DaemonThreadFactory("http3-connection"));
     }
 
@@ -55,7 +63,7 @@ public class Http3ApplicationProtocolFactory implements ApplicationProtocolConne
 
     @Override
     public ApplicationProtocolConnection createConnection(String protocol, QuicConnection quicConnection) {
-        return new Http3ServerConnection(quicConnection, httpRequestHandler, executorService);
+        return new Http3ServerConnection(quicConnection, httpRequestHandler, executorService, extensions);
     }
 
     @Override

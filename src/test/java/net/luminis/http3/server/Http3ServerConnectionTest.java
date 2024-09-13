@@ -35,6 +35,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
+import java.net.http.HttpHeaders;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -43,12 +44,11 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import static java.util.Collections.emptyMap;
 import static net.luminis.http3.impl.Http3ConnectionImpl.FRAME_TYPE_DATA;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 
@@ -193,7 +193,7 @@ public class Http3ServerConnectionTest {
                 response.setStatus(201);
             }
         };
-        Http3ServerConnection http3Connection = new Http3ServerConnection(createMockQuicConnection(), handler, executor);
+        Http3ServerConnection http3Connection = new Http3ServerConnection(createMockQuicConnection(), handler, executor, emptyMap());
 
         // When
         HeadersFrame requestHeadersFrame = createHeadersFrame("GET", new URI("https://www.example.com/index.html"));
@@ -218,7 +218,7 @@ public class Http3ServerConnectionTest {
             }
         };
 
-        Http3ServerConnection http3Connection = new Http3ServerConnection(createMockQuicConnection(), handler, executor);
+        Http3ServerConnection http3Connection = new Http3ServerConnection(createMockQuicConnection(), handler, executor, emptyMap());
 
         // When
         HeadersFrame requestHeadersFrame = new HeadersFrame();
@@ -240,7 +240,7 @@ public class Http3ServerConnectionTest {
         // Given
         long maxHeaderSize = Long.MAX_VALUE;
         long maxDataSize = 2500;
-        Http3ServerConnection http3Connection = new Http3ServerConnection(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize, executor);
+        Http3ServerConnection http3Connection = new Http3ServerConnection(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize, executor, emptyMap());
         byte[] rawData = new byte[10000];
         rawData[0] = FRAME_TYPE_DATA;
         rawData[1] = 0x44; // 0x44ff == 1279
@@ -262,7 +262,7 @@ public class Http3ServerConnectionTest {
         // Given
         long maxHeaderSize = 1000;
         long maxDataSize = Long.MAX_VALUE;
-        Http3ServerConnection http3Connection = new Http3ServerConnection(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize, executor);
+        Http3ServerConnection http3Connection = new Http3ServerConnection(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize, executor, emptyMap());
 
         HeadersFrame largeHeaders = new HeadersFrame("superlarge", "*".repeat(1000));
         byte[] data = largeHeaders.toBytes(new Encoder());
@@ -280,7 +280,7 @@ public class Http3ServerConnectionTest {
         // Given
         long maxHeaderSize = 1000;
         long maxDataSize = Long.MAX_VALUE;
-        Http3ServerConnection http3Connection = new Http3ServerConnection(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize, executor);
+        Http3ServerConnection http3Connection = new Http3ServerConnection(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize, executor, emptyMap());
 
         HeadersFrame largeHeaders = new HeadersFrame("superlarge", "*".repeat(1000));
         byte[] data = largeHeaders.toBytes(new Encoder());
@@ -331,6 +331,34 @@ public class Http3ServerConnectionTest {
 
         // Then
         assertThat(encoder.getCapturedHeaders().get(":status")).isEqualTo("501");
+    }
+
+    @Test
+    void http3serverExtensionIsCalledWhenRegisteredProperly() throws Exception {
+        // Given
+        Http3ServerExtension extensionHandler = mock(Http3ServerExtension.class);
+        when(extensionHandler.handleExtendedConnect(any(HttpHeaders.class), anyString(), anyString(), anyString(), any(QuicStream.class))).thenReturn(200);
+        Http3ServerExtensionFactory extensionFactory = http3ServerConnection -> extensionHandler;
+
+        CapturingEncoder encoder = new CapturingEncoder();
+        Http3ServerConnection http3Connection = new HttpConnectionBuilder()
+                .withHeaders(Map.of(":method", "CONNECT", ":protocol", "webtransport", ":authority", "example.com", ":path", "/"))
+                .withEncoder(encoder)
+                .withExtensionHandler("webtransport", extensionFactory)
+                .buildServerConnection();
+        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData());
+
+        // When
+        http3Connection.handleBidirectionalStream(requestResponseStream);
+
+        // Then
+        verify(extensionHandler).handleExtendedConnect(
+                any(HttpHeaders.class),
+                argThat(p -> p.equals("webtransport")),
+                argThat(a -> a.equals("example.com")),
+                argThat(p -> p.equals("/")),
+                any(QuicStream.class));
+        assertThat(encoder.getCapturedHeaders().get(":status")).isEqualTo("200");
     }
     //endregion
 

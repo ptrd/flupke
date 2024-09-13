@@ -31,6 +31,7 @@ import org.mockito.stubbing.Answer;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -46,6 +47,7 @@ public class HttpConnectionBuilder {
     private Map<String, String> headers;
     private HttpRequestHandler handler;
     private Encoder encoder;
+    private Map<String, Http3ServerExtensionFactory> extensions = new HashMap<>();
 
     public HttpConnectionBuilder withHeaders(Map<String, String> headers) {
         this.headers = headers;
@@ -62,16 +64,22 @@ public class HttpConnectionBuilder {
         return this;
     }
 
+    public HttpConnectionBuilder withExtensionHandler(String webtransport, Http3ServerExtensionFactory extensionHandler) {
+        extensions.put(webtransport, extensionHandler);
+        return this;
+    }
+
     public Http3ServerConnection buildServerConnection() throws Exception {
         if (handler == null) {
             handler = mock(HttpRequestHandler.class);
         }
+
         ExecutorService executor = Executors.newSingleThreadExecutor();
         QuicStream httpControlStream = mock(QuicStream.class);
         when(httpControlStream.getOutputStream()).thenReturn(mock(OutputStream.class));
         ServerConnection quicConnection = mock(ServerConnection.class);
         when(quicConnection.createStream(anyBoolean())).thenReturn(httpControlStream);
-        Http3ServerConnection http3Connection = new Http3ServerConnection(quicConnection, handler, executor);
+        Http3ServerConnection http3Connection = new Http3ServerConnection(quicConnection, handler, executor, extensions);
         if (encoder != null) {
             FieldSetter.setField(http3Connection, Http3ServerConnection.class.getDeclaredField("encoder"), encoder);
         }
