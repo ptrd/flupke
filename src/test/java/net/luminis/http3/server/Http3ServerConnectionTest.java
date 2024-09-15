@@ -334,6 +334,33 @@ public class Http3ServerConnectionTest {
     }
 
     @Test
+    void serverShouldSendEnableConnectProtocolSetting() throws Exception {
+        // Given
+        ByteArrayOutputStream controlStreamOutput = new ByteArrayOutputStream();
+        HttpConnectionBuilder builder = new HttpConnectionBuilder()
+                .withHeaders(Map.of(":method", "CONNECT", ":protocol", "websockets", ":authority", "example.com"))
+                .withControlStreamOutputSentTo(controlStreamOutput);
+
+        // When
+        Http3ServerConnection http3Connection = builder.buildServerConnection();
+
+        // Then
+        assertThat(controlStreamOutput.toByteArray()).isEqualTo(new byte[] {
+                0x00,  // type: control stream
+                0x04,  // frame type: SETTINGS
+                0x06,  // payload length
+                // frame payload
+                0x01,  // identifier: SETTINGS_QPACK_MAX_TABLE_CAPACITY
+                0,     // value
+                0x07,  // identifier: SETTINGS_QPACK_BLOCKED_STREAMS
+                0,     // value
+                0x08,  // identifier: SETTINGS_ENABLE_CONNECT_PROTOCOL
+                1      // value
+        });
+
+    }
+
+    @Test
     void http3serverExtensionIsCalledWhenRegisteredProperly() throws Exception {
         // Given
         Http3ServerExtension extensionHandler = mock(Http3ServerExtension.class);

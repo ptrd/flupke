@@ -28,6 +28,7 @@ import net.luminis.quic.server.ServerConnection;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -48,6 +49,7 @@ public class HttpConnectionBuilder {
     private HttpRequestHandler handler;
     private Encoder encoder;
     private Map<String, Http3ServerExtensionFactory> extensions = new HashMap<>();
+    private ByteArrayOutputStream controlStreamOutput;
 
     public HttpConnectionBuilder withHeaders(Map<String, String> headers) {
         this.headers = headers;
@@ -69,6 +71,11 @@ public class HttpConnectionBuilder {
         return this;
     }
 
+    public HttpConnectionBuilder withControlStreamOutputSentTo(ByteArrayOutputStream controlStreamOutput) {
+        this.controlStreamOutput = controlStreamOutput;
+        return this;
+    }
+
     public Http3ServerConnection buildServerConnection() throws Exception {
         if (handler == null) {
             handler = mock(HttpRequestHandler.class);
@@ -76,7 +83,12 @@ public class HttpConnectionBuilder {
 
         ExecutorService executor = Executors.newSingleThreadExecutor();
         QuicStream httpControlStream = mock(QuicStream.class);
-        when(httpControlStream.getOutputStream()).thenReturn(mock(OutputStream.class));
+        if (controlStreamOutput != null) {
+            when(httpControlStream.getOutputStream()).thenReturn(controlStreamOutput);
+        }
+        else {
+            when(httpControlStream.getOutputStream()).thenReturn(mock(OutputStream.class));
+        }
         ServerConnection quicConnection = mock(ServerConnection.class);
         when(quicConnection.createStream(anyBoolean())).thenReturn(httpControlStream);
         Http3ServerConnection http3Connection = new Http3ServerConnection(quicConnection, handler, executor, extensions);

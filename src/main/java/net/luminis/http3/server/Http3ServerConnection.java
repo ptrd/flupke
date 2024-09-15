@@ -38,6 +38,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.locks.ReentrantLock;
 
+import static net.luminis.http3.impl.SettingsFrame.SETTINGS_ENABLE_CONNECT_PROTOCOL;
+
 
 /**
  * Http connection serving HTTP requests using a given HttpRequestHandler.
@@ -70,7 +72,7 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
         this.extensionFactories = extensions;
         this.instantiatedExtensions = new ConcurrentHashMap<>();
         clientAddress = ((ServerConnection) quicConnection).getInitialClientAddress();
-
+        settingsParameters.put((long) SETTINGS_ENABLE_CONNECT_PROTOCOL, 1L);
         startControlStream();
         extensionInstantiationLock = new ReentrantLock();
     }
