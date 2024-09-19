@@ -76,7 +76,7 @@ public class HttpConnectionBuilder {
         return this;
     }
 
-    public Http3ServerConnection buildServerConnection() throws Exception {
+    public Http3ServerConnectionImpl buildServerConnection() throws Exception {
         if (handler == null) {
             handler = mock(HttpRequestHandler.class);
         }
@@ -91,9 +91,9 @@ public class HttpConnectionBuilder {
         }
         ServerConnection quicConnection = mock(ServerConnection.class);
         when(quicConnection.createStream(anyBoolean())).thenReturn(httpControlStream);
-        Http3ServerConnection http3Connection = new Http3ServerConnection(quicConnection, handler, executor, extensions);
+        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(quicConnection, handler, executor, extensions);
         if (encoder != null) {
-            FieldSetter.setField(http3Connection, Http3ServerConnection.class.getDeclaredField("encoder"), encoder);
+            FieldSetter.setField(http3Connection, Http3ServerConnectionImpl.class.getDeclaredField("encoder"), encoder);
         }
         mockDecoderWithHeaders(http3Connection, headers);
         return http3Connection;

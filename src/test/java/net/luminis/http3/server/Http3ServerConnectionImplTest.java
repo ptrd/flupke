@@ -52,7 +52,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 
-public class Http3ServerConnectionTest {
+public class Http3ServerConnectionImplTest {
 
     private List<Map.Entry<String, String>> mockEncoderCompressedHeaders = new ArrayList<>();
     private ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -62,7 +62,7 @@ public class Http3ServerConnectionTest {
     void handlerIsCalledWithMethodAndPathFromHeadersFrame() throws Exception {
         // Given
         HttpRequestHandler handler = mock(HttpRequestHandler.class);
-        Http3ServerConnection http3Connection = new HttpConnectionBuilder()
+        Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
                 .withHeaders(Map.of(":method", "GET", ":scheme", "https", ":authority", "example.com", ":path", "/index.html"))
                 .withHandler(handler)
                 .buildServerConnection();
@@ -84,7 +84,7 @@ public class Http3ServerConnectionTest {
     void whenMandatoryPseudoHeaderMethodIsMissingResetStreamShouldBeCalled() throws Exception {
         // Given
         HttpRequestHandler handler = mock(HttpRequestHandler.class);
-        Http3ServerConnection http3Connection = new HttpConnectionBuilder()
+        Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
                 .withHeaders(Map.of(":scheme", "https",":authority", "www.example.com:443", ":path", "/index.html"))
                 .withHandler(handler)
                 .buildServerConnection();
@@ -101,7 +101,7 @@ public class Http3ServerConnectionTest {
     void whenMandatoryPseudoHeaderSchemeIsMissingResetStreamShouldBeCalled() throws Exception {
         // Given
         HttpRequestHandler handler = mock(HttpRequestHandler.class);
-        Http3ServerConnection http3Connection = new HttpConnectionBuilder()
+        Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
                 .withHeaders(Map.of(":method", "GET",":authority", "www.example.com:443", ":path", "/index.html"))
                 .withHandler(handler)
                 .buildServerConnection();
@@ -118,7 +118,7 @@ public class Http3ServerConnectionTest {
     void whenMandatoryPseudoHeaderPathIsMissingResetStreamShouldBeCalled() throws Exception {
         // Given
         HttpRequestHandler handler = mock(HttpRequestHandler.class);
-        Http3ServerConnection http3Connection = new HttpConnectionBuilder()
+        Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
                 .withHeaders(Map.of(":method", "GET", ":scheme", "https", ":authority", "example.com"))
                 .withHandler(handler)
                 .buildServerConnection();
@@ -135,7 +135,7 @@ public class Http3ServerConnectionTest {
     void whenPseudoHeaderAuthorityIsMissingResetStreamShouldBeCalled() throws Exception {
         // Given
         HttpRequestHandler handler = mock(HttpRequestHandler.class);
-        Http3ServerConnection http3Connection = new HttpConnectionBuilder()
+        Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
                 .withHeaders(Map.of(":method", "GET", ":scheme", "https", ":path", "/index.html"))
                 .withHandler(handler)
                 .buildServerConnection();
@@ -152,7 +152,7 @@ public class Http3ServerConnectionTest {
     void whenPseudoHeaderAuthorityIsMissingButHostHeaderIsPresentResetStreamShouldNotBeCalled() throws Exception {
         // Given
         HttpRequestHandler handler = mock(HttpRequestHandler.class);
-        Http3ServerConnection http3Connection = new HttpConnectionBuilder()
+        Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
                 .withHeaders(Map.of("Host","example.com", ":method", "GET", ":scheme", "https", ":path", "/index.html"))
                 .withHandler(handler)
                 .buildServerConnection();
@@ -169,7 +169,7 @@ public class Http3ServerConnectionTest {
     void whenPseudoHeaderAuthorityIsMissingForConnectMethodResetStreamShouldBeCalled() throws Exception {
         // Given
         HttpRequestHandler handler = mock(HttpRequestHandler.class);
-        Http3ServerConnection http3Connection = new HttpConnectionBuilder()
+        Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
                 .withHeaders(Map.of(":method", "CONNECT"))
                 .withHandler(handler)
                 .buildServerConnection();
@@ -193,7 +193,7 @@ public class Http3ServerConnectionTest {
                 response.setStatus(201);
             }
         };
-        Http3ServerConnection http3Connection = new Http3ServerConnection(createMockQuicConnection(), handler, executor, emptyMap());
+        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), handler, executor, emptyMap());
 
         // When
         HeadersFrame requestHeadersFrame = createHeadersFrame("GET", new URI("https://www.example.com/index.html"));
@@ -218,7 +218,7 @@ public class Http3ServerConnectionTest {
             }
         };
 
-        Http3ServerConnection http3Connection = new Http3ServerConnection(createMockQuicConnection(), handler, executor, emptyMap());
+        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), handler, executor, emptyMap());
 
         // When
         HeadersFrame requestHeadersFrame = new HeadersFrame();
@@ -240,7 +240,7 @@ public class Http3ServerConnectionTest {
         // Given
         long maxHeaderSize = Long.MAX_VALUE;
         long maxDataSize = 2500;
-        Http3ServerConnection http3Connection = new Http3ServerConnection(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize, executor, emptyMap());
+        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize, executor, emptyMap());
         byte[] rawData = new byte[10000];
         rawData[0] = FRAME_TYPE_DATA;
         rawData[1] = 0x44; // 0x44ff == 1279
@@ -262,7 +262,7 @@ public class Http3ServerConnectionTest {
         // Given
         long maxHeaderSize = 1000;
         long maxDataSize = Long.MAX_VALUE;
-        Http3ServerConnection http3Connection = new Http3ServerConnection(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize, executor, emptyMap());
+        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize, executor, emptyMap());
 
         HeadersFrame largeHeaders = new HeadersFrame("superlarge", "*".repeat(1000));
         byte[] data = largeHeaders.toBytes(new Encoder());
@@ -280,7 +280,7 @@ public class Http3ServerConnectionTest {
         // Given
         long maxHeaderSize = 1000;
         long maxDataSize = Long.MAX_VALUE;
-        Http3ServerConnection http3Connection = new Http3ServerConnection(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize, executor, emptyMap());
+        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize, executor, emptyMap());
 
         HeadersFrame largeHeaders = new HeadersFrame("superlarge", "*".repeat(1000));
         byte[] data = largeHeaders.toBytes(new Encoder());
@@ -300,7 +300,7 @@ public class Http3ServerConnectionTest {
         // Given
         HttpRequestHandler handler = mock(HttpRequestHandler.class);
         CapturingEncoder encoder = new CapturingEncoder();
-        Http3ServerConnection http3Connection = new HttpConnectionBuilder()
+        Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
                 .withHeaders(Map.of(":method", "CONNECT", ":authority", "example.com"))
                 .withHandler(handler)
                 .withEncoder(encoder)
@@ -319,7 +319,7 @@ public class Http3ServerConnectionTest {
         // Given
         HttpRequestHandler handler = mock(HttpRequestHandler.class);
         CapturingEncoder encoder = new CapturingEncoder();
-        Http3ServerConnection http3Connection = new HttpConnectionBuilder()
+        Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
                 .withHeaders(Map.of(":method", "CONNECT", ":protocol", "websockets", ":authority", "example.com"))
                 .withHandler(handler)
                 .withEncoder(encoder)
@@ -342,7 +342,7 @@ public class Http3ServerConnectionTest {
                 .withControlStreamOutputSentTo(controlStreamOutput);
 
         // When
-        Http3ServerConnection http3Connection = builder.buildServerConnection();
+        Http3ServerConnectionImpl http3Connection = builder.buildServerConnection();
 
         // Then
         assertThat(controlStreamOutput.toByteArray()).isEqualTo(new byte[] {
@@ -368,7 +368,7 @@ public class Http3ServerConnectionTest {
         Http3ServerExtensionFactory extensionFactory = http3ServerConnection -> extensionHandler;
 
         CapturingEncoder encoder = new CapturingEncoder();
-        Http3ServerConnection http3Connection = new HttpConnectionBuilder()
+        Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
                 .withHeaders(Map.of(":method", "CONNECT", ":protocol", "webtransport", ":authority", "example.com", ":path", "/"))
                 .withEncoder(encoder)
                 .withExtensionHandler("webtransport", extensionFactory)

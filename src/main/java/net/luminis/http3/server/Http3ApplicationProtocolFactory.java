@@ -63,7 +63,7 @@ public class Http3ApplicationProtocolFactory implements ApplicationProtocolConne
 
     @Override
     public ApplicationProtocolConnection createConnection(String protocol, QuicConnection quicConnection) {
-        return new Http3ServerConnection(quicConnection, httpRequestHandler, executorService, extensions);
+        return new Http3ServerConnectionImpl(quicConnection, httpRequestHandler, executorService, extensions);
     }
 
     @Override
