@@ -19,6 +19,7 @@
 package net.luminis.http3.server;
 
 import net.luminis.http3.core.HttpError;
+import net.luminis.http3.core.HttpStream;
 import net.luminis.http3.impl.*;
 import net.luminis.qpack.Encoder;
 import net.luminis.quic.QuicConnection;
@@ -27,6 +28,7 @@ import net.luminis.quic.generic.VariableLengthInteger;
 import net.luminis.quic.server.ApplicationProtocolConnection;
 import net.luminis.quic.server.ServerConnection;
 
+import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -37,6 +39,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Consumer;
 
 import static net.luminis.http3.impl.SettingsFrame.SETTINGS_ENABLE_CONNECT_PROTOCOL;
 
@@ -58,6 +61,7 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
     private final Map<String, Http3ServerExtensionFactory> extensionFactories;
     private final Map<String, Http3ServerExtension> instantiatedExtensions;
     private final ReentrantLock extensionInstantiationLock;
+    private Map<Long, Consumer<HttpStream>> bidirectionalStreamHandler = new ConcurrentHashMap<>();
 
     public Http3ServerConnectionImpl(QuicConnection quicConnection, HttpRequestHandler requestHandler, ExecutorService executorService, Map<String, Http3ServerExtensionFactory> extensions) {
         this(quicConnection, requestHandler, DEFAULT_MAX_HEADER_SIZE, DEFAULT_MAX_DATA_SIZE, executorService, extensions);
@@ -83,10 +87,33 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
     }
 
     @Override
+    public void registerBidirectionalStreamHandler(long frameType, Consumer<HttpStream> streamHandler) {
+        bidirectionalStreamHandler.put(frameType, streamHandler);
+    }
+
+    @Override
     protected void handleBidirectionalStream(QuicStream quicStream) {
+        try {
+            InputStream requestStream = new BufferedInputStream(quicStream.getInputStream());
+            requestStream.mark(8);  // variable length integer can be up to 8 bytes
+            long frameType = VariableLengthInteger.parseLong(requestStream);
+            requestStream.reset();
+            if (bidirectionalStreamHandler.containsKey(frameType)) {
+                bidirectionalStreamHandler.get(frameType).accept(wrapWith(quicStream, requestStream));
+            }
+            else {
+                handleStandardRequestResponseStream(quicStream, requestStream);
+            }
+        }
+        catch (IOException e) {
+            quicStream.abortReading(H3_INTERNAL_ERROR);
+            sendHttpErrorResponse(500, "", quicStream);
+        }
+    }
+
+    protected void handleStandardRequestResponseStream(QuicStream quicStream, InputStream requestStream) {
         // https://www.rfc-editor.org/rfc/rfc9114.html#name-bidirectional-streams
         // "All client-initiated bidirectional streams are used for HTTP requests and responses."
-        InputStream requestStream = quicStream.getInputStream();
         try {
             HeadersFrame headersFrame = readRequestHeadersFrame(requestStream, maxHeaderSize);
             String httpMethod = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_METHOD);

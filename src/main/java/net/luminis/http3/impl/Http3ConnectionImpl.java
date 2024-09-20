@@ -253,6 +253,10 @@ public class Http3ConnectionImpl implements Http3Connection {
     }
 
     protected HttpStream wrap(QuicStream quicStream) {
+        return wrapWith(quicStream, quicStream.getInputStream());
+    }
+
+    protected HttpStream wrapWith(QuicStream quicStream, InputStream inputStream) {
         return new HttpStream() {
             @Override
             public OutputStream getOutputStream() {
@@ -261,7 +265,7 @@ public class Http3ConnectionImpl implements Http3Connection {
 
             @Override
             public InputStream getInputStream() {
-                return quicStream.getInputStream();
+                return inputStream;
             }
 
             @Override

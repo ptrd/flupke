@@ -19,6 +19,7 @@
 package net.luminis.http3.server;
 
 import net.luminis.http3.core.HttpError;
+import net.luminis.http3.core.HttpStream;
 import net.luminis.http3.impl.DataFrame;
 import net.luminis.http3.impl.HeadersFrame;
 import net.luminis.http3.test.CapturingEncoder;
@@ -28,6 +29,7 @@ import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.server.ServerConnection;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -43,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 
 import static java.util.Collections.emptyMap;
 import static net.luminis.http3.impl.Http3ConnectionImpl.FRAME_TYPE_DATA;
@@ -389,6 +392,27 @@ public class Http3ServerConnectionImplTest {
     }
     //endregion
 
+    //region HTTP/3 extensions
+    @Test
+    void whenExtensionHandlerForBidirectionalStreamsIsRegisteredItShouldBeCalled() throws Exception {
+        // Given
+        Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
+                .buildServerConnection();
+        Consumer<HttpStream> handler = mock(Consumer.class);
+        http3Connection.registerBidirectionalStreamHandler(0x3e, handler);
+
+        // When
+        ByteArrayInputStream input = new ByteArrayInputStream(new byte[] { 0x3e, (byte) 0xca, (byte) 0xfe });
+        QuicStream requestResponseStream = createMockQuicStream(input);
+        http3Connection.handleBidirectionalStream(requestResponseStream);
+
+        // Then
+        ArgumentCaptor<HttpStream> streamArgumentCaptor = ArgumentCaptor.forClass(HttpStream.class);
+        verify(handler).accept(streamArgumentCaptor.capture());
+        assertThat(streamArgumentCaptor.getValue().getInputStream().readAllBytes()).isEqualTo(new byte[] { 0x3e, (byte) 0xca, (byte) 0xfe });
+    }
+    //endregion
+
     //region helper methods
     private QuicStream mockQuicStreamWithInputData(byte[] inputData) {
         QuicStream quicStream = mock(QuicStream.class);
@@ -422,17 +446,18 @@ public class Http3ServerConnectionImplTest {
         when(stream.getOutputStream()).thenReturn(new ByteArrayOutputStream());
         return connection;
     }
+    private QuicStream createMockQuicStream(ByteArrayInputStream byteArrayInputStream) {
+        return createMockQuicStream(byteArrayInputStream, null);
+    }
 
     private QuicStream createMockQuicStream(ByteArrayOutputStream byteArrayOutputStream) {
-        if (byteArrayOutputStream == null) {
-            byteArrayOutputStream = new ByteArrayOutputStream();
-        }
-        QuicStream stream = mock(QuicStream.class);
-        when(stream.getOutputStream()).thenReturn(byteArrayOutputStream);
-        return stream;
+        return createMockQuicStream(null, byteArrayOutputStream);
     }
 
     private QuicStream createMockQuicStream(ByteArrayInputStream byteArrayInputStream, ByteArrayOutputStream byteArrayOutputStream) {
+        if (byteArrayInputStream == null) {
+            byteArrayInputStream = new ByteArrayInputStream(new byte[0]);
+        }
         if (byteArrayOutputStream == null) {
             byteArrayOutputStream = new ByteArrayOutputStream();
         }

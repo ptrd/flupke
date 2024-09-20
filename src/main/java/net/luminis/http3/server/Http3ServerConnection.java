@@ -19,6 +19,21 @@
 package net.luminis.http3.server;
 
 import net.luminis.http3.core.Http3Connection;
+import net.luminis.http3.core.HttpStream;
+
+import java.util.function.Consumer;
 
 public interface Http3ServerConnection extends Http3Connection {
+
+    /**
+     * HTTP/3 extension method: allow registration of a handler for a bidirectional stream. To distinguish the
+     * bidirectional stream from normal HTTP/3 request-response streams, the stream should start with a frame
+     * with a new frame type.
+     * https://www.rfc-editor.org/rfc/rfc9114.html#name-extensions-to-http-3
+     * "Extensions are permitted to use new frame types (Section 7.2), ..."
+     * @param frameType      the frame type that is used to distinguish the bidirectional stream from normal HTTP/3
+     *                       request-response streams and is the type of the first frame that is sent on the stream.
+     * @param streamHandler
+     */
+    void registerBidirectionalStreamHandler(long frameType, Consumer<HttpStream> streamHandler);
 }
