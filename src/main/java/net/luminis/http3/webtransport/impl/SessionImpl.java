@@ -51,7 +51,7 @@ public class SessionImpl implements Session {
     private final Http3Connection http3Connection;
     private final CapsuleProtocolStream connectStream;
     private final long sessionId;
-    private final AbstractSessionFactory sessionFactory;
+    private final SessionFactory sessionFactory;
     private volatile State state;
     private final Thread capsuleProcessorThread;
     private Consumer<WebTransportStream> unidirectionalStreamReceiveHandler;
@@ -62,7 +62,7 @@ public class SessionImpl implements Session {
 
     SessionImpl(Http3Connection http3Connection, CapsuleProtocolStream connectStream,
                 Consumer<WebTransportStream> unidirectionalStreamHandler, Consumer<WebTransportStream> bidirectionalStreamHandler,
-                AbstractSessionFactory sessionFactory) {
+                SessionFactory sessionFactory) {
         this.http3Connection = http3Connection;
         this.connectStream = connectStream;
         sessionId = connectStream.getStreamId();

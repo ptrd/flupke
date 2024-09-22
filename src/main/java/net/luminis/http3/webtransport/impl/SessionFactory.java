@@ -18,9 +18,9 @@
  */
 package net.luminis.http3.webtransport.impl;
 
-public abstract class AbstractSessionFactory {
+public interface SessionFactory {
 
-    abstract void startSession(SessionImpl session);
+    void startSession(SessionImpl session);
 
-    abstract void removeSession(SessionImpl session);
+    void removeSession(SessionImpl session);
 }
