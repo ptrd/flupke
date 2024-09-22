@@ -27,7 +27,7 @@ import java.util.function.Consumer;
 /**
  * A factory for WebTransport sessions.
  */
-public interface SessionFactory {
+public interface ClientSessionFactory {
 
     /**
      * Creates a WebTransport session given a HTTP3 client and a server URI.

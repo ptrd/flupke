@@ -49,7 +49,7 @@ import static org.mockito.Mockito.*;
 class SessionImplTest {
 
     private MockHttpConnectionBuilder builder;
-    private SessionFactoryImpl factory;
+    private ClientSessionFactoryImpl factory;
     private URI defaultWebtransportUri;
 
     @BeforeEach
@@ -582,7 +582,7 @@ class SessionImplTest {
     }
 
     private Session createSessionWith(Http3Client client) throws Exception {
-        Session session = new SessionFactoryImpl(defaultWebtransportUri, client).createSession(defaultWebtransportUri);
+        Session session = new ClientSessionFactoryImpl(defaultWebtransportUri, client).createSession(defaultWebtransportUri);
         session.open();
         return session;
     }
@@ -594,7 +594,7 @@ class SessionImplTest {
     }
 
     private Session createSessionWith(Http3Client client, Consumer<WebTransportStream> unidirectionalStreamHandler, Consumer<WebTransportStream> bidirectionalStreamHandler) throws IOException, HttpError {
-        Session session = new SessionFactoryImpl(defaultWebtransportUri, client).createSession(defaultWebtransportUri, unidirectionalStreamHandler, bidirectionalStreamHandler);
+        Session session = new ClientSessionFactoryImpl(defaultWebtransportUri, client).createSession(defaultWebtransportUri, unidirectionalStreamHandler, bidirectionalStreamHandler);
         session.open();
         return session;
     }

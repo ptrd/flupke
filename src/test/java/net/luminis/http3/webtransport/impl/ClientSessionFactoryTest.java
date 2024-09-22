@@ -24,8 +24,8 @@ import net.luminis.http3.core.Http3ClientConnection;
 import net.luminis.http3.core.HttpError;
 import net.luminis.http3.core.HttpStream;
 import net.luminis.http3.test.FieldReader;
+import net.luminis.http3.webtransport.ClientSessionFactory;
 import net.luminis.http3.webtransport.Session;
-import net.luminis.http3.webtransport.SessionFactory;
 import net.luminis.http3.webtransport.WebTransportStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,7 +42,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
-import static net.luminis.http3.webtransport.impl.SessionFactoryImpl.SETTINGS_WEBTRANSPORT_MAX_SESSIONS;
+import static net.luminis.http3.webtransport.impl.ClientSessionFactoryImpl.SETTINGS_WEBTRANSPORT_MAX_SESSIONS;
 import static net.luminis.http3.webtransport.impl.SessionImplTest.captureHttpConnectionBidirectionalStreamHandler;
 import static net.luminis.http3.webtransport.impl.SessionImplTest.httpStreamWith;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -52,9 +52,9 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.longThat;
 import static org.mockito.Mockito.*;
 
-class SessionFactoryTest {
+class ClientSessionFactoryTest {
 
-    private SessionFactory factory;
+    private ClientSessionFactory factory;
     private Http3Client client;
 
     @BeforeEach
@@ -66,7 +66,7 @@ class SessionFactoryTest {
     void createWebTransportSessionShouldSendExtendedConnect() throws Exception {
         // Given
         Http3ClientConnection http3connection = createMockHttp3ConnectionForExtendedConnect(client, 10);
-        factory = new SessionFactoryImpl(URI.create("https://example.com:443/"), client);
+        factory = new ClientSessionFactoryImpl(URI.create("https://example.com:443/"), client);
 
         // When
         Session session = factory.createSession(new URI("https://example.com:443/webtransport"));
@@ -85,7 +85,7 @@ class SessionFactoryTest {
         // Given
         Http3ClientConnection http3connection = createMockHttp3ConnectionForExtendedConnect(client, 10);
         when(http3connection.sendExtendedConnectWithCapsuleProtocol(any(), any(), any(), any())).thenThrow(new HttpError("", 404));
-        factory = new SessionFactoryImpl(URI.create("https://example.com:443/"), client);
+        factory = new ClientSessionFactoryImpl(URI.create("https://example.com:443/"), client);
 
         assertThatThrownBy(() ->
                 // When
@@ -100,7 +100,7 @@ class SessionFactoryTest {
         // Given
         Http3ClientConnection http3connection = createMockHttp3ConnectionForExtendedConnect(client, 10);
         InOrder inOrder = inOrder(http3connection);
-        factory = new SessionFactoryImpl(URI.create("https://example.com:443/"), client);
+        factory = new ClientSessionFactoryImpl(URI.create("https://example.com:443/"), client);
 
         // When
         factory.createSession(new URI("https://example.com:443/webtransport"));
@@ -116,7 +116,7 @@ class SessionFactoryTest {
     void whenCreatingSessionWebtransportStreamTypeIsRegistered() throws Exception {
         // Given
         Http3ClientConnection http3connection = createMockHttp3ConnectionForExtendedConnect(client, 10);
-        factory = new SessionFactoryImpl(URI.create("https://example.com:443/"), client);
+        factory = new ClientSessionFactoryImpl(URI.create("https://example.com:443/"), client);
 
         // When
         factory.createSession(new URI("https://example.com:443/webtransport"));
@@ -129,7 +129,7 @@ class SessionFactoryTest {
     void whenCreatingSessionSessionLimitShouldBeRespected() throws Exception {
         // Given
         Http3ClientConnection http3connection = createMockHttp3ConnectionForExtendedConnect(client, 1);
-        factory = new SessionFactoryImpl(URI.create("https://example.com:443/"), client);
+        factory = new ClientSessionFactoryImpl(URI.create("https://example.com:443/"), client);
         factory.createSession(new URI("https://example.com:443/webtransport"));
 
         assertThatThrownBy(() ->
@@ -143,7 +143,7 @@ class SessionFactoryTest {
     void whenCreatingSessionWithHandlersTheseAreUsed() throws Exception {
         // Given
         createMockHttp3ConnectionForExtendedConnect(client, 10);
-        factory = new SessionFactoryImpl(URI.create("https://example.com:443/"), client);
+        factory = new ClientSessionFactoryImpl(URI.create("https://example.com:443/"), client);
 
         // When
         Consumer<WebTransportStream> unidirectionalStreamHandler = mock(Consumer.class);
@@ -172,7 +172,7 @@ class SessionFactoryTest {
 
         // When: during the extended CONNECT request handling, the server immediately starts a stream and sends data on it before returning the CONNECT response
         createMockHttp3ConnectionForExtendedConnectWithDelayedResponseAfterAction(client, webtransportStreamCreationAction);
-        factory = new SessionFactoryImpl(URI.create("https://example.com:443/"), client);
+        factory = new ClientSessionFactoryImpl(URI.create("https://example.com:443/"), client);
 
         Consumer<WebTransportStream> bidirectionalStreamHandler = mock(Consumer.class);
         Session session = factory.createSession(new URI("https://example.com:443/wt"), mock(Consumer.class), bidirectionalStreamHandler);
@@ -199,7 +199,7 @@ class SessionFactoryTest {
 
         // When: during the extended CONNECT request handling, the server immediately starts a stream and sends data on it before returning the CONNECT response
         createMockHttp3ConnectionForExtendedConnectWithDelayedResponseAfterAction(client, webtransportStreamCreationAction);
-        factory = new SessionFactoryImpl(URI.create("https://example.com:443/"), client);
+        factory = new ClientSessionFactoryImpl(URI.create("https://example.com:443/"), client);
 
         Consumer<WebTransportStream> bidirectionalStreamHandler = mock(Consumer.class);
         Session session = factory.createSession(new URI("https://example.com:443/wt"), mock(Consumer.class), bidirectionalStreamHandler);
@@ -221,7 +221,7 @@ class SessionFactoryTest {
 
         // When: during the extended CONNECT request handling, the server immediately starts a stream and sends data on it before returning the CONNECT response
         createMockHttp3ConnectionForExtendedConnectWithDelayedResponseAfterAction(client, webtransportStreamCreationAction);
-        factory = new SessionFactoryImpl(URI.create("https://example.com:443/"), client);
+        factory = new ClientSessionFactoryImpl(URI.create("https://example.com:443/"), client);
 
         AtomicBoolean streamHandlerCalled = new AtomicBoolean(false);
         AtomicReference<Session> session = new AtomicReference<>();
@@ -240,7 +240,7 @@ class SessionFactoryTest {
     void whenReceivingStreamForSessionThatIsAlreadyClosedTheStreamShouldBeIgnored() throws Exception {
         // Given
         Http3ClientConnection http3connection = createMockHttp3ConnectionForExtendedConnect(client, 10);
-        factory = new SessionFactoryImpl(URI.create("https://example.com:443/"), client);
+        factory = new ClientSessionFactoryImpl(URI.create("https://example.com:443/"), client);
         Session session1 = factory.createSession(new URI("https://example.com:443/wt"));
         session1.open();
         session1.close();

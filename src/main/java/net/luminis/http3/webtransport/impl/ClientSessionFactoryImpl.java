@@ -23,8 +23,8 @@ import net.luminis.http3.core.CapsuleProtocolStream;
 import net.luminis.http3.core.Http3ClientConnection;
 import net.luminis.http3.core.HttpError;
 import net.luminis.http3.core.HttpStream;
+import net.luminis.http3.webtransport.ClientSessionFactory;
 import net.luminis.http3.webtransport.Session;
-import net.luminis.http3.webtransport.SessionFactory;
 import net.luminis.http3.webtransport.WebTransportStream;
 import net.luminis.quic.generic.VariableLengthInteger;
 
@@ -49,7 +49,7 @@ import static net.luminis.http3.webtransport.Constants.WEBTRANSPORT_SESSION_GONE
  * A factory for creating WebTransport sessions for a given server.
  * All sessions created by this factory are associated with a single HTTP/3 connection, that is created by this factory.
  */
-public class SessionFactoryImpl implements SessionFactory {
+public class ClientSessionFactoryImpl extends AbstractSessionFactory implements ClientSessionFactory {
 
     // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-http-3-settings-parameter-r
     // "The SETTINGS_WEBTRANSPORT_MAX_SESSIONS parameter indicates that the specified HTTP/3 endpoint is
@@ -73,7 +73,7 @@ public class SessionFactoryImpl implements SessionFactory {
      * @param httpClient    the client to use for creating the HTTP/3 connection
      * @throws IOException  if the connection to the server cannot be established
      */
-    public SessionFactoryImpl(URI serverUri, Http3Client httpClient) throws IOException {
+    public ClientSessionFactoryImpl(URI serverUri, Http3Client httpClient) throws IOException {
         this.server = serverUri.getHost();
         this.serverPort = serverUri.getPort();
 
@@ -192,6 +192,7 @@ public class SessionFactoryImpl implements SessionFactory {
         }
     }
 
+    @Override
     void startSession(SessionImpl session) {
         registrationLock.lock();
         try {
@@ -241,6 +242,7 @@ public class SessionFactoryImpl implements SessionFactory {
         }
     }
 
+    @Override
     void removeSession(SessionImpl session) {
         registrationLock.lock();
         try {

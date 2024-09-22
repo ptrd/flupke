@@ -35,7 +35,7 @@ import java.net.http.HttpRequest;
 import java.time.Duration;
 import java.util.Optional;
 
-import static net.luminis.http3.webtransport.impl.SessionFactoryImpl.SETTINGS_WEBTRANSPORT_MAX_SESSIONS;
+import static net.luminis.http3.webtransport.impl.ClientSessionFactoryImpl.SETTINGS_WEBTRANSPORT_MAX_SESSIONS;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
