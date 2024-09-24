@@ -19,17 +19,22 @@
 package net.luminis.http3.impl;
 
 import net.luminis.http3.Http3ConnectionSettings;
-import net.luminis.http3.core.*;
+import net.luminis.http3.core.CapsuleProtocolStream;
+import net.luminis.http3.core.Http3ClientConnection;
+import net.luminis.http3.core.HttpError;
+import net.luminis.http3.core.HttpStream;
 import net.luminis.qpack.Encoder;
 import net.luminis.quic.QuicClientConnection;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.Statistics;
-import net.luminis.quic.generic.VariableLengthInteger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 
-import java.io.*;
+import java.io.EOFException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.ProtocolException;
 import java.net.SocketException;
 import java.net.URI;
@@ -47,7 +52,6 @@ import java.util.Map;
 import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
-import java.util.function.Function;
 
 import static net.luminis.http3.impl.SettingsFrame.SETTINGS_ENABLE_CONNECT_PROTOCOL;
 
@@ -364,67 +368,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
                 ":protocol", protocol,
                 ":scheme", scheme,
                 ":path", extractPath(request.uri())));
-
-        return capsuleProtocol(createHttpStream(headersFrame));
-    }
-
-    private CapsuleProtocolStream capsuleProtocol(QuicStream httpStream) {
-        return new CapsuleProtocolStream() {
-
-            private Map<Long, Function<InputStream, Capsule>> capsuleParsers = new HashMap<>();
-            private PushbackInputStream inputStream = new PushbackInputStream(httpStream.getInputStream(), 8);
-
-            @Override
-            public Capsule receive() throws IOException {
-                long type = VariableLengthIntegerUtil.peekLong(inputStream);
-                if (capsuleParsers.containsKey(type)) {
-                    try {
-                        return capsuleParsers.get(type).apply(inputStream);
-                    }
-                    catch (UncheckedIOException ioException) {
-                        throw ioException.getCause();
-                    }
-                }
-                else {
-                    return parseGenericCapsule();
-                }
-            }
-
-            @Override
-            public void send(Capsule capsule) throws IOException {
-                capsule.write(httpStream.getOutputStream());
-                httpStream.getOutputStream().flush();
-            }
-
-            @Override
-            public void sendAndClose(Capsule capsule) throws IOException {
-                capsule.write(httpStream.getOutputStream());
-                httpStream.getOutputStream().close();
-            }
-
-            @Override
-            public void close() throws IOException {
-                httpStream.getOutputStream().close();
-            }
-
-            @Override
-            public long getStreamId() {
-                return httpStream.getStreamId();
-            }
-
-            @Override
-            public void registerCapsuleParser(long type, Function<InputStream, Capsule> parser) {
-                capsuleParsers.put(type, parser);
-            }
-
-            private Capsule parseGenericCapsule() throws IOException {
-                long type = VariableLengthInteger.parseLong(inputStream);
-                long length = VariableLengthInteger.parseLong(inputStream);
-                byte[] data = new byte[(int) length];
-                httpStream.getInputStream().read(data);
-                return new GenericCapsule(type, data);
-            }
-        };
+        return new CapsuleProtocolStreamImpl(createHttpStream(headersFrame));
     }
 
     @Override
