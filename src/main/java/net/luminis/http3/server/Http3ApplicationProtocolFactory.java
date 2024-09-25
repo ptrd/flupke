@@ -100,4 +100,7 @@ public class Http3ApplicationProtocolFactory implements ApplicationProtocolConne
         return 1024;
     }
 
+    public void setExtensions(Map<String, Http3ServerExtensionFactory> extensions) {
+        this.extensions = extensions;
+    }
 }

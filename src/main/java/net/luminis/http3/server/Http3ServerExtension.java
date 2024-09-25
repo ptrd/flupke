@@ -24,5 +24,5 @@ import java.net.http.HttpHeaders;
 
 public interface Http3ServerExtension {
 
-    int handleExtendedConnect(HttpHeaders headers, String protocol, String authority, String path, QuicStream requestResponseStream);
+    int handleExtendedConnect(HttpHeaders headers, String protocol, String authority, String pathAndQuery, QuicStream requestResponseStream);
 }
