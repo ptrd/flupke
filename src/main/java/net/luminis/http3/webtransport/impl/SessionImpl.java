@@ -34,8 +34,10 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 import static net.luminis.http3.webtransport.Constants.*;
 
@@ -53,6 +55,7 @@ public class SessionImpl implements Session {
     private final long sessionId;
     private final SessionFactory sessionFactory;
     private volatile State state;
+    private final ReentrantLock stateChangeLock = new ReentrantLock();
     private final Thread capsuleProcessorThread;
     private Consumer<WebTransportStream> unidirectionalStreamReceiveHandler;
     private Consumer<WebTransportStream> bidirectionalStreamReceiveHandler;
@@ -92,10 +95,8 @@ public class SessionImpl implements Session {
 
     @Override
     public void open() {
-        if (state != State.CREATED) {
-            throw new IllegalStateException("Session is already openend");
-        }
-        state = State.OPEN;
+        changeState(State.OPEN, state -> state == State.CREATED);
+
         sessionFactory.startSession(this);
     }
 
@@ -168,13 +169,9 @@ public class SessionImpl implements Session {
 
     @Override
     public void close(long applicationErrorCode, String applicationErrorMessage) throws IOException {
-        if (state == State.CREATED) {
-            throw new IllegalStateException("Session is not opened yet");
-        }
-        if (state != State.OPEN) {
+        if (! changeState(State.CLOSING, state -> state == State.OPEN, state -> state == State.CLOSING || state == State.CLOSED)) {
             return;
         }
-        state = State.CLOSING;
 
         // https://www.ietf.org/archive/id/draft-ietf-webtrans-overview-07.html#name-session-wide-features
         // "Terminate the session while communicating to the peer an unsigned 32-bit error code and an error reason
@@ -251,10 +248,9 @@ public class SessionImpl implements Session {
     }
 
     void closedByPeer(long applicationErrorCode, String applicationErrorMessage) {
-        if (state != State.OPEN) {
+        if (! changeState(State.CLOSING, state -> true, state -> state == State.CLOSING || state == State.CLOSED)) {
             return;
         }
-        state = State.CLOSING;
 
         // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-session-termination
         // "Upon learning that the session has been terminated, the endpoint MUST reset the send side and abort reading
@@ -275,7 +271,7 @@ public class SessionImpl implements Session {
     }
 
     private void stopSending() {
-        state = State.CLOSED;
+        changeState(State.CLOSED);
     }
 
     private void resetSenders() {
@@ -312,6 +308,31 @@ public class SessionImpl implements Session {
                 return inputStream.getInputStream();
             }
         };
+    }
+
+    private void changeState(State newState) {
+        changeState(newState, state -> true, state -> false);
+    }
+
+    private void changeState(State newState, Predicate<State> precondition) {
+        changeState(newState, precondition, state -> false);
+    }
+
+    private boolean changeState(State newState, Predicate<State> precondition, Predicate<State> ignoreCondition) {
+        stateChangeLock.lock();
+        try {
+            if (ignoreCondition.test(state)) {
+                return false;
+            }
+            if (!precondition.test(state)) {
+                throw new IllegalStateException("Invalid state transition from " + state + " to " + newState);
+            }
+            state = newState;
+            return true;
+        }
+        finally {
+            stateChangeLock.unlock();
+        }
     }
 
     @Override
