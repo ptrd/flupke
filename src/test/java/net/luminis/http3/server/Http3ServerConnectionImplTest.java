@@ -202,7 +202,7 @@ public class Http3ServerConnectionImplTest {
         HeadersFrame requestHeadersFrame = createHeadersFrame("GET", new URI("https://www.example.com/index.html"));
 
         ByteArrayOutputStream output = new ByteArrayOutputStream();
-        QuicStream stream = createMockQuicStream(output);
+        QuicStream stream = mockQuicStream(output);
         http3Connection.handleHttpRequest(List.of(requestHeadersFrame), stream, new NoOpEncoder());
 
         // Then
@@ -226,7 +226,7 @@ public class Http3ServerConnectionImplTest {
         // When
         HeadersFrame requestHeadersFrame = new HeadersFrame();
         ByteArrayOutputStream output = new ByteArrayOutputStream();
-        QuicStream stream = createMockQuicStream(output);
+        QuicStream stream = mockQuicStream(output);
         http3Connection.handleHttpRequest(List.of(requestHeadersFrame), stream, new NoOpEncoder());
 
         // Then
@@ -289,7 +289,7 @@ public class Http3ServerConnectionImplTest {
         byte[] data = largeHeaders.toBytes(new Encoder());
 
         // When
-        QuicStream quicStream = createMockQuicStream(new ByteArrayInputStream(data), new ByteArrayOutputStream());
+        QuicStream quicStream = mockQuicStreamWithInputData(data, new ByteArrayOutputStream());
         http3Connection.handleBidirectionalStream(quicStream);
 
         // Then
@@ -327,13 +327,39 @@ public class Http3ServerConnectionImplTest {
                 .withHandler(handler)
                 .withEncoder(encoder)
                 .buildServerConnection();
-        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData());
+        OutputStream outputStream = mock(OutputStream.class);
+        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData(), outputStream);
 
         // When
         http3Connection.handleBidirectionalStream(requestResponseStream);
 
         // Then
         assertThat(encoder.getCapturedHeaders().get(":status")).isEqualTo("501");
+        verify(outputStream).close();
+    }
+
+    @Test
+    void extendedConnectShouldNotCloseRequestStream() throws Exception {
+        // Given
+        Http3ServerExtension extensionHandler = mock(Http3ServerExtension.class);
+        when(extensionHandler.handleExtendedConnect(any(HttpHeaders.class), anyString(), anyString(), anyString(), any(QuicStream.class))).thenReturn(200);
+        Http3ServerExtensionFactory extensionFactory = http3ServerConnection -> extensionHandler;
+
+        CapturingEncoder encoder = new CapturingEncoder();
+        Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
+                .withHeaders(Map.of(":method", "CONNECT", ":protocol", "websockets", ":authority", "example.com", ":path", "/"))
+                .withExtensionHandler("websockets", extensionFactory)
+                .withEncoder(encoder)
+                .buildServerConnection();
+        OutputStream outputStream = mock(OutputStream.class);
+        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData(), outputStream);
+
+        // When
+        http3Connection.handleBidirectionalStream(requestResponseStream);
+
+        // Then
+        assertThat(encoder.getCapturedHeaders().get(":status")).isEqualTo("200");
+        verify(outputStream, never()).close();
     }
 
     @Test
@@ -402,8 +428,8 @@ public class Http3ServerConnectionImplTest {
         http3Connection.registerBidirectionalStreamHandler(0x3e, handler);
 
         // When
-        ByteArrayInputStream input = new ByteArrayInputStream(new byte[] { 0x3e, (byte) 0xca, (byte) 0xfe });
-        QuicStream requestResponseStream = createMockQuicStream(input);
+        byte[] input = new byte[] { 0x3e, (byte) 0xca, (byte) 0xfe };
+        QuicStream requestResponseStream = mockQuicStreamWithInputData(input);
         http3Connection.handleBidirectionalStream(requestResponseStream);
 
         // Then
@@ -414,13 +440,6 @@ public class Http3ServerConnectionImplTest {
     //endregion
 
     //region helper methods
-    private QuicStream mockQuicStreamWithInputData(byte[] inputData) {
-        QuicStream quicStream = mock(QuicStream.class);
-        when(quicStream.getInputStream()).thenReturn(new ByteArrayInputStream(inputData));
-        when(quicStream.getOutputStream()).thenReturn(mock(OutputStream.class));
-        return quicStream;
-    }
-
     private byte[] fakeHeadersFrameData() {
         return new byte[] {
                 0x01,
@@ -446,24 +465,29 @@ public class Http3ServerConnectionImplTest {
         when(stream.getOutputStream()).thenReturn(new ByteArrayOutputStream());
         return connection;
     }
-    private QuicStream createMockQuicStream(ByteArrayInputStream byteArrayInputStream) {
-        return createMockQuicStream(byteArrayInputStream, null);
+
+    private QuicStream mockQuicStreamWithInputData(byte[] inputData) {
+        return mockQuicStreamWithInputData(inputData, null);
     }
 
-    private QuicStream createMockQuicStream(ByteArrayOutputStream byteArrayOutputStream) {
-        return createMockQuicStream(null, byteArrayOutputStream);
+    private QuicStream mockQuicStream(ByteArrayOutputStream byteArrayOutputStream) {
+        return mockQuicStreamWithInputData(null, byteArrayOutputStream);
     }
 
-    private QuicStream createMockQuicStream(ByteArrayInputStream byteArrayInputStream, ByteArrayOutputStream byteArrayOutputStream) {
-        if (byteArrayInputStream == null) {
+    private QuicStream mockQuicStreamWithInputData(byte[] inputData, OutputStream outputStream) {
+        ByteArrayInputStream byteArrayInputStream = null;
+        if (inputData == null) {
             byteArrayInputStream = new ByteArrayInputStream(new byte[0]);
         }
-        if (byteArrayOutputStream == null) {
-            byteArrayOutputStream = new ByteArrayOutputStream();
+        else {
+            byteArrayInputStream = new ByteArrayInputStream(inputData);
+        }
+        if (outputStream == null) {
+            outputStream = new ByteArrayOutputStream();
         }
 
         QuicStream stream = mock(QuicStream.class);
-        when(stream.getOutputStream()).thenReturn(byteArrayOutputStream);
+        when(stream.getOutputStream()).thenReturn(outputStream);
         when(stream.getInputStream()).thenReturn(byteArrayInputStream);
         return stream;
     }

@@ -162,7 +162,7 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
             String authority = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_AUTHORITY);
             String path = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PATH);
             int statusCode = http3ServerExtension.handleExtendedConnect(headersFrame.headers(), extensionType, authority, path, quicStream);
-            sendHttpErrorResponse(statusCode, null, quicStream);
+            sendHttpStatus(statusCode, null, quicStream, statusCode != 200);
         }
         else {
             // https://www.rfc-editor.org/rfc/rfc9220.html#name-websockets-upgrade-over-htt
@@ -248,16 +248,24 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
     }
 
     private void sendHttpErrorResponse(int statusCode, String message, QuicStream quicStream) {
+        sendHttpStatus(statusCode, message, quicStream, true);
+    }
+
+    private void sendHttpStatus(int statusCode, String message, QuicStream quicStream, boolean closeOutput) {
         try {
-            sendStatus(statusCode, quicStream.getOutputStream());
+            OutputStream outputStream = quicStream.getOutputStream();
+            HeadersFrame headersFrame = new HeadersFrame(HeadersFrame.PSEUDO_HEADER_STATUS, Integer.toString(statusCode));
+            outputStream.write(headersFrame.toBytes(encoder));
         }
         catch (IOException e) {
         }
         finally {
-            try {
-                quicStream.getOutputStream().close();
+            if (closeOutput) {
+                try {
+                    quicStream.getOutputStream().close();
+                }
+                catch (IOException e) {}
             }
-            catch (IOException e) {}
         }
     }
 
@@ -332,11 +340,6 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
             // Ignore, there is nothing we can do. Note Kwik will not throw exception when writing to stream
             // (except when writing to a closed stream)
         }
-    }
-
-    private void sendStatus(int statusCode, OutputStream outputStream) throws IOException {
-        HeadersFrame headersFrame = new HeadersFrame(HeadersFrame.PSEUDO_HEADER_STATUS, Integer.toString(statusCode));
-        outputStream.write(headersFrame.toBytes(encoder));
     }
 
 }
