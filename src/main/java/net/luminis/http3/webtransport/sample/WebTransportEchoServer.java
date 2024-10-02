@@ -86,7 +86,7 @@ public class WebTransportEchoServer {
 
         HttpRequestHandler httpNoOpRequestHandler = (request, response) -> {};
         WebTransportHttp3ApplicationProtocolFactory webTransportProtocolFactory = new WebTransportHttp3ApplicationProtocolFactory(httpNoOpRequestHandler);
-        webTransportProtocolFactory.registerWebTransportServer(null, "/echo", session -> {
+        webTransportProtocolFactory.registerWebTransportServer("/echo", session -> {
             startEchoHandler(session);
         });
         serverConnector.registerApplicationProtocol("h3", webTransportProtocolFactory);

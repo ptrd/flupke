@@ -50,7 +50,7 @@ public class WebTransportHttp3ApplicationProtocolFactory extends Http3Applicatio
         setExtensions(Map.of("webtransport", webTransportExtensionFactory));
     }
 
-    public void registerWebTransportServer(String authority, String path, Consumer<Session> callback) {
+    public void registerWebTransportServer(String path, Consumer<Session> callback) {
         webTransportExtensionFactory.registerWebTransportServer(path, callback);
     }
 
