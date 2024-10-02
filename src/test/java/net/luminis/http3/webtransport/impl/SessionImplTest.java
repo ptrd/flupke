@@ -62,6 +62,7 @@ class SessionImplTest {
     void creatingUnidirectionalStreamShouldSendStreamType() throws Exception {
         // Given
         Http3Client client = builder
+                .withCapsuleProtocolStream(createOpenInputStream())
                 .buildClient();
         Session session = createSessionWith(client);
 
