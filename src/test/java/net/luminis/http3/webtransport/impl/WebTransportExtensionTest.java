@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpHeaders;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
@@ -31,11 +32,13 @@ import static org.mockito.Mockito.mock;
 
 class WebTransportExtensionTest {
 
+    ExecutorService executor = mock(ExecutorService.class);
+
     @Test
     void whenPathsMatchExtendedConnectReturns200() {
         // Given
         Map<String, Consumer<Session>> handlers = Map.of("/service", session -> {});
-        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers);
+        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers, executor);
 
         // When
         int httpStatus = webTransportExtension.handleExtendedConnect(mock(HttpHeaders.class), "webtransport", "localhost", "/service", mock());
@@ -48,7 +51,7 @@ class WebTransportExtensionTest {
     void whenPathsDoNotMatchExtendedConnectReturns404() {
         // Given
         Map<String, Consumer<Session>> handlers = Map.of("/service", session -> {});
-        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers);
+        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers, executor);
 
         // When
         int httpStatus = webTransportExtension.handleExtendedConnect(mock(HttpHeaders.class), "webtransport", "localhost", "/welcome", mock());
@@ -61,7 +64,7 @@ class WebTransportExtensionTest {
     void whenRequestPathPartlyMatchesExtendedConnectReturns404() {
         // Given
         Map<String, Consumer<Session>> handlers = Map.of("/service", session -> {});
-        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers);
+        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers, executor);
 
         // When
         int httpStatus = webTransportExtension.handleExtendedConnect(mock(HttpHeaders.class), "webtransport", "localhost", "/services", mock());
@@ -74,7 +77,7 @@ class WebTransportExtensionTest {
     void whenRequestPathIsPrefixOfRegisteredPathExtendedConnectReturns404() {
         // Given
         Map<String, Consumer<Session>> handlers = Map.of("/service", session -> {});
-        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers);
+        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers, executor);
 
         // When
         int httpStatus = webTransportExtension.handleExtendedConnect(mock(HttpHeaders.class), "webtransport", "localhost", "/serv", mock());
@@ -87,7 +90,7 @@ class WebTransportExtensionTest {
     void whenRequestPathContainsQueryParamsExtendedConnectReturnsSuccess() {
         // Given
         Map<String, Consumer<Session>> handlers = Map.of("/service", session -> {});
-        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers);
+        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers, executor);
 
         // When
         int httpStatus = webTransportExtension.handleExtendedConnect(mock(HttpHeaders.class), "webtransport", "localhost", "/service?prop=value", mock());

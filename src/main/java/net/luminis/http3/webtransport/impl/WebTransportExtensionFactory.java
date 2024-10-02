@@ -22,21 +22,36 @@ import net.luminis.http3.server.Http3ServerConnection;
 import net.luminis.http3.server.Http3ServerExtension;
 import net.luminis.http3.server.Http3ServerExtensionFactory;
 import net.luminis.http3.webtransport.Session;
+import net.luminis.quic.concurrent.DaemonThreadFactory;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 
 public class WebTransportExtensionFactory implements Http3ServerExtensionFactory {
 
     private final Map<String, Consumer<Session>> webTransportHandlers = new HashMap<>();
+    private ExecutorService executor = Executors.newCachedThreadPool(new DaemonThreadFactory("webtransport"));
 
     @Override
     public Http3ServerExtension createExtension(Http3ServerConnection http3ServerConnection) {
-        return new WebTransportExtension(http3ServerConnection, webTransportHandlers);
+        return new WebTransportExtension(http3ServerConnection, webTransportHandlers, executor);
     }
 
+    /**
+     * Register a WebTransport server handler for a given path. The handler is called when a client connects to the server
+     * using the given path. The handler is called with a Session object that represents the WebTransport connection on its own thread.
+     * @param path
+     * @param callback
+     */
     public void registerWebTransportServer(String path, Consumer<Session> callback) {
         webTransportHandlers.put(path, callback);
+    }
+
+    public void setExecutor(ExecutorService executor) {
+        this.executor = Objects.requireNonNull(executor);
     }
 }

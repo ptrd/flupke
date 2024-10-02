@@ -23,6 +23,7 @@ import net.luminis.http3.server.HttpRequestHandler;
 import net.luminis.http3.webtransport.Session;
 
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 
 public class WebTransportHttp3ApplicationProtocolFactory extends Http3ApplicationProtocolFactory {
@@ -52,6 +53,10 @@ public class WebTransportHttp3ApplicationProtocolFactory extends Http3Applicatio
 
     public void registerWebTransportServer(String path, Consumer<Session> callback) {
         webTransportExtensionFactory.registerWebTransportServer(path, callback);
+    }
+
+    public void setExecutor(ExecutorService executor) {
+        webTransportExtensionFactory.setExecutor(executor);
     }
 
     @Override

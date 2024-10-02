@@ -93,27 +93,25 @@ public class WebTransportEchoServer {
 
     private void startEchoHandler(Session session) {
         System.out.println("Starting echo handler for WebTransport session: " + session.getSessionId());
-        new Thread(() -> {
-            final CountDownLatch finished = new CountDownLatch(1);
-            session.registerSessionTerminatedEventListener((errorCode, message) -> {
-                System.out.println("Session " + session.getSessionId() + " closed with error code " + errorCode);
-                finished.countDown();
-            });
-            session.open();
-            session.setBidirectionalStreamReceiveHandler(stream -> {
-                try {
-                    stream.getInputStream().transferTo(stream.getOutputStream());
-                    stream.getOutputStream().close();
-                    System.out.println("Processed a request for session " + session.getSessionId() + " response sent");
-                }
-                catch (IOException e) {
-                    System.out.println("IO error while processing request: " + e.getMessage());
-                }
-            });
+        final CountDownLatch finished = new CountDownLatch(1);
+        session.registerSessionTerminatedEventListener((errorCode, message) -> {
+            System.out.println("Session " + session.getSessionId() + " closed with error code " + errorCode);
+            finished.countDown();
+        });
+        session.open();
+        session.setBidirectionalStreamReceiveHandler(stream -> {
             try {
-                finished.await();
+                stream.getInputStream().transferTo(stream.getOutputStream());
+                stream.getOutputStream().close();
+                System.out.println("Processed a request for session " + session.getSessionId() + " response sent");
             }
-            catch (InterruptedException e) { /* ignore */ }
-        }).start();
+            catch (IOException e) {
+                System.out.println("IO error while processing request: " + e.getMessage());
+            }
+        });
+        try {
+            finished.await();
+        }
+        catch (InterruptedException e) { /* ignore */ }
     }
 }

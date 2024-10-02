@@ -29,16 +29,20 @@ import java.net.URISyntaxException;
 import java.net.http.HttpHeaders;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 
 public class WebTransportExtension implements Http3ServerExtension {
 
     private final ServerSessionFactoryImpl sessionFactory;
     private final Map<String, Consumer<Session>> handlers;
+    private final ExecutorService executor;
 
-    public WebTransportExtension(Http3ServerConnection http3ServerConnection, Map<String, Consumer<Session>> webTransportHandlers) {
+    public WebTransportExtension(Http3ServerConnection http3ServerConnection, Map<String, Consumer<Session>> webTransportHandlers,
+                                 ExecutorService executorService) {
         sessionFactory = new ServerSessionFactoryImpl(http3ServerConnection);
         this.handlers = webTransportHandlers;
+        this.executor = executorService;
     }
 
     @Override
@@ -46,12 +50,16 @@ public class WebTransportExtension implements Http3ServerExtension {
         Optional<Consumer<Session>> handler = findHandler(pathAndQuery);
         if (handler.isPresent()) {
             Session session = sessionFactory.createServerSession(new CapsuleProtocolStreamImpl(requestResponseSteam));
-            handler.get().accept(session);
+            async(() -> handler.get().accept(session));
             return 200;
         }
         else {
             return 404;
         }
+    }
+
+    private void async(Runnable runnable) {
+        executor.submit(runnable);
     }
 
     private Optional<Consumer<Session>> findHandler(String pathAndQuery) {
