@@ -93,12 +93,13 @@ public class WebTransportEchoServer {
 
     private void startEchoHandler(Session session) {
         System.out.println("Starting echo handler for WebTransport session: " + session.getSessionId());
+
         final CountDownLatch finished = new CountDownLatch(1);
         session.registerSessionTerminatedEventListener((errorCode, message) -> {
             System.out.println("Session " + session.getSessionId() + " closed with error code " + errorCode);
             finished.countDown();
         });
-        session.open();
+
         session.setBidirectionalStreamReceiveHandler(stream -> {
             try {
                 stream.getInputStream().transferTo(stream.getOutputStream());
@@ -109,6 +110,10 @@ public class WebTransportEchoServer {
                 System.out.println("IO error while processing request: " + e.getMessage());
             }
         });
+
+        // Make sure the session is opened _after_ setting the handlers, otherwise we might miss incoming streams.
+        session.open();
+
         try {
             finished.await();
         }
