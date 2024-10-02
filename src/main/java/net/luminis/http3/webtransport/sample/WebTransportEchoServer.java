@@ -86,9 +86,7 @@ public class WebTransportEchoServer {
 
         HttpRequestHandler httpNoOpRequestHandler = (request, response) -> {};
         WebTransportHttp3ApplicationProtocolFactory webTransportProtocolFactory = new WebTransportHttp3ApplicationProtocolFactory(httpNoOpRequestHandler);
-        webTransportProtocolFactory.registerWebTransportServer("/echo", session -> {
-            startEchoHandler(session);
-        });
+        webTransportProtocolFactory.registerWebTransportServer("/echo", this::startEchoHandler);
         serverConnector.registerApplicationProtocol("h3", webTransportProtocolFactory);
         serverConnector.start();
     }
@@ -115,7 +113,7 @@ public class WebTransportEchoServer {
             try {
                 finished.await();
             }
-            catch (InterruptedException e) {}
+            catch (InterruptedException e) { /* ignore */ }
         }).start();
     }
 }
