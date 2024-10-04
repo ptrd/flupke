@@ -84,8 +84,19 @@ public class WebTransportEchoServer {
                 .withLogger(log)
                 .build();
 
-        HttpRequestHandler httpNoOpRequestHandler = (request, response) -> {};
-        WebTransportHttp3ApplicationProtocolFactory webTransportProtocolFactory = new WebTransportHttp3ApplicationProtocolFactory(httpNoOpRequestHandler);
+        HttpRequestHandler dummyGetHandler = (request, response) -> {
+            if (request.method().equals("GET")) {
+                response.setStatus(200);
+            }
+            else {
+                response.setStatus(405);
+            }
+        };
+        // Set a handler for non-CONNECT requests; a no-op handler (e.g. (req, resp) -> {} ) would also work, but would
+        // always return an error status (4xx), which might be confusing.
+        HttpRequestHandler httpRequestHandler = dummyGetHandler;
+
+        WebTransportHttp3ApplicationProtocolFactory webTransportProtocolFactory = new WebTransportHttp3ApplicationProtocolFactory(httpRequestHandler);
         webTransportProtocolFactory.registerWebTransportServer("/echo", this::startEchoHandler);
         serverConnector.registerApplicationProtocol("h3", webTransportProtocolFactory);
         serverConnector.start();
