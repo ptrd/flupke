@@ -22,16 +22,33 @@ import java.io.OutputStream;
 
 public abstract class HttpServerResponse {
 
-    private int status;
+    private int status = -1;
 
     public abstract OutputStream getOutputStream();
 
+    /**
+     * https://www.rfc-editor.org/rfc/rfc9110.html#name-status-codes
+     * "All valid status codes are within the range of 100 to 599, inclusive."
+     * "Values outside the range 100..599 are invalid. Implementations often use three-digit integer values outside of
+     *  that range (i.e., 600..999) for internal communication of non-HTTP status (e.g., library errors). "
+     * @param status
+     */
     public void setStatus(int status) {
+        if (status < 100 || status > 1000) {
+            throw new IllegalArgumentException("invalid status code: " + status);
+        }
         this.status = status;
     }
 
     public int status() {
+        if (status == -1) {
+            throw new IllegalStateException("status not set");
+        }
         return status;
+    }
+
+    public boolean isStatusSet() {
+        return status != -1;
     }
 
     public long size() {

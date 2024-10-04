@@ -335,8 +335,12 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
 
         try {
             requestHandler.handleRequest(request, response);
+            if (!response.isStatusSet()) {
+                response.setStatus(405);
+            }
             response.getOutputStream().close();
-        } catch (IOException e) {
+        }
+        catch (IOException e) {
             // Ignore, there is nothing we can do. Note Kwik will not throw exception when writing to stream
             // (except when writing to a closed stream)
         }

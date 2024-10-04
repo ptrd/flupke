@@ -235,6 +235,23 @@ public class Http3ServerConnectionImplTest {
         DataFrame dataFrame = new DataFrame().parse(dataBytes);
         assertThat(dataFrame.getPayload()).isEqualTo("Hello World!".getBytes());
     }
+
+    @Test
+    void statusShouldAlwaysBeSetEvenWhenHandlerDoesNot() throws Exception {
+        // Given
+        HttpRequestHandler handler = (req, resp) -> {};
+        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), handler, executor, emptyMap());
+
+        // When
+        HeadersFrame requestHeadersFrame = new HeadersFrame();
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        QuicStream stream = mockQuicStream(output);
+        CapturingEncoder encoder = new CapturingEncoder();
+        http3Connection.handleHttpRequest(List.of(requestHeadersFrame), stream, encoder);
+
+        // Then
+        assertThat(encoder.getCapturedHeaders()).containsKey(":status");
+    }
     //endregion
 
     //region request limits
