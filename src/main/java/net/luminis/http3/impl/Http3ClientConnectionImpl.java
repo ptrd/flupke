@@ -20,10 +20,7 @@ package net.luminis.http3.impl;
 
 import net.luminis.http3.core.*;
 import net.luminis.qpack.Encoder;
-import net.luminis.quic.QuicClientConnection;
-import net.luminis.quic.QuicConnection;
-import net.luminis.quic.QuicStream;
-import net.luminis.quic.Statistics;
+import net.luminis.quic.*;
 import net.luminis.quic.generic.VariableLengthInteger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
@@ -61,11 +58,11 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     private Consumer<HttpStream> bidirectionalStreamHandler;
 
     public Http3ClientConnectionImpl(String host, int port) throws IOException {
-        this(host, port, DEFAULT_CONNECT_TIMEOUT, false, null);
+        this(host, port, DEFAULT_CONNECT_TIMEOUT, false, null, null);
     }
 
-    public Http3ClientConnectionImpl(String host, int port, Duration connectTimeout, boolean disableCertificateCheck, Logger logger) throws IOException {
-        this(createQuicConnection(host, port, connectTimeout, disableCertificateCheck, logger));
+    public Http3ClientConnectionImpl(String host, int port, Duration connectTimeout, boolean disableCertificateCheck, DatagramSocketFactory datagramSocketFactory, Logger logger) throws IOException {
+        this(createQuicConnection(host, port, connectTimeout, disableCertificateCheck, datagramSocketFactory, logger));
     }
 
     public Http3ClientConnectionImpl(QuicConnection quicConnection) {
@@ -113,7 +110,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         }
     }
 
-    private static QuicConnection createQuicConnection(String host, int port, Duration connectTimeout, boolean disableCertificateCheck, Logger logger) throws SocketException, UnknownHostException {
+    private static QuicConnection createQuicConnection(String host, int port, Duration connectTimeout, boolean disableCertificateCheck, DatagramSocketFactory datagramSocketFactory, Logger logger) throws SocketException, UnknownHostException {
         QuicClientConnection.Builder builder = QuicClientConnection.newBuilder();
         try {
             builder.uri(new URI("//" + host + ":" + port));
@@ -136,6 +133,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         if (disableCertificateCheck) {
             builder.noServerCertificateCheck();
         }
+        builder.socketFactory(datagramSocketFactory);
         builder.logger(logger != null? logger: new NullLogger());
         return builder.build();
     }

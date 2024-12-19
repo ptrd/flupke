@@ -24,6 +24,7 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
 import java.net.Authenticator;
 import java.net.CookieHandler;
+import java.net.InetAddress;
 import java.net.ProxySelector;
 import java.net.http.HttpClient;
 import java.time.Duration;
@@ -46,9 +47,16 @@ public class Http3ClientBuilder implements HttpClient.Builder {
     private Long receiveBufferSize;
     private boolean disableCertificateCheck;
     private Logger logger;
+    private InetAddress address;
 
     public Http3ClientBuilder receiveBufferSize(long bufferSize) {
         receiveBufferSize = bufferSize;
+        return this;
+    }
+
+    @Override
+    public HttpClient.Builder localAddress(InetAddress localAddr) {
+        this.address = localAddr;
         return this;
     }
 
@@ -118,6 +126,6 @@ public class Http3ClientBuilder implements HttpClient.Builder {
 
     @Override
     public HttpClient build() {
-        return new Http3Client(connectTimeout, receiveBufferSize, disableCertificateCheck, logger);
+        return new Http3Client(connectTimeout, receiveBufferSize, disableCertificateCheck, address, logger);
     }
 }
