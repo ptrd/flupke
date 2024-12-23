@@ -17,8 +17,6 @@ public class InterfaceBoundDatagramSocketFactory implements DatagramSocketFactor
     }
     @Override
     public DatagramSocket createSocket(InetAddress inetAddress) throws SocketException {
-        DatagramSocket datagramSocket = bindToLocalAddress(localAddress);
-        datagramSocket.connect(new InetSocketAddress(inetAddress, 443));
-        return datagramSocket;
+        return bindToLocalAddress(localAddress);
     }
 }
