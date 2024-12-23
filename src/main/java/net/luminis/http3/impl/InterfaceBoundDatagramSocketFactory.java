@@ -8,16 +8,16 @@ import java.net.InetSocketAddress;
 import java.net.SocketException;
 
 public class InterfaceBoundDatagramSocketFactory implements DatagramSocketFactory {
-    private final InetAddress address;
-    public InterfaceBoundDatagramSocketFactory(InetAddress address) {
-        this.address = address;
+    private final InetAddress localAddress;
+    public InterfaceBoundDatagramSocketFactory(InetAddress localAddress) {
+        this.localAddress = localAddress;
     }
     private DatagramSocket bindToLocalAddress(InetAddress address) throws SocketException {
         return new DatagramSocket(new InetSocketAddress(address, 0));
     }
     @Override
     public DatagramSocket createSocket(InetAddress inetAddress) throws SocketException {
-        DatagramSocket datagramSocket = bindToLocalAddress(address);
+        DatagramSocket datagramSocket = bindToLocalAddress(localAddress);
         datagramSocket.connect(new InetSocketAddress(inetAddress, 443));
         return datagramSocket;
     }
