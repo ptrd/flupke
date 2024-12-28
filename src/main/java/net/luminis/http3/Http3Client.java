@@ -22,6 +22,8 @@ import net.luminis.http3.core.Http3ClientConnection;
 import net.luminis.http3.core.HttpError;
 import net.luminis.http3.core.HttpStream;
 import net.luminis.http3.impl.Http3ConnectionFactory;
+import net.luminis.http3.impl.InterfaceBoundDatagramSocketFactory;
+import net.luminis.quic.DatagramSocketFactory;
 import net.luminis.quic.Statistics;
 import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.log.Logger;
@@ -31,6 +33,7 @@ import javax.net.ssl.SSLParameters;
 import java.io.IOException;
 import java.net.Authenticator;
 import java.net.CookieHandler;
+import java.net.InetAddress;
 import java.net.ProxySelector;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -48,17 +51,19 @@ public class Http3Client extends HttpClient {
     private final Duration connectTimeout;
     private final Long receiveBufferSize;
     private final boolean disableCertificateCheck;
+    private final DatagramSocketFactory datagramSocketFactory;
     private final Logger logger;
     private Http3ClientConnection http3Connection;
     protected Http3ConnectionFactory http3ConnectionFactory;
     private final ExecutorService executorService;
 
-    Http3Client(Duration connectTimeout, Long receiveBufferSize, boolean disableCertificateCheck, Logger logger) {
+    Http3Client(Duration connectTimeout, Long receiveBufferSize, boolean disableCertificateCheck, InetAddress inetAddress, Logger logger) {
         this.connectTimeout = connectTimeout;
         this.receiveBufferSize = receiveBufferSize;
         this.disableCertificateCheck = disableCertificateCheck;
         this.logger = logger;
         this.http3ConnectionFactory = new Http3ConnectionFactory(this);
+        this.datagramSocketFactory = new InterfaceBoundDatagramSocketFactory(inetAddress);
 
         executorService = Executors.newCachedThreadPool(new DaemonThreadFactory("http3"));
     }
@@ -122,6 +127,10 @@ public class Http3Client extends HttpClient {
 
     public boolean isDisableCertificateCheck() {
         return disableCertificateCheck;
+    }
+
+    public DatagramSocketFactory getDatagramSocketFactory() {
+        return datagramSocketFactory;
     }
 
     public Logger getLogger() {

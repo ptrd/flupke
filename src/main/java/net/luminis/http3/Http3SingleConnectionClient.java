@@ -21,6 +21,7 @@ package net.luminis.http3;
 import net.luminis.http3.impl.Http3SingleConnectionFactory;
 import net.luminis.quic.QuicConnection;
 
+import java.net.InetAddress;
 import java.time.Duration;
 
 /**
@@ -28,8 +29,8 @@ import java.time.Duration;
  */
 public class Http3SingleConnectionClient extends Http3Client {
 
-    public Http3SingleConnectionClient(QuicConnection quicConnection, Duration connectTimeout, Long receiveBufferSize) {
-        super(connectTimeout, receiveBufferSize, false, null);
+    public Http3SingleConnectionClient(QuicConnection quicConnection, Duration connectTimeout, Long receiveBufferSize, InetAddress localAddress) {
+        super(connectTimeout, receiveBufferSize, false, localAddress, null);
 
         http3ConnectionFactory = new Http3SingleConnectionFactory(quicConnection);
     }
