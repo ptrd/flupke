@@ -54,7 +54,6 @@ public class Http3ClientBuilder implements HttpClient.Builder {
         return this;
     }
 
-    @Override
     public HttpClient.Builder localAddress(InetAddress localAddr) {
         this.address = localAddr;
         return this;
