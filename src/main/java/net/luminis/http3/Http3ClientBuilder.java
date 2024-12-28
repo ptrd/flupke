@@ -54,6 +54,22 @@ public class Http3ClientBuilder implements HttpClient.Builder {
         return this;
     }
 
+    /**
+     * Binds the socket to this local address when creating connections for sending requests.
+     * If no local address is set or null is passed to this method then sockets created by the HTTP client will be bound
+     * to an automatically assigned socket address.
+     *
+     * Common usages of the HttpClient do not require this method to be called. Setting a local address, through this method,
+     * is only for advanced usages where users of the HttpClient require specific control on which network interface gets
+     * used for the HTTP communication. Callers of this method are expected to be aware of the networking configurations
+     * of the system where the HttpClient will be used and care should be taken to ensure the correct localAddr is passed.
+     * Failure to do so can result in requests sent through the HttpClient to fail.
+     *
+     * This method is part of the HttpClient.Builder interface since Java 19.
+     *
+     * @param localAddr the local address to bind to
+     * @return this builder
+     */
     public HttpClient.Builder localAddress(InetAddress localAddr) {
         this.address = localAddr;
         return this;
