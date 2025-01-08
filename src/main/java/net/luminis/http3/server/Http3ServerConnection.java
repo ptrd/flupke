@@ -23,11 +23,11 @@ import net.luminis.http3.impl.DataFrame;
 import net.luminis.http3.impl.HeadersFrame;
 import net.luminis.http3.impl.Http3ConnectionImpl;
 import net.luminis.http3.impl.Http3Frame;
-import net.luminis.qpack.Encoder;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.server.ApplicationProtocolConnection;
 import net.luminis.quic.server.ServerConnection;
+import tech.kwik.qpack.Encoder;
 
 import java.io.IOException;
 import java.io.InputStream;

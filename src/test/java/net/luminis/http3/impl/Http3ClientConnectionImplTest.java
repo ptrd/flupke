@@ -26,8 +26,6 @@ import net.luminis.http3.core.HttpStream;
 import net.luminis.http3.test.ByteUtils;
 import net.luminis.http3.test.FieldSetter;
 import net.luminis.http3.test.Http3ClientConnectionBuilder;
-import net.luminis.qpack.Decoder;
-import net.luminis.qpack.Encoder;
 import net.luminis.quic.QuicClientConnection;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.generic.VariableLengthInteger;
@@ -35,6 +33,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
+import tech.kwik.qpack.Decoder;
+import tech.kwik.qpack.Encoder;
 
 import java.io.*;
 import java.net.ProtocolException;
@@ -1026,7 +1026,7 @@ public class Http3ClientConnectionImplTest {
         return quicStream;
     }
 
-    private class NoOpEncoder extends Encoder {
+    private class NoOpEncoder implements Encoder {
         @Override
         public ByteBuffer compressHeaders(List<Map.Entry<String, String>> headers) {
             mockEncoderCompressedHeaders = headers;
@@ -1034,7 +1034,7 @@ public class Http3ClientConnectionImplTest {
         }
     }
 
-    private class NoOpDecoder extends Decoder {
+    private class NoOpDecoder implements Decoder {
         @Override
         public List<Map.Entry<String, String>> decodeStream(InputStream inputStream) throws IOException {
             return mockEncoderCompressedHeaders;

@@ -21,12 +21,12 @@ package net.luminis.http3.server;
 import net.luminis.http3.core.HttpError;
 import net.luminis.http3.impl.DataFrame;
 import net.luminis.http3.impl.HeadersFrame;
-import net.luminis.qpack.Decoder;
-import net.luminis.qpack.Encoder;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.server.ServerConnection;
 import org.junit.jupiter.api.Test;
+import tech.kwik.qpack.Decoder;
+import tech.kwik.qpack.Encoder;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -150,7 +150,7 @@ public class Http3ServerConnectionTest {
         Http3ServerConnection http3Connection = new Http3ServerConnection(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize, executor);
 
         HeadersFrame largeHeaders = new HeadersFrame("superlarge", "*".repeat(1000));
-        byte[] data = largeHeaders.toBytes(new Encoder());
+        byte[] data = largeHeaders.toBytes(Encoder.newBuilder().build());
 
         assertThatThrownBy(() ->
                 // When
@@ -168,7 +168,7 @@ public class Http3ServerConnectionTest {
         Http3ServerConnection http3Connection = new Http3ServerConnection(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize, executor);
 
         HeadersFrame largeHeaders = new HeadersFrame("superlarge", "*".repeat(1000));
-        byte[] data = largeHeaders.toBytes(new Encoder());
+        byte[] data = largeHeaders.toBytes(Encoder.newBuilder().build());
 
         // When
         QuicStream quicStream = createMockQuicStream(new ByteArrayInputStream(data), new ByteArrayOutputStream());
@@ -215,7 +215,7 @@ public class Http3ServerConnectionTest {
         return stream;
     }
 
-    private class NoOpEncoder extends Encoder {
+    private class NoOpEncoder implements Encoder {
         @Override
         public ByteBuffer compressHeaders(List<Map.Entry<String, String>> headers) {
             mockEncoderCompressedHeaders = headers;
@@ -224,7 +224,7 @@ public class Http3ServerConnectionTest {
         }
     }
 
-    private class NoOpDecoder extends Decoder {
+    private class NoOpDecoder implements Decoder {
         @Override
         public List<Map.Entry<String, String>> decodeStream(InputStream inputStream) {
             return mockEncoderCompressedHeaders;

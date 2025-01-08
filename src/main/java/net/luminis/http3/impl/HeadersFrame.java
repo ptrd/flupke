@@ -18,9 +18,9 @@
  */
 package net.luminis.http3.impl;
 
-import net.luminis.qpack.Decoder;
-import net.luminis.qpack.Encoder;
 import net.luminis.quic.generic.VariableLengthInteger;
+import tech.kwik.qpack.Decoder;
+import tech.kwik.qpack.Encoder;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;

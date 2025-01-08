@@ -18,10 +18,10 @@
  */
 package net.luminis.http3.impl;
 
-import net.luminis.qpack.Decoder;
-import net.luminis.qpack.Encoder;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import tech.kwik.qpack.Decoder;
+import tech.kwik.qpack.Encoder;
 
 import java.io.InputStream;
 import java.net.URI;

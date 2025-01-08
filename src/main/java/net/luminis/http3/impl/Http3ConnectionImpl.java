@@ -21,11 +21,11 @@ package net.luminis.http3.impl;
 import net.luminis.http3.core.Http3Connection;
 import net.luminis.http3.core.HttpError;
 import net.luminis.http3.core.HttpStream;
-import net.luminis.qpack.Decoder;
-import net.luminis.qpack.Encoder;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.generic.VariableLengthInteger;
+import tech.kwik.qpack.Decoder;
+import tech.kwik.qpack.Encoder;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -115,11 +115,11 @@ public class Http3ConnectionImpl implements Http3Connection {
 
     public Http3ConnectionImpl(QuicConnection quicConnection) {
         this.quicConnection = quicConnection;
-        qpackDecoder = new Decoder();
+        qpackDecoder = Decoder.newBuilder().build();
         settingsParameters = new HashMap<>();
 
         registerStandardStreamHandlers();
-        qpackEncoder = new Encoder();
+        qpackEncoder = Encoder.newBuilder().build();
     }
 
     @Override

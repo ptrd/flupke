@@ -15,7 +15,7 @@ repositories {
 
 dependencies {
     implementation group: 'tech.kwik', name: 'kwik', version: '0.9.1'
-    implementation group: 'tech.kwik', name: 'qpack', version: '1.0.2'
+    implementation group: 'tech.kwik', name: 'qpack', version: '2.0'
 
     def junitVersion = "5.10.0"
     testImplementation("org.junit.jupiter:junit-jupiter-api:$junitVersion")
@@ -56,6 +56,7 @@ jar {
     from {
         configurations.compileClasspath.findAll { it.name =~ /qpack.*\.jar/ }.collect { it.isDirectory() ? it : zipTree(it) }
     }
+    exclude 'module-info.class'
 }
 
 task uberJar(type: Jar) {
@@ -65,7 +66,7 @@ task uberJar(type: Jar) {
     archiveBaseName = "flupke-uber"
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
-    exclude 'META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.txt'
+    exclude 'META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.txt', 'module-info.class'
     with jar
 }
 
