@@ -85,7 +85,7 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
         InputStream requestStream = quicStream.getInputStream();
         try {
             List<Http3Frame> receivedFrames = parseHttp3Frames(requestStream);
-            handleHttpRequest(receivedFrames, quicStream, new Encoder());
+            handleHttpRequest(receivedFrames, quicStream, qpackEncoder);
         }
         catch (IOException ioError) {
             quicStream.abortReading(H3_INTERNAL_ERROR);
@@ -186,7 +186,7 @@ public class Http3ServerConnection extends Http3ConnectionImpl implements Applic
 
     private void sendStatus(int statusCode, OutputStream outputStream) throws IOException {
         HeadersFrame headersFrame = new HeadersFrame(HeadersFrame.PSEUDO_HEADER_STATUS, Integer.toString(statusCode));
-        outputStream.write(headersFrame.toBytes(new Encoder()));
+        outputStream.write(headersFrame.toBytes(qpackEncoder));
     }
 
 }

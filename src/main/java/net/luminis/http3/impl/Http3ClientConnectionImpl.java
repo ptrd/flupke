@@ -20,7 +20,11 @@ package net.luminis.http3.impl;
 
 import net.luminis.http3.core.*;
 import net.luminis.qpack.Encoder;
-import net.luminis.quic.*;
+import net.luminis.quic.DatagramSocketFactory;
+import net.luminis.quic.QuicClientConnection;
+import net.luminis.quic.QuicConnection;
+import net.luminis.quic.QuicStream;
+import net.luminis.quic.Statistics;
 import net.luminis.quic.generic.VariableLengthInteger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
@@ -52,7 +56,6 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     private InputStream serverPushStream;
     private Statistics connectionStats;
     private boolean initialized;
-    private Encoder qpackEncoder;
     private final CountDownLatch settingsFrameReceived;
     private boolean settingsEnableConnectProtocol;
     private Consumer<HttpStream> bidirectionalStreamHandler;
@@ -69,8 +72,6 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         super(quicConnection);
 
         quicConnection.setPeerInitiatedStreamCallback(stream -> doAsync(() -> handleIncomingStream(stream)));
-
-        qpackEncoder = new Encoder();
 
         settingsFrameReceived = new CountDownLatch(1);
     }

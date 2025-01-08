@@ -453,7 +453,7 @@ public class Http3ClientConnectionImplTest {
         mockQuicConnectionWithStreams(http3Connection, new byte[] { 0x01, 0x00});
         Encoder mockedQPackEncoder = mock(Encoder.class);
         when(mockedQPackEncoder.compressHeaders(anyList())).thenReturn(ByteBuffer.allocate(0));
-        FieldSetter.setField(http3Connection, Http3ClientConnectionImpl.class.getDeclaredField("qpackEncoder"), mockedQPackEncoder);
+        FieldSetter.setField(http3Connection, Http3ConnectionImpl.class.getDeclaredField("qpackEncoder"), mockedQPackEncoder);
 
         // When
         HttpRequest connectRequest = HttpRequest.newBuilder()
@@ -638,7 +638,7 @@ public class Http3ClientConnectionImplTest {
         mockQuicConnectionWithStreams(http3Connection, new byte[] { 0x01, 0x00 });
         Encoder mockedQPackEncoder = mock(Encoder.class);
         when(mockedQPackEncoder.compressHeaders(anyList())).thenReturn(ByteBuffer.allocate(0));
-        FieldSetter.setField(http3Connection, Http3ClientConnectionImpl.class.getDeclaredField("qpackEncoder"), mockedQPackEncoder);
+        FieldSetter.setField(http3Connection, Http3ConnectionImpl.class.getDeclaredField("qpackEncoder"), mockedQPackEncoder);
 
         http3Connection.handleIncomingStream(createControlStream(SETTINGS_ENABLE_CONNECT_PROTOCOL, 1));
 
@@ -667,7 +667,7 @@ public class Http3ClientConnectionImplTest {
         mockQuicConnectionWithStreams(http3Connection, new byte[] { 0x01, 0x00});
         Encoder mockedQPackEncoder = mock(Encoder.class);
         when(mockedQPackEncoder.compressHeaders(anyList())).thenReturn(ByteBuffer.allocate(0));
-        FieldSetter.setField(http3Connection, Http3ClientConnectionImpl.class.getDeclaredField("qpackEncoder"), mockedQPackEncoder);
+        FieldSetter.setField(http3Connection, Http3ConnectionImpl.class.getDeclaredField("qpackEncoder"), mockedQPackEncoder);
 
         http3Connection.handleIncomingStream(createControlStream(SETTINGS_ENABLE_CONNECT_PROTOCOL, 1));
 
@@ -694,7 +694,7 @@ public class Http3ClientConnectionImplTest {
         // Must use mocked encoder to be able to capture headers in validate step.
         Encoder mockedQPackEncoder = mock(Encoder.class);
         when(mockedQPackEncoder.compressHeaders(anyList())).thenReturn(ByteBuffer.allocate(0));
-        FieldSetter.setField(http3Connection, Http3ClientConnectionImpl.class.getDeclaredField("qpackEncoder"), mockedQPackEncoder);
+        FieldSetter.setField(http3Connection, Http3ConnectionImpl.class.getDeclaredField("qpackEncoder"), mockedQPackEncoder);
 
         // Server must send SETTINGS_ENABLE_CONNECT_PROTOCOL setting on control stream in order to let client use extended CONNECT.
         http3Connection.handleIncomingStream(createControlStream(SETTINGS_ENABLE_CONNECT_PROTOCOL, 1));

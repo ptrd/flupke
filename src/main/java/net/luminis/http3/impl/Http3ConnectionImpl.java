@@ -22,6 +22,7 @@ import net.luminis.http3.core.Http3Connection;
 import net.luminis.http3.core.HttpError;
 import net.luminis.http3.core.HttpStream;
 import net.luminis.qpack.Decoder;
+import net.luminis.qpack.Encoder;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.generic.VariableLengthInteger;
@@ -109,6 +110,7 @@ public class Http3ConnectionImpl implements Http3Connection {
             (long) QPACK_BLOCKED_STREAMS,
             (long) SETTINGS_ENABLE_CONNECT_PROTOCOL
     );
+    protected Encoder qpackEncoder;
 
 
     public Http3ConnectionImpl(QuicConnection quicConnection) {
@@ -117,6 +119,7 @@ public class Http3ConnectionImpl implements Http3Connection {
         settingsParameters = new HashMap<>();
 
         registerStandardStreamHandlers();
+        qpackEncoder = new Encoder();
     }
 
     @Override
