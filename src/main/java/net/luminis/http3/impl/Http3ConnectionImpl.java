@@ -164,7 +164,7 @@ public class Http3ConnectionImpl implements Http3Connection {
     }
 
     @Override
-    public HttpStream createBidirectionalStream() {
+    public HttpStream createBidirectionalStream() throws IOException {
         return wrap(quicConnection.createStream(true));
     }
 

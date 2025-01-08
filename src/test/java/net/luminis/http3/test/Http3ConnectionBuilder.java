@@ -24,6 +24,7 @@ import net.luminis.quic.QuicStream;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
@@ -42,7 +43,7 @@ public class Http3ConnectionBuilder {
         return this;
     }
 
-    public Http3ConnectionImpl build() {
+    public Http3ConnectionImpl build() throws IOException {
         QuicConnection quicConnection = mock(QuicConnection.class);
 
         if (unidirectionalOutputStream != null) {

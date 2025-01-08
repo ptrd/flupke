@@ -121,7 +121,7 @@ public class Http3ServerConnectionTest {
     }
 
     @Test
-    void requestDataLargerThanMaxIsNotAccepted() {
+    void requestDataLargerThanMaxIsNotAccepted() throws Exception {
         // Given
         long maxHeaderSize = Long.MAX_VALUE;
         long maxDataSize = 2500;
@@ -143,7 +143,7 @@ public class Http3ServerConnectionTest {
     }
 
     @Test
-    void requestHeadersLargerThanMaxIsNotAccepted() {
+    void requestHeadersLargerThanMaxIsNotAccepted() throws Exception {
         // Given
         long maxHeaderSize = 1000;
         long maxDataSize = Long.MAX_VALUE;
@@ -161,7 +161,7 @@ public class Http3ServerConnectionTest {
     }
 
     @Test
-    void requestThatIsAbortedWithErrorDiscardsStream() {
+    void requestThatIsAbortedWithErrorDiscardsStream() throws Exception {
         // Given
         long maxHeaderSize = 1000;
         long maxDataSize = Long.MAX_VALUE;
@@ -187,7 +187,7 @@ public class Http3ServerConnectionTest {
         return headersFrame;
     }
 
-    private QuicConnection createMockQuicConnection() {
+    private QuicConnection createMockQuicConnection() throws IOException {
         ServerConnection connection = mock(ServerConnection.class);
         QuicStream stream = mock(QuicStream.class);
         when(connection.createStream(false)).thenReturn(stream);
