@@ -18,7 +18,7 @@
  */
 package net.luminis.http3.impl;
 
-import net.luminis.quic.generic.VariableLengthInteger;
+import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.qpack.Decoder;
 import tech.kwik.qpack.Encoder;
 

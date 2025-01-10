@@ -26,13 +26,13 @@ import net.luminis.http3.core.HttpStream;
 import net.luminis.http3.test.ByteUtils;
 import net.luminis.http3.test.FieldSetter;
 import net.luminis.http3.test.Http3ClientConnectionBuilder;
-import net.luminis.quic.QuicClientConnection;
-import net.luminis.quic.QuicStream;
-import net.luminis.quic.generic.VariableLengthInteger;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
+import tech.kwik.core.QuicClientConnection;
+import tech.kwik.core.QuicStream;
+import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.qpack.Decoder;
 import tech.kwik.qpack.Encoder;
 

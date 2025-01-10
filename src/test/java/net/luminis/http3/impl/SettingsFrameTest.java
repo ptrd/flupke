@@ -18,8 +18,8 @@
  */
 package net.luminis.http3.impl;
 
-import net.luminis.quic.generic.InvalidIntegerEncodingException;
-import net.luminis.quic.generic.VariableLengthInteger;
+import tech.kwik.core.generic.InvalidIntegerEncodingException;
+import tech.kwik.core.generic.VariableLengthInteger;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;

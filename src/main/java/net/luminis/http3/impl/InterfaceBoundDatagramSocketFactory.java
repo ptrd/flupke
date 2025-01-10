@@ -18,7 +18,7 @@
  */
 package net.luminis.http3.impl;
 
-import net.luminis.quic.DatagramSocketFactory;
+import tech.kwik.core.DatagramSocketFactory;
 
 import java.net.DatagramSocket;
 import java.net.InetAddress;

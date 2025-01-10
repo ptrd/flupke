@@ -18,7 +18,7 @@
  */
 package net.luminis.http3.core;
 
-import net.luminis.quic.generic.VariableLengthInteger;
+import tech.kwik.core.generic.VariableLengthInteger;
 
 import java.io.IOException;
 import java.io.OutputStream;

@@ -19,7 +19,7 @@
 package net.luminis.http3.impl;
 
 import net.luminis.http3.core.Http3ClientConnection;
-import net.luminis.quic.QuicConnection;
+import tech.kwik.core.QuicConnection;
 
 import java.io.IOException;
 import java.net.http.HttpRequest;

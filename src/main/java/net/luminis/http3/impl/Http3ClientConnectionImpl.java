@@ -19,14 +19,14 @@
 package net.luminis.http3.impl;
 
 import net.luminis.http3.core.*;
-import net.luminis.quic.DatagramSocketFactory;
-import net.luminis.quic.QuicClientConnection;
-import net.luminis.quic.QuicConnection;
-import net.luminis.quic.QuicStream;
-import net.luminis.quic.Statistics;
-import net.luminis.quic.generic.VariableLengthInteger;
-import net.luminis.quic.log.Logger;
-import net.luminis.quic.log.NullLogger;
+import tech.kwik.core.DatagramSocketFactory;
+import tech.kwik.core.QuicClientConnection;
+import tech.kwik.core.QuicConnection;
+import tech.kwik.core.QuicStream;
+import tech.kwik.core.Statistics;
+import tech.kwik.core.generic.VariableLengthInteger;
+import tech.kwik.core.log.Logger;
+import tech.kwik.core.log.NullLogger;
 import tech.kwik.qpack.Encoder;
 
 import java.io.*;

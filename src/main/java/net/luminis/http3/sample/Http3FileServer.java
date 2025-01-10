@@ -19,10 +19,10 @@
 package net.luminis.http3.sample;
 
 import net.luminis.http3.server.Http3ApplicationProtocolFactory;
-import net.luminis.quic.QuicConnection;
-import net.luminis.quic.log.SysOutLogger;
-import net.luminis.quic.server.ServerConnectionConfig;
-import net.luminis.quic.server.ServerConnector;
+import tech.kwik.core.QuicConnection;
+import tech.kwik.core.log.SysOutLogger;
+import tech.kwik.core.server.ServerConnectionConfig;
+import tech.kwik.core.server.ServerConnector;
 
 import java.io.File;
 import java.io.FileInputStream;

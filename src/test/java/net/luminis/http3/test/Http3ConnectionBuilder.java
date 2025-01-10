@@ -19,8 +19,8 @@
 package net.luminis.http3.test;
 
 import net.luminis.http3.impl.Http3ConnectionImpl;
-import net.luminis.quic.QuicConnection;
-import net.luminis.quic.QuicStream;
+import tech.kwik.core.QuicConnection;
+import tech.kwik.core.QuicStream;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;

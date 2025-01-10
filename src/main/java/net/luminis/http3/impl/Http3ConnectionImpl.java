@@ -21,9 +21,9 @@ package net.luminis.http3.impl;
 import net.luminis.http3.core.Http3Connection;
 import net.luminis.http3.core.HttpError;
 import net.luminis.http3.core.HttpStream;
-import net.luminis.quic.QuicConnection;
-import net.luminis.quic.QuicStream;
-import net.luminis.quic.generic.VariableLengthInteger;
+import tech.kwik.core.QuicConnection;
+import tech.kwik.core.QuicStream;
+import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.qpack.Decoder;
 import tech.kwik.qpack.Encoder;
 

@@ -19,7 +19,7 @@
 package net.luminis.http3;
 
 import net.luminis.http3.impl.Http3SingleConnectionFactory;
-import net.luminis.quic.QuicConnection;
+import tech.kwik.core.QuicConnection;
 
 import java.net.InetAddress;
 import java.time.Duration;

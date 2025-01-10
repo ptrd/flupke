@@ -19,8 +19,8 @@
 package net.luminis.http3.sample;
 
 import net.luminis.http3.Http3Client;
-import net.luminis.quic.log.Logger;
-import net.luminis.quic.log.SysOutLogger;
+import tech.kwik.core.log.Logger;
+import tech.kwik.core.log.SysOutLogger;
 
 import java.io.IOException;
 import java.io.InputStream;

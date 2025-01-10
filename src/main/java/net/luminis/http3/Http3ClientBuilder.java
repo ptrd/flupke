@@ -18,7 +18,7 @@
  */
 package net.luminis.http3;
 
-import net.luminis.quic.log.Logger;
+import tech.kwik.core.log.Logger;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;

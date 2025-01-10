@@ -22,10 +22,10 @@ import net.luminis.http3.core.HttpError;
 import net.luminis.http3.core.HttpStream;
 import net.luminis.http3.test.Http3ClientConnectionBuilder;
 import net.luminis.http3.test.Http3ConnectionBuilder;
-import net.luminis.quic.QuicConnection;
-import net.luminis.quic.QuicStream;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import tech.kwik.core.QuicConnection;
+import tech.kwik.core.QuicStream;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;

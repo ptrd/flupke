@@ -23,10 +23,10 @@ import net.luminis.http3.core.HttpError;
 import net.luminis.http3.core.HttpStream;
 import net.luminis.http3.impl.Http3ConnectionFactory;
 import net.luminis.http3.impl.InterfaceBoundDatagramSocketFactory;
-import net.luminis.quic.DatagramSocketFactory;
-import net.luminis.quic.Statistics;
-import net.luminis.quic.concurrent.DaemonThreadFactory;
-import net.luminis.quic.log.Logger;
+import tech.kwik.core.DatagramSocketFactory;
+import tech.kwik.core.Statistics;
+import tech.kwik.core.concurrent.DaemonThreadFactory;
+import tech.kwik.core.log.Logger;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;

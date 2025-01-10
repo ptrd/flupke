@@ -18,7 +18,7 @@
  */
 package net.luminis.http3.core;
 
-import net.luminis.quic.Statistics;
+import tech.kwik.core.Statistics;
 
 import java.io.IOException;
 import java.net.http.HttpRequest;
