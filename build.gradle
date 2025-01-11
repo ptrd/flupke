@@ -50,7 +50,7 @@ test {
 
 jar {
     manifest {
-        attributes 'Main-Class': 'net.luminis.http3.sample.Flupke'
+        attributes 'Main-Class': 'tech.kwik.flupke.sample.Flupke'
     }
 
     from {
@@ -61,7 +61,7 @@ jar {
 
 task uberJar(type: Jar) {
     manifest {
-        attributes 'Main-Class': 'net.luminis.http3.sample.Flupke'
+        attributes 'Main-Class': 'tech.kwik.flupke.sample.Flupke'
     }
     archiveBaseName = "flupke-uber"
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
@@ -90,7 +90,7 @@ task determineVersion {
             }
             project.version = versionTag
 
-            ext.versionDir = new File("${buildDir}", "generated/net/luminis/http3/impl")
+            ext.versionDir = new File("${buildDir}", "generated/tech/kwik/flupke/impl")
             versionDir.mkdirs()
 
             new File(versionDir, "version.properties").text = versionTag
@@ -123,7 +123,7 @@ def pomContent = {
         developer {
             id = 'peterd'
             name = 'Peter Doornbosch'
-            email = 'peter.doornbosch@luminis.eu'
+            email = 'peter.doornbosch@gmail.com'
         }
     }
 

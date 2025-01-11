@@ -32,7 +32,7 @@ task generateAndroidSources(type: Copy) {
         exclude "**/sample/kwik/**"
     }
     into "${buildDir}/generated/main/java"
-    filter { line -> line.replaceAll("import java.net.http.", "import net.luminis.httpclient.") }
+    filter { line -> line.replaceAll("import java.net.http.", "import tech.kwik.flupke.httpclient.") }
 }
 
 tasks.named("assemble") {
@@ -65,9 +65,9 @@ test {
 }
 
 jar {
-    include "net/luminis/httpclient/**"
-    include "net/luminis/http3/**"
-    exclude "net/luminis/http3/server/**"
+    include "tech/kwik/flupke/httpclient/**"
+    include "tech/kwik/flupke/**"
+    exclude "tech/kwik/flupke/server/**"
     include "tech/kwik/qpack/**"
     from {
         configurations.compileClasspath.findAll { it.name =~ /qpack.*\.jar/ }.collect { it.isDirectory() ? it : zipTree(it) }
