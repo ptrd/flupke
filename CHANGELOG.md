@@ -1,5 +1,14 @@
 # Releases
 
+## 0.6 (2025-01-21)
+
+**Note: this release has a breaking change (which is, however, easy to fix)**
+
+Changed package structure: the flupke package (and all subpackages) now start with `tech.kwik.flupke`.
+
+**Upgrade instructions:** perform a global find-and-replace to replace the string `net.luminis.http3` by `tech.kwik.flupke`.
+If your project is also using the android drop-in replacement for the Java HTTP Client, also replace the string `net.luminis.httpclient` by `tech.kwik.flupke.httpclient`.
+
 ## 0.5.4 (2025-01-11)
 
 - upgraded kwik dependency to latest (0.10)
