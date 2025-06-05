@@ -4,4 +4,4 @@ if [ ! -f "$flupkejar" ]; then
     echo "Cannot find flupke-uber.jar. Did you forgot to build it? ('gradle uberJar')"
     exit
 fi
-java -cp $flupkejar tech.kwik.flupke.sample.Sample $*
+java $JAVA_OPTS -cp $flupkejar tech.kwik.flupke.sample.Sample $*
