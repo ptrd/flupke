@@ -15,7 +15,7 @@ repositories {
 
 dependencies {
     implementation group: 'tech.kwik', name: 'kwik', version: '0.10.3'
-    implementation group: 'tech.kwik', name: 'qpack', version: '2.0'
+    implementation group: 'tech.kwik', name: 'qpack', version: '2.0.1'
 
     def junitVersion = "5.10.0"
     testImplementation("org.junit.jupiter:junit-jupiter-api:$junitVersion")
