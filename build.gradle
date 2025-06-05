@@ -14,7 +14,7 @@ repositories {
 }
 
 dependencies {
-    implementation group: 'tech.kwik', name: 'kwik', version: '0.10.2'
+    implementation group: 'tech.kwik', name: 'kwik', version: '0.10.3'
     implementation group: 'tech.kwik', name: 'qpack', version: '2.0'
 
     def junitVersion = "5.10.0"
