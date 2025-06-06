@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023, 2024 Peter Doornbosch
+ * Copyright © 2023, 2024, 2025 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *
@@ -19,11 +19,12 @@
 package net.luminis.http3.test;
 
 import net.luminis.http3.impl.Http3ConnectionImpl;
-import net.luminis.quic.QuicConnection;
-import net.luminis.quic.QuicStream;
+import tech.kwik.core.QuicConnection;
+import tech.kwik.core.QuicStream;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
@@ -42,7 +43,7 @@ public class Http3ConnectionBuilder {
         return this;
     }
 
-    public Http3ConnectionImpl build() {
+    public Http3ConnectionImpl build() throws IOException {
         QuicConnection quicConnection = mock(QuicConnection.class);
 
         if (unidirectionalOutputStream != null) {

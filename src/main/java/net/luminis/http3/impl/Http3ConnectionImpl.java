@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023, 2024 Peter Doornbosch
+ * Copyright © 2023, 2024, 2025 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *
@@ -21,10 +21,11 @@ package net.luminis.http3.impl;
 import net.luminis.http3.core.Http3Connection;
 import net.luminis.http3.core.HttpError;
 import net.luminis.http3.core.HttpStream;
-import net.luminis.qpack.Decoder;
-import net.luminis.quic.QuicConnection;
-import net.luminis.quic.QuicStream;
-import net.luminis.quic.generic.VariableLengthInteger;
+import tech.kwik.core.QuicConnection;
+import tech.kwik.core.QuicStream;
+import tech.kwik.core.generic.VariableLengthInteger;
+import tech.kwik.qpack.Decoder;
+import tech.kwik.qpack.Encoder;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -112,11 +113,12 @@ public class Http3ConnectionImpl implements Http3Connection {
             (long) QPACK_BLOCKED_STREAMS,
             (long) SETTINGS_ENABLE_CONNECT_PROTOCOL
     );
+    protected Encoder qpackEncoder;
 
 
     public Http3ConnectionImpl(QuicConnection quicConnection) {
         this.quicConnection = quicConnection;
-        qpackDecoder = new Decoder();
+        qpackDecoder = Decoder.newBuilder().build();
         settingsParameters = new HashMap<>();
         settingsParameters.put((long) QPACK_MAX_TABLE_CAPACITY, 0L);
         settingsParameters.put((long) QPACK_BLOCKED_STREAMS, 0L);
@@ -124,6 +126,7 @@ public class Http3ConnectionImpl implements Http3Connection {
         settingsFrameReceived = new CountDownLatch(1);
 
         registerStandardStreamHandlers();
+        qpackEncoder = Encoder.newBuilder().build();
     }
 
     @Override
@@ -183,7 +186,7 @@ public class Http3ConnectionImpl implements Http3Connection {
     }
 
     @Override
-    public HttpStream createBidirectionalStream() {
+    public HttpStream createBidirectionalStream() throws IOException {
         return wrap(quicConnection.createStream(true));
     }
 

@@ -22,7 +22,7 @@ Latest release can be found at maven central:
     <dependency>
         <groupId>tech.kwik</groupId>
         <artifactId>flupke</artifactId>
-        <version>0.5.3</version>
+        <version>0.5.4</version>
     </dependency> 
 
 

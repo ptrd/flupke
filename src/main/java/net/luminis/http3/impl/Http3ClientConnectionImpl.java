@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020, 2021, 2022, 2023, 2024 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021, 2022, 2023, 2024, 2025 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *
@@ -23,13 +23,14 @@ import net.luminis.http3.core.CapsuleProtocolStream;
 import net.luminis.http3.core.Http3ClientConnection;
 import net.luminis.http3.core.HttpError;
 import net.luminis.http3.core.HttpStream;
-import net.luminis.qpack.Encoder;
-import net.luminis.quic.QuicClientConnection;
-import net.luminis.quic.QuicConnection;
-import net.luminis.quic.QuicStream;
-import net.luminis.quic.Statistics;
-import net.luminis.quic.log.Logger;
-import net.luminis.quic.log.NullLogger;
+import tech.kwik.core.DatagramSocketFactory;
+import tech.kwik.core.QuicClientConnection;
+import tech.kwik.core.QuicConnection;
+import tech.kwik.core.QuicStream;
+import tech.kwik.core.Statistics;
+import tech.kwik.core.log.Logger;
+import tech.kwik.core.log.NullLogger;
+import tech.kwik.qpack.Encoder;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -61,23 +62,20 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     private InputStream serverPushStream;
     private Statistics connectionStats;
     private boolean initialized;
-    private Encoder qpackEncoder;
     private Consumer<HttpStream> bidirectionalStreamHandler;
 
     public Http3ClientConnectionImpl(String host, int port) throws IOException {
-        this(host, port, DEFAULT_CONNECT_TIMEOUT, defaultConnectionSettings(), null);
+        this(host, port, DEFAULT_CONNECT_TIMEOUT, defaultConnectionSettings(), null, null);
     }
 
-    public Http3ClientConnectionImpl(String host, int port, Duration connectTimeout, Http3ConnectionSettings connectionSettings, Logger logger) throws IOException {
-        this(createQuicConnection(host, port, connectTimeout, connectionSettings, logger));
+    public Http3ClientConnectionImpl(String host, int port, Duration connectTimeout, Http3ConnectionSettings connectionSettings, DatagramSocketFactory datagramSocketFactory, Logger logger) throws IOException {
+        this(createQuicConnection(host, port, connectTimeout, connectionSettings, datagramSocketFactory, logger));
     }
 
     public Http3ClientConnectionImpl(QuicConnection quicConnection) {
         super(quicConnection);
 
         quicConnection.setPeerInitiatedStreamCallback(stream -> doAsync(() -> handleIncomingStream(stream)));
-
-        qpackEncoder = new Encoder();
     }
 
     public Http3ClientConnectionImpl(String host, int port, Encoder encoder) throws IOException {
@@ -115,7 +113,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         }
     }
 
-    private static QuicConnection createQuicConnection(String host, int port, Duration connectTimeout, Http3ConnectionSettings connectionSettings, Logger logger) throws SocketException, UnknownHostException {
+    private static QuicConnection createQuicConnection(String host, int port, Duration connectTimeout, Http3ConnectionSettings connectionSettings, DatagramSocketFactory datagramSocketFactory, Logger logger) throws SocketException, UnknownHostException {
         QuicClientConnection.Builder builder = QuicClientConnection.newBuilder();
         try {
             builder.uri(new URI("//" + host + ":" + port));
@@ -138,6 +136,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         if (connectionSettings.disableCertificateCheck()) {
             builder.noServerCertificateCheck();
         }
+        builder.socketFactory(datagramSocketFactory);
         builder.logger(logger != null? logger: new NullLogger());
         return builder.build();
     }

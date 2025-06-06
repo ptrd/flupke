@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021, 2022, 2023, 2024 Peter Doornbosch
+ * Copyright © 2021, 2022, 2023, 2024, 2025 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *
@@ -19,7 +19,7 @@
 package net.luminis.http3.impl;
 
 import net.luminis.http3.core.Http3ClientConnection;
-import net.luminis.quic.QuicConnection;
+import tech.kwik.core.QuicConnection;
 
 import java.io.IOException;
 import java.net.http.HttpRequest;

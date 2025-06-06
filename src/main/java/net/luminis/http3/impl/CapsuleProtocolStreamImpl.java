@@ -21,8 +21,8 @@ package net.luminis.http3.impl;
 import net.luminis.http3.core.Capsule;
 import net.luminis.http3.core.CapsuleProtocolStream;
 import net.luminis.http3.core.GenericCapsule;
-import net.luminis.quic.QuicStream;
-import net.luminis.quic.generic.VariableLengthInteger;
+import tech.kwik.core.QuicStream;
+import tech.kwik.core.generic.VariableLengthInteger;
 
 import java.io.IOException;
 import java.io.InputStream;

@@ -18,7 +18,8 @@
  */
 package net.luminis.http3.test;
 
-import net.luminis.qpack.Encoder;
+
+import tech.kwik.qpack.impl.EncoderImpl;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -28,7 +29,7 @@ import java.util.Map;
 /**
  * An encoder that captures the headers that are passed to it, so a test can easily verify which headers are send to the encoder.
  */
-public class CapturingEncoder extends Encoder {
+public class CapturingEncoder extends EncoderImpl {
 
     private Map<String, String> capturedHeaders = new HashMap<>();
 

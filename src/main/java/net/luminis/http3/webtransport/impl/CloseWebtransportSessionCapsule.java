@@ -19,7 +19,7 @@
 package net.luminis.http3.webtransport.impl;
 
 import net.luminis.http3.core.Capsule;
-import net.luminis.quic.generic.VariableLengthInteger;
+import tech.kwik.core.generic.VariableLengthInteger;
 
 import java.io.EOFException;
 import java.io.IOException;

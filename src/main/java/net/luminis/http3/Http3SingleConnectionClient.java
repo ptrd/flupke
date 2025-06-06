@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021, 2022, 2023, 2024 Peter Doornbosch
+ * Copyright © 2021, 2022, 2023, 2024, 2025 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *
@@ -19,8 +19,9 @@
 package net.luminis.http3;
 
 import net.luminis.http3.impl.Http3SingleConnectionFactory;
-import net.luminis.quic.QuicConnection;
+import tech.kwik.core.QuicConnection;
 
+import java.net.InetAddress;
 import java.time.Duration;
 
 /**
@@ -28,8 +29,8 @@ import java.time.Duration;
  */
 public class Http3SingleConnectionClient extends Http3Client {
 
-    public Http3SingleConnectionClient(QuicConnection quicConnection, Duration connectTimeout, Long receiveBufferSize) {
-        super(connectTimeout, receiveBufferSize, false, 0, 0, null);
+    public Http3SingleConnectionClient(QuicConnection quicConnection, Duration connectTimeout, Long receiveBufferSize, InetAddress localAddress) {
+        super(connectTimeout, receiveBufferSize, false, 0, 0, localAddress, null);
 
         http3ConnectionFactory = new Http3SingleConnectionFactory(quicConnection);
     }

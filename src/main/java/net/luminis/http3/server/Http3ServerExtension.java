@@ -18,7 +18,8 @@
  */
 package net.luminis.http3.server;
 
-import net.luminis.quic.QuicStream;
+
+import tech.kwik.core.QuicStream;
 
 import java.net.http.HttpHeaders;
 

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020, 2021, 2022, 2023, 2024 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021, 2022, 2023, 2024, 2025 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *
@@ -18,10 +18,10 @@
  */
 package net.luminis.http3.impl;
 
-import net.luminis.qpack.Decoder;
-import net.luminis.qpack.Encoder;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import tech.kwik.qpack.Decoder;
+import tech.kwik.qpack.Encoder;
 
 import java.io.InputStream;
 import java.net.URI;

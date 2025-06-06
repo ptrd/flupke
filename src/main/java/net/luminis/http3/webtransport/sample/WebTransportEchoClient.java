@@ -24,8 +24,8 @@ import net.luminis.http3.core.HttpError;
 import net.luminis.http3.webtransport.Session;
 import net.luminis.http3.webtransport.WebTransportStream;
 import net.luminis.http3.webtransport.impl.ClientSessionFactoryImpl;
-import net.luminis.quic.log.Logger;
-import net.luminis.quic.log.SysOutLogger;
+import tech.kwik.core.log.Logger;
+import tech.kwik.core.log.SysOutLogger;
 
 import java.io.IOException;
 import java.net.URI;

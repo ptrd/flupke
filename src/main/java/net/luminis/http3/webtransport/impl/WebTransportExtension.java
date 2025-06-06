@@ -22,7 +22,7 @@ import net.luminis.http3.impl.CapsuleProtocolStreamImpl;
 import net.luminis.http3.server.Http3ServerConnection;
 import net.luminis.http3.server.Http3ServerExtension;
 import net.luminis.http3.webtransport.Session;
-import net.luminis.quic.QuicStream;
+import tech.kwik.core.QuicStream;
 
 import java.net.URI;
 import java.net.URISyntaxException;

@@ -22,7 +22,7 @@ import net.luminis.http3.server.Http3ServerConnection;
 import net.luminis.http3.server.Http3ServerExtension;
 import net.luminis.http3.server.Http3ServerExtensionFactory;
 import net.luminis.http3.webtransport.Session;
-import net.luminis.quic.concurrent.DaemonThreadFactory;
+import tech.kwik.core.concurrent.DaemonThreadFactory;
 
 import java.util.HashMap;
 import java.util.Map;

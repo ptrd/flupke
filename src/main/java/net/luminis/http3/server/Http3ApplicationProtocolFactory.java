@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021, 2022, 2023, 2024 Peter Doornbosch
+ * Copyright © 2021, 2022, 2023, 2024, 2025 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *
@@ -20,10 +20,10 @@ package net.luminis.http3.server;
 
 
 import net.luminis.http3.sample.FileServer;
-import net.luminis.quic.QuicConnection;
-import net.luminis.quic.concurrent.DaemonThreadFactory;
-import net.luminis.quic.server.ApplicationProtocolConnection;
-import net.luminis.quic.server.ApplicationProtocolConnectionFactory;
+import tech.kwik.core.QuicConnection;
+import tech.kwik.core.concurrent.DaemonThreadFactory;
+import tech.kwik.core.server.ApplicationProtocolConnection;
+import tech.kwik.core.server.ApplicationProtocolConnectionFactory;
 
 import java.io.File;
 import java.util.Map;

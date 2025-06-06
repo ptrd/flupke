@@ -21,9 +21,9 @@ package net.luminis.http3.webtransport.sample;
 import net.luminis.http3.server.HttpRequestHandler;
 import net.luminis.http3.webtransport.Session;
 import net.luminis.http3.webtransport.impl.WebTransportHttp3ApplicationProtocolFactory;
-import net.luminis.quic.log.SysOutLogger;
-import net.luminis.quic.server.ServerConnectionConfig;
-import net.luminis.quic.server.ServerConnector;
+import tech.kwik.core.log.SysOutLogger;
+import tech.kwik.core.server.ServerConnectionConfig;
+import tech.kwik.core.server.ServerConnector;
 
 import java.io.File;
 import java.io.FileInputStream;

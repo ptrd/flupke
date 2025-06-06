@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021, 2022, 2023, 2024 Peter Doornbosch
+ * Copyright © 2021, 2022, 2023, 2024, 2025 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *
@@ -19,7 +19,6 @@
 package net.luminis.http3.server;
 
 import java.net.InetAddress;
-import java.net.URI;
 import java.net.http.HttpHeaders;
 import java.time.Instant;
 

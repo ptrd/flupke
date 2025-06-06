@@ -21,12 +21,12 @@ package net.luminis.http3.server;
 import net.luminis.http3.core.HttpError;
 import net.luminis.http3.core.HttpStream;
 import net.luminis.http3.impl.*;
-import net.luminis.qpack.Encoder;
-import net.luminis.quic.QuicConnection;
-import net.luminis.quic.QuicStream;
-import net.luminis.quic.generic.VariableLengthInteger;
-import net.luminis.quic.server.ApplicationProtocolConnection;
-import net.luminis.quic.server.ServerConnection;
+import tech.kwik.core.QuicConnection;
+import tech.kwik.core.QuicStream;
+import tech.kwik.core.generic.VariableLengthInteger;
+import tech.kwik.core.server.ApplicationProtocolConnection;
+import tech.kwik.core.server.ServerConnection;
+import tech.kwik.qpack.Encoder;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
@@ -57,7 +57,7 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
     private final long maxHeaderSize;
     private final long maxDataSize;
     private final ExecutorService executor;
-    private final Encoder encoder = new Encoder();
+    private final Encoder encoder;
     private final Map<String, Http3ServerExtensionFactory> extensionFactories;
     private final Map<String, Http3ServerExtension> instantiatedExtensions;
     private final ReentrantLock extensionInstantiationLock;
@@ -75,6 +75,7 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
         this.executor = executorService;
         this.extensionFactories = extensions;
         this.instantiatedExtensions = new ConcurrentHashMap<>();
+        encoder = Encoder.newBuilder().build();
         clientAddress = ((ServerConnection) quicConnection).getInitialClientAddress();
         settingsParameters.put((long) SETTINGS_ENABLE_CONNECT_PROTOCOL, 1L);
         startControlStream();

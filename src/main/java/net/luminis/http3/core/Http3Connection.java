@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023, 2024 Peter Doornbosch
+ * Copyright © 2023, 2024, 2025 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *
@@ -51,7 +51,7 @@ public interface Http3Connection {
      * The returned stream does _not_ perform HTTP/3 framing; it's the callers responsibility to send the data in HTTP/3
      * frames or in a format that is compatible with HTTP/3 framing.
      */
-    HttpStream createBidirectionalStream();
+    HttpStream createBidirectionalStream() throws IOException;
 
     /**
      * HTTP/3 extension method for adding additional settings.

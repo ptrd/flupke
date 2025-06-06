@@ -23,13 +23,14 @@ import net.luminis.http3.core.HttpStream;
 import net.luminis.http3.impl.DataFrame;
 import net.luminis.http3.impl.HeadersFrame;
 import net.luminis.http3.test.CapturingEncoder;
-import net.luminis.qpack.Decoder;
-import net.luminis.qpack.Encoder;
-import net.luminis.quic.QuicConnection;
-import net.luminis.quic.QuicStream;
-import net.luminis.quic.server.ServerConnection;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import tech.kwik.core.QuicConnection;
+import tech.kwik.core.QuicStream;
+import tech.kwik.core.server.ServerConnection;
+import tech.kwik.qpack.Encoder;
+import tech.kwik.qpack.impl.DecoderImpl;
+import tech.kwik.qpack.impl.EncoderImpl;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -256,7 +257,7 @@ public class Http3ServerConnectionImplTest {
 
     //region request limits
     @Test
-    void requestDataLargerThanMaxIsNotAccepted() {
+    void requestDataLargerThanMaxIsNotAccepted() throws Exception {
         // Given
         long maxHeaderSize = Long.MAX_VALUE;
         long maxDataSize = 2500;
@@ -278,14 +279,14 @@ public class Http3ServerConnectionImplTest {
     }
 
     @Test
-    void requestHeadersLargerThanMaxIsNotAccepted() {
+    void requestHeadersLargerThanMaxIsNotAccepted() throws Exception {
         // Given
         long maxHeaderSize = 1000;
         long maxDataSize = Long.MAX_VALUE;
         Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize, executor, emptyMap());
 
         HeadersFrame largeHeaders = new HeadersFrame("superlarge", "*".repeat(1000));
-        byte[] data = largeHeaders.toBytes(new Encoder());
+        byte[] data = largeHeaders.toBytes(Encoder.newBuilder().build());
 
         assertThatThrownBy(() ->
                 // When
@@ -296,14 +297,14 @@ public class Http3ServerConnectionImplTest {
     }
 
     @Test
-    void requestThatIsAbortedWithErrorDiscardsStream() {
+    void requestThatIsAbortedWithErrorDiscardsStream() throws Exception {
         // Given
         long maxHeaderSize = 1000;
         long maxDataSize = Long.MAX_VALUE;
         Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize, executor, emptyMap());
 
         HeadersFrame largeHeaders = new HeadersFrame("superlarge", "*".repeat(1000));
-        byte[] data = largeHeaders.toBytes(new Encoder());
+        byte[] data = largeHeaders.toBytes(Encoder.newBuilder().build());
 
         // When
         QuicStream quicStream = mockQuicStreamWithInputData(data, new ByteArrayOutputStream());
@@ -475,7 +476,7 @@ public class Http3ServerConnectionImplTest {
         return headersFrame;
     }
 
-    private QuicConnection createMockQuicConnection() {
+    private QuicConnection createMockQuicConnection() throws Exception {
         ServerConnection connection = mock(ServerConnection.class);
         QuicStream stream = mock(QuicStream.class);
         when(connection.createStream(false)).thenReturn(stream);
@@ -509,7 +510,7 @@ public class Http3ServerConnectionImplTest {
         return stream;
     }
 
-    private class NoOpEncoder extends Encoder {
+    private class NoOpEncoder extends EncoderImpl {
         @Override
         public ByteBuffer compressHeaders(List<Map.Entry<String, String>> headers) {
             mockEncoderCompressedHeaders = headers;
@@ -518,7 +519,7 @@ public class Http3ServerConnectionImplTest {
         }
     }
 
-    private class NoOpDecoder extends Decoder {
+    private class NoOpDecoder extends DecoderImpl {
         @Override
         public List<Map.Entry<String, String>> decodeStream(InputStream inputStream) {
             return mockEncoderCompressedHeaders;
