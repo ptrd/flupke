@@ -89,6 +89,26 @@ public class Http3ServerConnectionImplTest {
                         req.method().equals("GET") && req.path().equals("/index.html")),
                 any(HttpServerResponse.class));
     }
+
+    @Test
+    void requestHeadersShouldBePassedToHandler() throws Exception {
+        // Given
+        HttpRequestHandler handler = mock(HttpRequestHandler.class);
+        Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
+                .withHeaders(Map.of(":method", "GET", ":scheme", "https", ":authority", "example.com", ":path", "/index.html"))
+                .withHeaders(Map.of("X-Custom-Header", "CustomValue"))
+                .withHandler(handler)
+                .buildServerConnection();
+        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData());
+
+        // When
+        http3Connection.handleBidirectionalStream(requestResponseStream);
+
+        // Then
+        verify(handler).handleRequest(
+                argThat(req -> req.headers().firstValue("X-Custom-Header").orElse("").equals("CustomValue")),
+                any(HttpServerResponse.class));
+    }
     //endregion
 
     //region request correctness

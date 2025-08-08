@@ -327,7 +327,7 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
 
         String method = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_METHOD);
         String path = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PATH);
-        HttpServerRequest request = new HttpServerRequest(method, path, null, clientAddress);
+        HttpServerRequest request = new HttpServerRequest(method, path, headersFrame.headers(), clientAddress);
         HttpServerResponse response = new HttpServerResponse() {
             private boolean outputStarted;
             private DataFrameWriter dataFrameWriter;

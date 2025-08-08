@@ -18,13 +18,13 @@
  */
 package tech.kwik.flupke.server;
 
-import tech.kwik.flupke.core.Http3Connection;
-import tech.kwik.flupke.impl.Http3ConnectionImpl;
-import tech.kwik.flupke.test.FieldSetter;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 import tech.kwik.core.QuicStream;
 import tech.kwik.core.server.ServerConnection;
+import tech.kwik.flupke.core.Http3Connection;
+import tech.kwik.flupke.impl.Http3ConnectionImpl;
+import tech.kwik.flupke.test.FieldSetter;
 import tech.kwik.qpack.Decoder;
 import tech.kwik.qpack.Encoder;
 
@@ -45,14 +45,14 @@ import static org.mockito.Mockito.when;
 
 public class HttpConnectionBuilder {
 
-    private Map<String, String> headers;
+    private Map<String, String> headers = new HashMap<>();
     private HttpRequestHandler handler;
     private Encoder encoder;
     private Map<String, Http3ServerExtensionFactory> extensions = new HashMap<>();
     private ByteArrayOutputStream controlStreamOutput;
 
     public HttpConnectionBuilder withHeaders(Map<String, String> headers) {
-        this.headers = headers;
+        this.headers.putAll(headers);
         return this;
     }
 
