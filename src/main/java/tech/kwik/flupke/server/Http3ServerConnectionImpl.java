@@ -328,36 +328,7 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
         String method = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_METHOD);
         String path = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PATH);
         HttpServerRequest request = new HttpServerRequest(method, path, headersFrame.headers(), clientAddress);
-        HttpServerResponse response = new HttpServerResponse() {
-            private boolean outputStarted;
-            private DataFrameWriter dataFrameWriter;
-
-            @Override
-            public OutputStream getOutputStream() {
-                if (!outputStarted) {
-                    HeadersFrame headersFrame = new HeadersFrame(HeadersFrame.PSEUDO_HEADER_STATUS, Integer.toString(status()));
-                    OutputStream outputStream = quicStream.getOutputStream();
-                    try {
-                        outputStream.write(headersFrame.toBytes(qpackEncoder));
-                    } catch (IOException e) {
-                        // Ignore, there is nothing we can do. Note Kwik will not throw exception when writing to stream.
-                    }
-                    outputStarted = true;
-                    dataFrameWriter = new DataFrameWriter(quicStream.getOutputStream());
-                }
-                return dataFrameWriter;
-            }
-
-            @Override
-            public long size() {
-                if (dataFrameWriter != null) {
-                    return dataFrameWriter.getBytesWritten();
-                }
-                else {
-                    return 0;
-                }
-            }
-        };
+        HttpServerResponse response = new DefaultHttpResponse(quicStream, qpackEncoder);
 
         try {
             requestHandler.handleRequest(request, response);
