@@ -19,6 +19,7 @@
 package tech.kwik.flupke.server;
 
 import java.io.OutputStream;
+import java.net.http.HttpHeaders;
 
 public abstract class HttpServerResponse {
 
@@ -38,6 +39,9 @@ public abstract class HttpServerResponse {
             throw new IllegalArgumentException("invalid status code: " + status);
         }
         this.status = status;
+    }
+
+    public void setHeaders(HttpHeaders headers) {
     }
 
     public int status() {

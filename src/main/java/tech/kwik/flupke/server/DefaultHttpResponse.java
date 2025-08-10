@@ -18,12 +18,15 @@
  */
 package tech.kwik.flupke.server;
 
+
 import tech.kwik.core.QuicStream;
 import tech.kwik.flupke.impl.HeadersFrame;
 import tech.kwik.qpack.Encoder;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.http.HttpHeaders;
+import java.util.Map;
 
 class DefaultHttpResponse extends HttpServerResponse {
 
@@ -31,16 +34,27 @@ class DefaultHttpResponse extends HttpServerResponse {
     private final OutputStream quicOutputStream;
     private boolean outputStarted;
     private DataFrameWriter dataFrameWriter;
+    private HttpHeaders httpHeaders;
 
     public DefaultHttpResponse(QuicStream quicStream, Encoder qpackEncoder) {
         this.qpackEncoder = qpackEncoder;
         this.quicOutputStream = quicStream.getOutputStream();
+        this.httpHeaders = HttpHeaders.of(Map.of(), (a, b) -> true);
+    }
+
+    @Override
+    public void setHeaders(HttpHeaders headers) {
+        if (outputStarted) {
+            throw new IllegalStateException("Cannot set headers after getOutputStream has been called");
+        }
+
+        httpHeaders = headers;
     }
 
     @Override
     public OutputStream getOutputStream() {
         if (!outputStarted) {
-            HeadersFrame headersFrame = new HeadersFrame(HeadersFrame.PSEUDO_HEADER_STATUS, Integer.toString(status()));
+            HeadersFrame headersFrame = new HeadersFrame(httpHeaders, Map.of(HeadersFrame.PSEUDO_HEADER_STATUS, Integer.toString(status())));
             OutputStream outputStream = quicOutputStream;
             try {
                 outputStream.write(headersFrame.toBytes(qpackEncoder));
