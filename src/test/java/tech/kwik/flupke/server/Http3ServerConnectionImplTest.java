@@ -18,6 +18,7 @@
  */
 package tech.kwik.flupke.server;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.invocation.InvocationOnMock;
@@ -31,20 +32,18 @@ import tech.kwik.flupke.impl.DataFrame;
 import tech.kwik.flupke.impl.HeadersFrame;
 import tech.kwik.flupke.impl.SettingsFrame;
 import tech.kwik.flupke.test.CapturingEncoder;
+import tech.kwik.flupke.test.NoOpEncoderDecoderBuilder;
+import tech.kwik.flupke.test.QuicStreamBuilder;
 import tech.kwik.flupke.webtransport.impl.WebTransportExtensionFactory;
 import tech.kwik.qpack.Encoder;
-import tech.kwik.qpack.impl.DecoderImpl;
-import tech.kwik.qpack.impl.EncoderImpl;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.http.HttpHeaders;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -66,8 +65,13 @@ import static tech.kwik.flupke.impl.Http3ConnectionImpl.FRAME_TYPE_DATA;
 
 public class Http3ServerConnectionImplTest {
 
-    private List<Map.Entry<String, String>> mockEncoderCompressedHeaders = new ArrayList<>();
     private ExecutorService executor = Executors.newSingleThreadExecutor();
+    private NoOpEncoderDecoderBuilder noOpEncoderDecoderBuilder;
+
+    @BeforeEach
+    void setUp() {
+        noOpEncoderDecoderBuilder = new NoOpEncoderDecoderBuilder();
+    }
 
     //region request handling
     @Test
@@ -78,7 +82,7 @@ public class Http3ServerConnectionImplTest {
                 .withHeaders(Map.of(":method", "GET", ":scheme", "https", ":authority", "example.com", ":path", "/index.html"))
                 .withHandler(handler)
                 .buildServerConnection();
-        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData());
+        QuicStream requestResponseStream = new QuicStreamBuilder().withInputData(fakeHeadersFrameData()).build();
 
         // When
         http3Connection.handleBidirectionalStream(requestResponseStream);
@@ -99,7 +103,7 @@ public class Http3ServerConnectionImplTest {
                 .withHeaders(Map.of("X-Custom-Header", "CustomValue"))
                 .withHandler(handler)
                 .buildServerConnection();
-        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData());
+        QuicStream requestResponseStream = new QuicStreamBuilder().withInputData(fakeHeadersFrameData()).build();
 
         // When
         http3Connection.handleBidirectionalStream(requestResponseStream);
@@ -120,7 +124,7 @@ public class Http3ServerConnectionImplTest {
                 .withHeaders(Map.of(":scheme", "https",":authority", "www.example.com:443", ":path", "/index.html"))
                 .withHandler(handler)
                 .buildServerConnection();
-        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData());
+        QuicStream requestResponseStream = new QuicStreamBuilder().withInputData(fakeHeadersFrameData()).build();
 
         // When
         http3Connection.handleBidirectionalStream(requestResponseStream);
@@ -137,7 +141,7 @@ public class Http3ServerConnectionImplTest {
                 .withHeaders(Map.of(":method", "GET",":authority", "www.example.com:443", ":path", "/index.html"))
                 .withHandler(handler)
                 .buildServerConnection();
-        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData());
+        QuicStream requestResponseStream = new QuicStreamBuilder().withInputData(fakeHeadersFrameData()).build();
 
         // When
         http3Connection.handleBidirectionalStream(requestResponseStream);
@@ -154,7 +158,7 @@ public class Http3ServerConnectionImplTest {
                 .withHeaders(Map.of(":method", "GET", ":scheme", "https", ":authority", "example.com"))
                 .withHandler(handler)
                 .buildServerConnection();
-        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData());
+        QuicStream requestResponseStream = new QuicStreamBuilder().withInputData(fakeHeadersFrameData()).build();
 
         // When
         http3Connection.handleBidirectionalStream(requestResponseStream);
@@ -171,7 +175,7 @@ public class Http3ServerConnectionImplTest {
                 .withHeaders(Map.of(":method", "GET", ":scheme", "https", ":path", "/index.html"))
                 .withHandler(handler)
                 .buildServerConnection();
-        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData());
+        QuicStream requestResponseStream = new QuicStreamBuilder().withInputData(fakeHeadersFrameData()).build();
 
         // When
         http3Connection.handleBidirectionalStream(requestResponseStream);
@@ -188,7 +192,7 @@ public class Http3ServerConnectionImplTest {
                 .withHeaders(Map.of("Host","example.com", ":method", "GET", ":scheme", "https", ":path", "/index.html"))
                 .withHandler(handler)
                 .buildServerConnection();
-        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData());
+        QuicStream requestResponseStream = new QuicStreamBuilder().withInputData(fakeHeadersFrameData()).build();
 
         // When
         http3Connection.handleBidirectionalStream(requestResponseStream);
@@ -205,7 +209,7 @@ public class Http3ServerConnectionImplTest {
                 .withHeaders(Map.of(":method", "CONNECT"))
                 .withHandler(handler)
                 .buildServerConnection();
-        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData());
+        QuicStream requestResponseStream = new QuicStreamBuilder().withInputData(fakeHeadersFrameData()).build();
 
         // When
         http3Connection.handleBidirectionalStream(requestResponseStream);
@@ -231,11 +235,11 @@ public class Http3ServerConnectionImplTest {
         HeadersFrame requestHeadersFrame = createHeadersFrame("GET", new URI("https://www.example.com/index.html"));
 
         ByteArrayOutputStream output = new ByteArrayOutputStream();
-        QuicStream stream = mockQuicStream(output);
-        http3Connection.handleHttpRequest(List.of(requestHeadersFrame), stream, new NoOpEncoder());
+        QuicStream stream = new QuicStreamBuilder().withOutputStream(output).build();
+        http3Connection.handleHttpRequest(List.of(requestHeadersFrame), stream, noOpEncoderDecoderBuilder.encoder());
 
         // Then
-        HeadersFrame responseHeadersFrame = new HeadersFrame().parsePayload(output.toByteArray(), new NoOpDecoder());
+        HeadersFrame responseHeadersFrame = new HeadersFrame().parsePayload(output.toByteArray(), noOpEncoderDecoderBuilder.decoder());
         assertThat(responseHeadersFrame.getPseudoHeader(":status")).isEqualTo("201");
     }
 
@@ -255,8 +259,8 @@ public class Http3ServerConnectionImplTest {
         // When
         HeadersFrame requestHeadersFrame = new HeadersFrame();
         ByteArrayOutputStream output = new ByteArrayOutputStream();
-        QuicStream stream = mockQuicStream(output);
-        http3Connection.handleHttpRequest(List.of(requestHeadersFrame), stream, new NoOpEncoder());
+        QuicStream stream = new QuicStreamBuilder().withOutputStream(output).build();
+        http3Connection.handleHttpRequest(List.of(requestHeadersFrame), stream, noOpEncoderDecoderBuilder.encoder());
 
         // Then
         // Strip of header frame (two bytes: header type and header length (== 0), because of dummy encoder)
@@ -274,7 +278,7 @@ public class Http3ServerConnectionImplTest {
         // When
         HeadersFrame requestHeadersFrame = new HeadersFrame();
         ByteArrayOutputStream output = new ByteArrayOutputStream();
-        QuicStream stream = mockQuicStream(output);
+        QuicStream stream = new QuicStreamBuilder().withOutputStream(output).build();
         CapturingEncoder encoder = new CapturingEncoder();
         http3Connection.handleHttpRequest(List.of(requestHeadersFrame), stream, encoder);
 
@@ -335,7 +339,10 @@ public class Http3ServerConnectionImplTest {
         byte[] data = largeHeaders.toBytes(Encoder.newBuilder().build());
 
         // When
-        QuicStream quicStream = mockQuicStreamWithInputData(data, new ByteArrayOutputStream());
+        QuicStream quicStream = new QuicStreamBuilder()
+                .withInputData(data)
+                .withOutputStream(new ByteArrayOutputStream())
+                .build();
         http3Connection.handleBidirectionalStream(quicStream);
 
         // Then
@@ -354,7 +361,7 @@ public class Http3ServerConnectionImplTest {
                 .withHandler(handler)
                 .withEncoder(encoder)
                 .buildServerConnection();
-        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData());
+        QuicStream requestResponseStream = new QuicStreamBuilder().withInputData(fakeHeadersFrameData()).build();
 
         // When
         http3Connection.handleBidirectionalStream(requestResponseStream);
@@ -374,7 +381,10 @@ public class Http3ServerConnectionImplTest {
                 .withEncoder(encoder)
                 .buildServerConnection();
         OutputStream outputStream = mock(OutputStream.class);
-        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData(), outputStream);
+        QuicStream requestResponseStream = new QuicStreamBuilder()
+                .withInputData(fakeHeadersFrameData())
+                .withOutputStream(outputStream)
+                .build();
 
         // When
         http3Connection.handleBidirectionalStream(requestResponseStream);
@@ -399,7 +409,10 @@ public class Http3ServerConnectionImplTest {
                 .withEncoder(encoder)
                 .buildServerConnection();
         OutputStream outputStream = mock(OutputStream.class);
-        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData(), outputStream);
+        QuicStream requestResponseStream = new QuicStreamBuilder()
+                .withInputData(fakeHeadersFrameData())
+                .withOutputStream(outputStream)
+                .build();
 
         // When
         http3Connection.handleBidirectionalStream(requestResponseStream);
@@ -451,7 +464,7 @@ public class Http3ServerConnectionImplTest {
                 .withEncoder(encoder)
                 .withExtensionHandler("webtransport", extensionFactory)
                 .buildServerConnection();
-        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData());
+        QuicStream requestResponseStream = new QuicStreamBuilder().withInputData(fakeHeadersFrameData()).build();
 
         // When
         http3Connection.handleBidirectionalStream(requestResponseStream);
@@ -477,11 +490,14 @@ public class Http3ServerConnectionImplTest {
 
         Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
                 .withHeaders(Map.of(":method", "CONNECT", ":protocol", "webtransport", ":authority", "example.com", ":path", "/"))
-                .withEncoder(new NoOpEncoder())
+                .withEncoder(noOpEncoderDecoderBuilder.encoder())
                 .withExtensionHandler("webtransport", extensionFactory)
                 .buildServerConnection();
         OutputStream outputStream = mock(OutputStream.class);
-        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData(), outputStream);
+        QuicStream requestResponseStream = new QuicStreamBuilder()
+                .withInputData(fakeHeadersFrameData())
+                .withOutputStream(outputStream)
+                .build();
 
         // When
         http3Connection.handleBidirectionalStream(requestResponseStream);
@@ -510,10 +526,10 @@ public class Http3ServerConnectionImplTest {
 
         Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
                 .withHeaders(Map.of(":method", "CONNECT", ":protocol", "webtransport", ":authority", "example.com", ":path", "/"))
-                .withEncoder(new NoOpEncoder())
+                .withEncoder(noOpEncoderDecoderBuilder.encoder())
                 .withExtensionHandler("webtransport", http3ServerConnection -> extensionHandler)
                 .buildServerConnection();
-        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData());
+        QuicStream requestResponseStream = new QuicStreamBuilder().withInputData(fakeHeadersFrameData()).build();
 
         // When
         http3Connection.handleBidirectionalStream(requestResponseStream);
@@ -532,7 +548,7 @@ public class Http3ServerConnectionImplTest {
 
         // When
         byte[] input = new byte[] { 0x3e, (byte) 0xca, (byte) 0xfe };
-        QuicStream requestResponseStream = mockQuicStreamWithInputData(input);
+        QuicStream requestResponseStream = new QuicStreamBuilder().withInputData(input).build();
         http3Connection.handleBidirectionalStream(requestResponseStream);
 
         // Then
@@ -585,48 +601,6 @@ public class Http3ServerConnectionImplTest {
         when(connection.createStream(false)).thenReturn(stream);
         when(stream.getOutputStream()).thenReturn(new ByteArrayOutputStream());
         return connection;
-    }
-
-    private QuicStream mockQuicStreamWithInputData(byte[] inputData) {
-        return mockQuicStreamWithInputData(inputData, null);
-    }
-
-    private QuicStream mockQuicStream(ByteArrayOutputStream byteArrayOutputStream) {
-        return mockQuicStreamWithInputData(null, byteArrayOutputStream);
-    }
-
-    private QuicStream mockQuicStreamWithInputData(byte[] inputData, OutputStream outputStream) {
-        ByteArrayInputStream byteArrayInputStream = null;
-        if (inputData == null) {
-            byteArrayInputStream = new ByteArrayInputStream(new byte[0]);
-        }
-        else {
-            byteArrayInputStream = new ByteArrayInputStream(inputData);
-        }
-        if (outputStream == null) {
-            outputStream = new ByteArrayOutputStream();
-        }
-
-        QuicStream stream = mock(QuicStream.class);
-        when(stream.getOutputStream()).thenReturn(outputStream);
-        when(stream.getInputStream()).thenReturn(byteArrayInputStream);
-        return stream;
-    }
-
-    private class NoOpEncoder extends EncoderImpl {
-        @Override
-        public ByteBuffer compressHeaders(List<Map.Entry<String, String>> headers) {
-            mockEncoderCompressedHeaders = headers;
-            int uncompressedSize = headers.stream().mapToInt(e -> e.getKey().length() + e.getValue().length() + 2).sum();
-            return ByteBuffer.allocate(uncompressedSize);
-        }
-    }
-
-    private class NoOpDecoder extends DecoderImpl {
-        @Override
-        public List<Map.Entry<String, String>> decodeStream(InputStream inputStream) {
-            return mockEncoderCompressedHeaders;
-        }
     }
 
     private static class StatusCallbackAnswer implements Answer<Void> {
