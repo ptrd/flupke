@@ -66,7 +66,7 @@ public class ClientSessionFactoryImpl extends AbstractSessionFactoryImpl impleme
             httpClientConnection.addSettingsParameter(SETTINGS_WEBTRANSPORT_MAX_SESSIONS, 1);
             httpClientConnection.connect();
 
-            maxSessions = httpClientConnection.getSettingsParameter(SETTINGS_WEBTRANSPORT_MAX_SESSIONS).orElse(0L);
+            maxSessions = httpClientConnection.getPeerSettingsParameter(SETTINGS_WEBTRANSPORT_MAX_SESSIONS).orElse(0L);
 
             httpClientConnection.registerUnidirectionalStreamType(STREAM_TYPE_WEBTRANSPORT, this::handleUnidirectionalStream);
             httpClientConnection.registerBidirectionalStreamHandler(this::handleBidirectionalStream);

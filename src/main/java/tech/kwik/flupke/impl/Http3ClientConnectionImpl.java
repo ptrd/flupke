@@ -18,11 +18,6 @@
  */
 package tech.kwik.flupke.impl;
 
-import tech.kwik.flupke.Http3ConnectionSettings;
-import tech.kwik.flupke.core.CapsuleProtocolStream;
-import tech.kwik.flupke.core.Http3ClientConnection;
-import tech.kwik.flupke.core.HttpError;
-import tech.kwik.flupke.core.HttpStream;
 import tech.kwik.core.DatagramSocketFactory;
 import tech.kwik.core.QuicClientConnection;
 import tech.kwik.core.QuicConnection;
@@ -30,6 +25,11 @@ import tech.kwik.core.QuicStream;
 import tech.kwik.core.Statistics;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.log.NullLogger;
+import tech.kwik.flupke.Http3ConnectionSettings;
+import tech.kwik.flupke.core.CapsuleProtocolStream;
+import tech.kwik.flupke.core.Http3ClientConnection;
+import tech.kwik.flupke.core.HttpError;
+import tech.kwik.flupke.core.HttpStream;
 import tech.kwik.qpack.Encoder;
 
 import java.io.EOFException;
@@ -343,7 +343,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     }
 
     private boolean isEnableConnectProtocol() {
-        return getSettingsParameter(SETTINGS_ENABLE_CONNECT_PROTOCOL).orElse(0L) == 1L;
+        return getPeerSettingsParameter(SETTINGS_ENABLE_CONNECT_PROTOCOL).orElse(0L) == 1L;
     }
 
     @Override

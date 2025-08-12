@@ -266,7 +266,7 @@ class ClientSessionFactoryTest {
         CapsuleProtocolStream capsuleProtocolStream = mock(CapsuleProtocolStream.class);
         when(capsuleProtocolStream.getStreamId()).thenReturn(4L);  // Control stream stream ID
         when(http3connection.sendExtendedConnectWithCapsuleProtocol(any(), any(), any(), any())).thenReturn(capsuleProtocolStream);
-        when(http3connection.getSettingsParameter(SETTINGS_WEBTRANSPORT_MAX_SESSIONS)).thenReturn(Optional.of(maxWebTransportSessions));
+        when(http3connection.getPeerSettingsParameter(SETTINGS_WEBTRANSPORT_MAX_SESSIONS)).thenReturn(Optional.of(maxWebTransportSessions));
         return http3connection;
     }
 
@@ -277,7 +277,7 @@ class ClientSessionFactoryTest {
         CapsuleProtocolStream capsuleProtocolStream = mock(CapsuleProtocolStream.class);
         when(capsuleProtocolStream.getStreamId()).thenReturn(4L);  // Control stream stream ID
         when(http3connection.sendExtendedConnectWithCapsuleProtocol(any(), any(), any(), any())).thenReturn(capsuleProtocolStream);
-        when(http3connection.getSettingsParameter(SETTINGS_WEBTRANSPORT_MAX_SESSIONS)).thenReturn(Optional.of(10L));
+        when(http3connection.getPeerSettingsParameter(SETTINGS_WEBTRANSPORT_MAX_SESSIONS)).thenReturn(Optional.of(10L));
 
         // Simulate the server performing the action asynchronously before returning the response to the extended CONNECT request.
         when(http3connection.sendExtendedConnectWithCapsuleProtocol(any(), any(), any(), any())).thenAnswer(invocation -> {

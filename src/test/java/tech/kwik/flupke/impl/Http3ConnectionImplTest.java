@@ -295,7 +295,7 @@ public class Http3ConnectionImplTest {
         connection.addSettingsParameter(0x22, 0x33);
 
         // Then
-        assertThat(connection.getSettingsParameter(0x22)).isNotPresent();
+        assertThat(connection.getPeerSettingsParameter(0x22)).isNotPresent();
     }
 
     @Test
@@ -308,8 +308,8 @@ public class Http3ConnectionImplTest {
         Http3ConnectionImpl connection = http3ClientConnectionBuilder.build();
 
         // Then
-        assertThat(connection.getSettingsParameter(0x22)).isPresent();
-        assertThat(connection.getSettingsParameter(0x22).get()).isEqualTo(0x33);
+        assertThat(connection.getPeerSettingsParameter(0x22)).isPresent();
+        assertThat(connection.getPeerSettingsParameter(0x22).get()).isEqualTo(0x33);
     }
     //endregion
 

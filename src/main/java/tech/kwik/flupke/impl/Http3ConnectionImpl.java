@@ -205,7 +205,7 @@ public class Http3ConnectionImpl implements Http3Connection {
     }
 
     @Override
-    public Optional<Long> getSettingsParameter(long identifier) {
+    public Optional<Long> getPeerSettingsParameter(long identifier) {
         return Optional.ofNullable(peerSettingsParameters.get(identifier));
     }
 
