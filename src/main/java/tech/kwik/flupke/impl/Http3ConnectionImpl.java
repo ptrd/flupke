@@ -18,12 +18,12 @@
  */
 package tech.kwik.flupke.impl;
 
-import tech.kwik.flupke.core.Http3Connection;
-import tech.kwik.flupke.core.HttpError;
-import tech.kwik.flupke.core.HttpStream;
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.QuicStream;
 import tech.kwik.core.generic.VariableLengthInteger;
+import tech.kwik.flupke.core.Http3Connection;
+import tech.kwik.flupke.core.HttpError;
+import tech.kwik.flupke.core.HttpStream;
 import tech.kwik.qpack.Decoder;
 import tech.kwik.qpack.Encoder;
 
@@ -107,6 +107,7 @@ public class Http3ConnectionImpl implements Http3Connection {
     protected Map<Long, Consumer<HttpStream>> unidirectionalStreamHandler = new HashMap<>();
     protected final Decoder qpackDecoder;
     protected final Map<Long, Long> settingsParameters;
+    protected final Map<Long, Long> peerSettingsParameters;
     protected final CountDownLatch settingsFrameReceived;
     private final List<Long> internalSettingsParameterIds = List.of(
             (long) QPACK_MAX_TABLE_CAPACITY,
@@ -122,6 +123,8 @@ public class Http3ConnectionImpl implements Http3Connection {
         settingsParameters = new HashMap<>();
         settingsParameters.put((long) QPACK_MAX_TABLE_CAPACITY, 0L);
         settingsParameters.put((long) QPACK_BLOCKED_STREAMS, 0L);
+
+        peerSettingsParameters = new HashMap<>();
 
         settingsFrameReceived = new CountDownLatch(1);
 
@@ -203,7 +206,7 @@ public class Http3ConnectionImpl implements Http3Connection {
 
     @Override
     public Optional<Long> getSettingsParameter(long identifier) {
-        return Optional.ofNullable(settingsParameters.get(identifier));
+        return Optional.ofNullable(peerSettingsParameters.get(identifier));
     }
 
     private boolean isReservedStreamType(long streamType) {
@@ -336,7 +339,7 @@ public class Http3ConnectionImpl implements Http3Connection {
             SettingsFrame settingsFrame = new SettingsFrame().parsePayload(ByteBuffer.wrap(payload));
             peerQpackMaxTableCapacity = settingsFrame.getQpackMaxTableCapacity();
             peerQpackBlockedStreams = settingsFrame.getQpackBlockedStreams();
-            settingsParameters.putAll(settingsFrame.getAllParameters());
+            peerSettingsParameters.putAll(settingsFrame.getAllParameters());
             settingsFrameReceived.countDown();
         }
         catch (IOException e) {

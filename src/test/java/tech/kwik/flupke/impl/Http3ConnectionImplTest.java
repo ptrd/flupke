@@ -18,14 +18,14 @@
  */
 package tech.kwik.flupke.impl;
 
-import tech.kwik.flupke.core.HttpError;
-import tech.kwik.flupke.core.HttpStream;
-import tech.kwik.flupke.test.Http3ClientConnectionBuilder;
-import tech.kwik.flupke.test.Http3ConnectionBuilder;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.QuicStream;
+import tech.kwik.flupke.core.HttpError;
+import tech.kwik.flupke.core.HttpStream;
+import tech.kwik.flupke.test.Http3ClientConnectionBuilder;
+import tech.kwik.flupke.test.Http3ConnectionBuilder;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -34,13 +34,14 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.function.Consumer;
 
-import static tech.kwik.flupke.impl.Http3ConnectionImpl.*;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
+import static tech.kwik.flupke.impl.Http3ConnectionImpl.*;
 
 public class Http3ConnectionImplTest {
 
+    //region read frame
     @Test
     public void readFrameShouldThrowErrorWhenDataFrameTooLarge() {
         // Given
@@ -76,7 +77,9 @@ public class Http3ConnectionImplTest {
         assertThat(frame).isInstanceOf(UnknownFrame.class);
         assertThat(inputStream.available()).isEqualTo(89);
     }
+    //endregion
 
+    //region register stream type
     @Test
     public void attemptToRegisterDefaultStreamTypeShouldFail() {
         // Given
@@ -101,7 +104,9 @@ public class Http3ConnectionImplTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("reserved");
     }
+    //endregion
 
+    //region register handler
     @Test
     public void registeredHandlerShouldBeCalled() {
         // Given
@@ -127,7 +132,9 @@ public class Http3ConnectionImplTest {
         // Then
         assertThat(new String(buffer.array())).isEqualTo("Hello World");
     }
+    //endregion
 
+    //region control stream handling
     @Test
     public void closingProcessControlStreamShouldLeadToConnectionError() {
         // Given
@@ -174,7 +181,9 @@ public class Http3ConnectionImplTest {
         verify(quicConnection, never()).close(anyLong(), any());
         verify(quicStream).abortReading(anyLong());
     }
+    //endregion
 
+    //region other streams
     @Test
     public void qpackDecoderStreamShouldNotBeClosed() {
         // Given
@@ -240,7 +249,9 @@ public class Http3ConnectionImplTest {
         // Then
         assertThat(new String(output.toByteArray())).isEqualTo("Hello World");
     }
+    //endregion
 
+    //region settings parameters
     @Test
     public void additionalSettingsParametersShouldBeWrittenToControlStream() throws Exception {
         // Given
@@ -275,6 +286,34 @@ public class Http3ConnectionImplTest {
         assertThat(controlStreamOutput.toByteArray()).isEqualTo(new byte[] { 0x00, 0x04, 0x04, 0x01, 0x0, 0x07, 0x0 });
     }
 
+    @Test
+    void localSettingsParameterShouldNotBeReturnedWhenReadingPeersParameters() throws Exception {
+        // Given
+        Http3ConnectionImpl connection = new Http3ClientConnectionBuilder().build();
+
+        // When
+        connection.addSettingsParameter(0x22, 0x33);
+
+        // Then
+        assertThat(connection.getSettingsParameter(0x22)).isNotPresent();
+    }
+
+    @Test
+    void settingsParameterSendByPeerShouldBeReceived() throws Exception {
+        // Given
+        Http3ClientConnectionBuilder http3ClientConnectionBuilder = new Http3ClientConnectionBuilder()
+                .withDefaultSettingsFrameSupplementedWith(0x22, 0x33);
+
+        // When
+        Http3ConnectionImpl connection = http3ClientConnectionBuilder.build();
+
+        // Then
+        assertThat(connection.getSettingsParameter(0x22)).isPresent();
+        assertThat(connection.getSettingsParameter(0x22).get()).isEqualTo(0x33);
+    }
+    //endregion
+
+    //region helper methods
     private void ignoreExceptions(Runnable runnable) {
         try {
             runnable.run();
@@ -282,4 +321,5 @@ public class Http3ConnectionImplTest {
             // Ignore
         }
     }
+    //endregion
 }
