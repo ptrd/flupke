@@ -18,16 +18,18 @@
  */
 package tech.kwik.flupke.server;
 
-import tech.kwik.flupke.core.HttpError;
-import tech.kwik.flupke.core.HttpStream;
-import tech.kwik.flupke.impl.DataFrame;
-import tech.kwik.flupke.impl.HeadersFrame;
-import tech.kwik.flupke.test.CapturingEncoder;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.QuicStream;
 import tech.kwik.core.server.ServerConnection;
+import tech.kwik.flupke.core.HttpError;
+import tech.kwik.flupke.core.HttpStream;
+import tech.kwik.flupke.impl.DataFrame;
+import tech.kwik.flupke.impl.HeadersFrame;
+import tech.kwik.flupke.impl.SettingsFrame;
+import tech.kwik.flupke.test.CapturingEncoder;
+import tech.kwik.flupke.webtransport.impl.WebTransportExtensionFactory;
 import tech.kwik.qpack.Encoder;
 import tech.kwik.qpack.impl.DecoderImpl;
 import tech.kwik.qpack.impl.EncoderImpl;
@@ -49,11 +51,11 @@ import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 
 import static java.util.Collections.emptyMap;
-import static tech.kwik.flupke.impl.Http3ConnectionImpl.FRAME_TYPE_DATA;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static tech.kwik.flupke.impl.Http3ConnectionImpl.FRAME_TYPE_DATA;
 
 
 public class Http3ServerConnectionImplTest {
@@ -454,6 +456,24 @@ public class Http3ServerConnectionImplTest {
         ArgumentCaptor<HttpStream> streamArgumentCaptor = ArgumentCaptor.forClass(HttpStream.class);
         verify(handler).accept(streamArgumentCaptor.capture());
         assertThat(streamArgumentCaptor.getValue().getInputStream().readAllBytes()).isEqualTo(new byte[] { 0x3e, (byte) 0xca, (byte) 0xfe });
+    }
+
+    @Test
+    void extensionSpecificSettingShouldBeSendInHttp3SettingsFrame() throws Exception {
+        // Given
+        ByteArrayOutputStream controlStreamOutput = new ByteArrayOutputStream();
+        HttpConnectionBuilder builder = new HttpConnectionBuilder()
+                .withExtensionHandler("webtransport", new WebTransportExtensionFactory())
+                .withControlStreamOutputSentTo(controlStreamOutput);
+
+        // When
+        Http3ServerConnectionImpl http3ServerConnection = builder.buildServerConnection();
+
+        // Then
+        ByteBuffer serializedSettingsFrame = ByteBuffer.wrap(controlStreamOutput.toByteArray());
+        serializedSettingsFrame.get(); // skip first byte (type)
+        SettingsFrame settingsFrame = new SettingsFrame().parsePayload(serializedSettingsFrame);
+        assertThat(settingsFrame.getParameter(0x14e9cd29L)).isEqualTo(1L);
     }
     //endregion
 

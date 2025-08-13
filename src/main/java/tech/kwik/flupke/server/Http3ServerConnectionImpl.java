@@ -18,14 +18,14 @@
  */
 package tech.kwik.flupke.server;
 
-import tech.kwik.flupke.core.HttpError;
-import tech.kwik.flupke.core.HttpStream;
-import tech.kwik.flupke.impl.*;
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.QuicStream;
 import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.core.server.ApplicationProtocolConnection;
 import tech.kwik.core.server.ServerConnection;
+import tech.kwik.flupke.core.HttpError;
+import tech.kwik.flupke.core.HttpStream;
+import tech.kwik.flupke.impl.*;
 import tech.kwik.qpack.Encoder;
 
 import java.io.BufferedInputStream;
@@ -78,6 +78,11 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
         encoder = Encoder.newBuilder().build();
         clientAddress = ((ServerConnection) quicConnection).getInitialClientAddress();
         settingsParameters.put((long) SETTINGS_ENABLE_CONNECT_PROTOCOL, 1L);
+        extensionFactories.values().forEach(factory -> {
+            factory.getExtensionSettings().forEach((key, value) -> {
+                settingsParameters.put(key, value);
+            });
+        });
         startControlStream();
         extensionInstantiationLock = new ReentrantLock();
     }

@@ -18,6 +18,10 @@
  */
 package tech.kwik.flupke.server;
 
+import java.util.Map;
+
+import static java.util.Collections.emptyMap;
+
 public interface Http3ServerExtensionFactory {
 
     /**
@@ -26,4 +30,12 @@ public interface Http3ServerExtensionFactory {
      * @return  the extension
      */
     Http3ServerExtension createExtension(Http3ServerConnection http3ServerConnection);
+
+    /**
+     * Return the extension specific HTTP3 settings for this extension.
+     * @return
+     */
+    default Map<Long, Long> getExtensionSettings() {
+        return emptyMap();
+    }
 }

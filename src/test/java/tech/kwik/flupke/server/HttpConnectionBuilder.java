@@ -66,8 +66,8 @@ public class HttpConnectionBuilder {
         return this;
     }
 
-    public HttpConnectionBuilder withExtensionHandler(String webtransport, Http3ServerExtensionFactory extensionHandler) {
-        extensions.put(webtransport, extensionHandler);
+    public HttpConnectionBuilder withExtensionHandler(String protocol, Http3ServerExtensionFactory extensionHandler) {
+        extensions.put(protocol, extensionHandler);
         return this;
     }
 
