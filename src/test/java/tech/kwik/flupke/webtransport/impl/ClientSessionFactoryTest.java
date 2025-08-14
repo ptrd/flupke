@@ -48,7 +48,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.longThat;
 import static org.mockito.Mockito.*;
-import static tech.kwik.flupke.webtransport.impl.ClientSessionFactoryImpl.SETTINGS_WEBTRANSPORT_MAX_SESSIONS;
+import static tech.kwik.flupke.webtransport.impl.ClientSessionFactoryImpl.SETTINGS_WT_MAX_SESSIONS;
 import static tech.kwik.flupke.webtransport.impl.SessionImplTest.captureHttpConnectionBidirectionalStreamHandler;
 import static tech.kwik.flupke.webtransport.impl.SessionImplTest.httpStreamWith;
 
@@ -105,10 +105,11 @@ class ClientSessionFactoryTest {
         // When
         factory.createSession(new URI("https://example.com:443/webtransport"));
 
-        // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-08.html#name-protocol-overview
-        // "When an HTTP/3 connection is established, both the client and server have to send a SETTINGS_WEBTRANSPORT_MAX_SESSIONS"
+        // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-13.html#section-2.2
+        // "When an HTTP/3 connection is established, both the client and the server send a SETTINGS_WT_MAX_SESSIONS
+        //  setting to indicate support for WebTransport over HTTP/3. "
         // Then
-        inOrder.verify(http3connection).addSettingsParameter(longThat(l -> l == 0xc671706aL), longThat(l -> l > 0));
+        inOrder.verify(http3connection).addSettingsParameter(longThat(l -> l == 0x14e9cd29L), longThat(l -> l > 0));
         inOrder.verify(http3connection).connect();
     }
 
@@ -266,7 +267,7 @@ class ClientSessionFactoryTest {
         CapsuleProtocolStream capsuleProtocolStream = mock(CapsuleProtocolStream.class);
         when(capsuleProtocolStream.getStreamId()).thenReturn(4L);  // Control stream stream ID
         when(http3connection.sendExtendedConnectWithCapsuleProtocol(any(), any(), any(), any())).thenReturn(capsuleProtocolStream);
-        when(http3connection.getPeerSettingsParameter(SETTINGS_WEBTRANSPORT_MAX_SESSIONS)).thenReturn(Optional.of(maxWebTransportSessions));
+        when(http3connection.getPeerSettingsParameter(SETTINGS_WT_MAX_SESSIONS)).thenReturn(Optional.of(maxWebTransportSessions));
         return http3connection;
     }
 
@@ -277,7 +278,7 @@ class ClientSessionFactoryTest {
         CapsuleProtocolStream capsuleProtocolStream = mock(CapsuleProtocolStream.class);
         when(capsuleProtocolStream.getStreamId()).thenReturn(4L);  // Control stream stream ID
         when(http3connection.sendExtendedConnectWithCapsuleProtocol(any(), any(), any(), any())).thenReturn(capsuleProtocolStream);
-        when(http3connection.getPeerSettingsParameter(SETTINGS_WEBTRANSPORT_MAX_SESSIONS)).thenReturn(Optional.of(10L));
+        when(http3connection.getPeerSettingsParameter(SETTINGS_WT_MAX_SESSIONS)).thenReturn(Optional.of(10L));
 
         // Simulate the server performing the action asynchronously before returning the response to the extended CONNECT request.
         when(http3connection.sendExtendedConnectWithCapsuleProtocol(any(), any(), any(), any())).thenAnswer(invocation -> {

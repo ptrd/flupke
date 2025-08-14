@@ -18,8 +18,8 @@
  */
 package tech.kwik.flupke.webtransport.impl;
 
-import tech.kwik.flupke.core.HttpStream;
 import tech.kwik.core.generic.VariableLengthInteger;
+import tech.kwik.flupke.core.HttpStream;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -34,10 +34,12 @@ import static tech.kwik.flupke.webtransport.Constants.WEBTRANSPORT_SESSION_GONE;
 
 public abstract class AbstractSessionFactoryImpl implements SessionFactory {
 
-    // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-http-3-settings-parameter-r
-    // "The SETTINGS_WEBTRANSPORT_MAX_SESSIONS parameter indicates that the specified HTTP/3 endpoint is
-    //  WebTransport-capable and the number of concurrent sessions it is willing to receive."
-    static final long SETTINGS_WEBTRANSPORT_MAX_SESSIONS = 0xc671706aL;
+    // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-13.html#section-9.2
+    // "The SETTINGS_WT_MAX_SESSIONS setting indicates that the specified HTTP/3 endpoint is WebTransport-capable and
+    //  the number of concurrent sessions it is willing to receive."
+    // "Setting Name: WT_MAX_SESSIONS
+    //  Value: 0x14e9cd29"
+    public static final long SETTINGS_WT_MAX_SESSIONS = 0x14e9cd29L;
 
     protected final Map<Long, SessionImpl> sessionRegistry = new ConcurrentHashMap<>();
     private final ReentrantLock registrationLock = new ReentrantLock();

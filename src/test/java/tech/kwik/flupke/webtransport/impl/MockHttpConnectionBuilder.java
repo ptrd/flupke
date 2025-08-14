@@ -40,7 +40,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static tech.kwik.flupke.webtransport.impl.ClientSessionFactoryImpl.SETTINGS_WEBTRANSPORT_MAX_SESSIONS;
+import static tech.kwik.flupke.webtransport.impl.ClientSessionFactoryImpl.SETTINGS_WT_MAX_SESSIONS;
 
 public class MockHttpConnectionBuilder {
 
@@ -54,7 +54,7 @@ public class MockHttpConnectionBuilder {
         Http3ClientConnection http3connection = buildHttp3Connection();
         Http3Client client = mock(Http3Client.class);
         when(client.createConnection(any(HttpRequest.class))).thenReturn(http3connection);
-        when(http3connection.getPeerSettingsParameter(SETTINGS_WEBTRANSPORT_MAX_SESSIONS)).thenReturn(Optional.of(10L));
+        when(http3connection.getPeerSettingsParameter(SETTINGS_WT_MAX_SESSIONS)).thenReturn(Optional.of(10L));
         return client;
     }
 

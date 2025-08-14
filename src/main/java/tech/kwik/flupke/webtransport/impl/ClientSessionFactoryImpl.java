@@ -61,12 +61,16 @@ public class ClientSessionFactoryImpl extends AbstractSessionFactoryImpl impleme
             HttpRequest request = HttpRequest.newBuilder(new URI("https://" + server + ":" + serverPort)).build();
             httpClientConnection = httpClient.createConnection(request);
 
-            // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-extended-connect-in-http-3
-            // "To use WebTransport over HTTP/3, clients MUST send the SETTINGS_ENABLE_CONNECT_PROTOCOL setting with a value of "1"."
-            httpClientConnection.addSettingsParameter(SETTINGS_WEBTRANSPORT_MAX_SESSIONS, 1);
+            // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-13.html#section-3.1
+            // "A client supporting WebTransport over HTTP/3 MUST send the SETTINGS_WT_MAX_SESSIONS setting with a value greater than "0"."
+            httpClientConnection.addSettingsParameter(SETTINGS_WT_MAX_SESSIONS, 1);
             httpClientConnection.connect();
 
-            maxSessions = httpClientConnection.getPeerSettingsParameter(SETTINGS_WEBTRANSPORT_MAX_SESSIONS).orElse(0L);
+            // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-13.html#section-5.2
+            // "This document defines a SETTINGS_WT_MAX_SESSIONS setting that allows the server to limit the maximum number
+            //  of concurrent WebTransport sessions on a single HTTP/3 connection.
+            //  The client MUST NOT open more simultaneous sessions than indicated in the server SETTINGS parameter. "
+            maxSessions = httpClientConnection.getPeerSettingsParameter(SETTINGS_WT_MAX_SESSIONS).orElse(0L);
 
             httpClientConnection.registerUnidirectionalStreamType(STREAM_TYPE_WEBTRANSPORT, this::handleUnidirectionalStream);
             httpClientConnection.registerBidirectionalStreamHandler(this::handleBidirectionalStream);
