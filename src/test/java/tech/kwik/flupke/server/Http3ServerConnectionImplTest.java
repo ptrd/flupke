@@ -362,7 +362,7 @@ public class Http3ServerConnectionImplTest {
     void extendedConnectShouldNotCloseRequestStream() throws Exception {
         // Given
         Http3ServerExtension extensionHandler = mock(Http3ServerExtension.class);
-        when(extensionHandler.handleExtendedConnect(any(HttpHeaders.class), anyString(), anyString(), anyString(), any(QuicStream.class))).thenReturn(200);
+        when(extensionHandler.handleExtendedConnect(any(HttpHeaders.class), anyString(), anyString(), anyString(), any(HttpStream.class))).thenReturn(200);
         Http3ServerExtensionFactory extensionFactory = http3ServerConnection -> extensionHandler;
 
         CapturingEncoder encoder = new CapturingEncoder();
@@ -413,7 +413,7 @@ public class Http3ServerConnectionImplTest {
     void http3serverExtensionIsCalledWhenRegisteredProperly() throws Exception {
         // Given
         Http3ServerExtension extensionHandler = mock(Http3ServerExtension.class);
-        when(extensionHandler.handleExtendedConnect(any(HttpHeaders.class), anyString(), anyString(), anyString(), any(QuicStream.class))).thenReturn(200);
+        when(extensionHandler.handleExtendedConnect(any(HttpHeaders.class), anyString(), anyString(), anyString(), any(HttpStream.class))).thenReturn(200);
         Http3ServerExtensionFactory extensionFactory = http3ServerConnection -> extensionHandler;
 
         CapturingEncoder encoder = new CapturingEncoder();
@@ -433,7 +433,7 @@ public class Http3ServerConnectionImplTest {
                 argThat(p -> p.equals("webtransport")),
                 argThat(a -> a.equals("example.com")),
                 argThat(p -> p.equals("/")),
-                any(QuicStream.class));
+                any(HttpStream.class));
         assertThat(encoder.getCapturedHeaders().get(":status")).isEqualTo("200");
     }
     //endregion

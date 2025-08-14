@@ -18,11 +18,11 @@
  */
 package tech.kwik.flupke.impl;
 
+import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.flupke.core.Capsule;
 import tech.kwik.flupke.core.CapsuleProtocolStream;
 import tech.kwik.flupke.core.GenericCapsule;
-import tech.kwik.core.QuicStream;
-import tech.kwik.core.generic.VariableLengthInteger;
+import tech.kwik.flupke.core.HttpStream;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -35,12 +35,12 @@ import java.util.function.Function;
 
 public class CapsuleProtocolStreamImpl implements CapsuleProtocolStream {
 
-    private QuicStream quicStream;
+    private HttpStream httpStream;
     private Map<Long, Function<InputStream, Capsule>> capsuleParsers;
     private PushbackInputStream inputStream;
 
-    public CapsuleProtocolStreamImpl(QuicStream stream) {
-        this.quicStream = stream;
+    public CapsuleProtocolStreamImpl(HttpStream stream) {
+        this.httpStream = stream;
         capsuleParsers = new HashMap<>();
         inputStream = new PushbackInputStream(stream.getInputStream(), 8);
     }
@@ -63,24 +63,24 @@ public class CapsuleProtocolStreamImpl implements CapsuleProtocolStream {
 
     @Override
     public void send(Capsule capsule) throws IOException {
-        capsule.write(quicStream.getOutputStream());
-        quicStream.getOutputStream().flush();
+        capsule.write(httpStream.getOutputStream());
+        httpStream.getOutputStream().flush();
     }
 
     @Override
     public void sendAndClose(Capsule capsule) throws IOException {
-        capsule.write(quicStream.getOutputStream());
-        quicStream.getOutputStream().close();
+        capsule.write(httpStream.getOutputStream());
+        httpStream.getOutputStream().close();
     }
 
     @Override
     public void close() throws IOException {
-        quicStream.getOutputStream().close();
+        httpStream.getOutputStream().close();
     }
 
     @Override
     public long getStreamId() {
-        return quicStream.getStreamId();
+        return httpStream.getStreamId();
     }
 
     @Override
@@ -92,7 +92,7 @@ public class CapsuleProtocolStreamImpl implements CapsuleProtocolStream {
         long type = VariableLengthInteger.parseLong(inputStream);
         long length = VariableLengthInteger.parseLong(inputStream);
         byte[] data = new byte[(int) length];
-        quicStream.getInputStream().read(data);
+        httpStream.getInputStream().read(data);
         return new GenericCapsule(type, data);
     }
 }

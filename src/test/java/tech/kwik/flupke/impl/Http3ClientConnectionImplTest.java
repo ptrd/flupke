@@ -18,6 +18,13 @@
  */
 package tech.kwik.flupke.impl;
 
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
+import tech.kwik.core.QuicClientConnection;
+import tech.kwik.core.QuicStream;
+import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.flupke.core.CapsuleProtocolStream;
 import tech.kwik.flupke.core.GenericCapsule;
 import tech.kwik.flupke.core.Http3ClientConnection;
@@ -26,13 +33,6 @@ import tech.kwik.flupke.core.HttpStream;
 import tech.kwik.flupke.test.ByteUtils;
 import tech.kwik.flupke.test.FieldSetter;
 import tech.kwik.flupke.test.Http3ClientConnectionBuilder;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
-import tech.kwik.core.QuicClientConnection;
-import tech.kwik.core.QuicStream;
-import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.qpack.Decoder;
 import tech.kwik.qpack.Encoder;
 
@@ -53,15 +53,16 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.emptyMap;
-import static tech.kwik.flupke.impl.Http3ConnectionImpl.FRAME_TYPE_HEADERS;
-import static tech.kwik.flupke.impl.Http3ConnectionImpl.H3_STREAM_CREATION_ERROR;
-import static tech.kwik.flupke.impl.SettingsFrame.SETTINGS_ENABLE_CONNECT_PROTOCOL;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.entry;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.*;
+import static tech.kwik.flupke.impl.Http3ConnectionImpl.FRAME_TYPE_DATA;
+import static tech.kwik.flupke.impl.Http3ConnectionImpl.FRAME_TYPE_HEADERS;
+import static tech.kwik.flupke.impl.Http3ConnectionImpl.H3_STREAM_CREATION_ERROR;
+import static tech.kwik.flupke.impl.SettingsFrame.SETTINGS_ENABLE_CONNECT_PROTOCOL;
 
 
 public class Http3ClientConnectionImplTest {
@@ -792,8 +793,8 @@ public class Http3ClientConnectionImplTest {
 
         // Then
         byte[] data = Arrays.copyOfRange(quicOutputStream.toByteArray(), position, quicOutputStream.size());
-        // 0x06: frame length, 0x4068: capsule type (2-byte var int), 0x03: capsule length, 0x01, 0x02, 0x03: capsule data
-        assertThat(data).isEqualTo(new byte[] { 0x40, 0x68, 0x03, 0x01, 0x02, 0x03 });
+        // 0x00: DataFrame type, 0x06: frame length, 0x4068: capsule type (2-byte var int), 0x03: capsule length, 0x01, 0x02, 0x03: capsule data
+        assertThat(data).isEqualTo(new byte[] { 0x00, 0x06, 0x40, 0x68, 0x03, 0x01, 0x02, 0x03 });
     }
 
     @Test
@@ -801,6 +802,7 @@ public class Http3ClientConnectionImplTest {
         // Given
         ByteArrayInputStream quicInputStream = new ByteArrayInputStream(new byte[] {
                 FRAME_TYPE_HEADERS, 0x00,
+                FRAME_TYPE_DATA, 0x06,
                 0x40, 0x68, 0x03, 0x75, 0x49, (byte) 0xde  // 0x4068: capsule type (2-byte var int), 0x03: capsule length,  0x75, 0x49, 0xde: capsule data
 
         });
@@ -826,6 +828,7 @@ public class Http3ClientConnectionImplTest {
         // Given
         ByteArrayInputStream quicInputStream = new ByteArrayInputStream(new byte[] {
                 FRAME_TYPE_HEADERS, 0x00,
+                FRAME_TYPE_DATA, 0x06,
                 0x40, 0x68, 0x03, 0x75, 0x49, (byte) 0xde  // 0x4068: capsule type (2-byte var int), 0x03: capsule length,  0x75, 0x49, 0xde: capsule data
         });
         Http3ClientConnection http3Connection = new Http3ClientConnectionBuilder()
@@ -863,6 +866,7 @@ public class Http3ClientConnectionImplTest {
                 .withEnableConnectProtocolSettings()
                 .withBidirectionalQuicStream(new ByteArrayInputStream(new byte[] {
                         FRAME_TYPE_HEADERS, 0x00,
+                        FRAME_TYPE_DATA, 0x01,
                         0x2f }))
                 .build();
         HttpRequest connectRequest = HttpRequest.newBuilder()
@@ -918,7 +922,7 @@ public class Http3ClientConnectionImplTest {
         capsuleProtocolStream.sendAndClose(new GenericCapsule(0x68, new byte[] { 0x01, 0x02, 0x03 }));
 
         // Then
-        verify(quicOutputStream).write(any());
+        verify(quicOutputStream, atLeast(1)).write(any());
         verify(quicOutputStream).close();
     }
 

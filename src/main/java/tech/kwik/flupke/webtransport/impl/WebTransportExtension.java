@@ -18,11 +18,11 @@
  */
 package tech.kwik.flupke.webtransport.impl;
 
+import tech.kwik.flupke.core.HttpStream;
 import tech.kwik.flupke.impl.CapsuleProtocolStreamImpl;
 import tech.kwik.flupke.server.Http3ServerConnection;
 import tech.kwik.flupke.server.Http3ServerExtension;
 import tech.kwik.flupke.webtransport.Session;
-import tech.kwik.core.QuicStream;
 
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -46,7 +46,7 @@ public class WebTransportExtension implements Http3ServerExtension {
     }
 
     @Override
-    public int handleExtendedConnect(HttpHeaders headers, String protocol, String authority, String pathAndQuery, QuicStream requestResponseSteam) {
+    public int handleExtendedConnect(HttpHeaders headers, String protocol, String authority, String pathAndQuery, HttpStream requestResponseSteam) {
         Optional<Consumer<Session>> handler = findHandler(pathAndQuery);
         if (handler.isPresent()) {
             Session session = sessionFactory.createServerSession(new CapsuleProtocolStreamImpl(requestResponseSteam));

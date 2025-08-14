@@ -367,7 +367,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
                 ":protocol", protocol,
                 ":scheme", scheme,
                 ":path", extractPath(request.uri())));
-        return new CapsuleProtocolStreamImpl(createHttpStream(headersFrame));
+        return new CapsuleProtocolStreamImpl(new HttpStreamImpl(createHttpStream(headersFrame)));
     }
 
     @Override

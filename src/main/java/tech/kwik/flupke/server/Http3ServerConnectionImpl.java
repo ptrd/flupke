@@ -167,7 +167,7 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
         if (http3ServerExtension != null) {
             String authority = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_AUTHORITY);
             String path = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PATH);
-            int statusCode = http3ServerExtension.handleExtendedConnect(headersFrame.headers(), extensionType, authority, path, quicStream);
+            int statusCode = http3ServerExtension.handleExtendedConnect(headersFrame.headers(), extensionType, authority, path, new HttpStreamImpl(quicStream));
             sendHttpStatus(statusCode, null, quicStream, statusCode != 200);
         }
         else {

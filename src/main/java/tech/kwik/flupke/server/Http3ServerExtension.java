@@ -19,11 +19,11 @@
 package tech.kwik.flupke.server;
 
 
-import tech.kwik.core.QuicStream;
+import tech.kwik.flupke.core.HttpStream;
 
 import java.net.http.HttpHeaders;
 
 public interface Http3ServerExtension {
 
-    int handleExtendedConnect(HttpHeaders headers, String protocol, String authority, String pathAndQuery, QuicStream requestResponseStream);
+    int handleExtendedConnect(HttpHeaders headers, String protocol, String authority, String pathAndQuery, HttpStream requestResponseStream);
 }
