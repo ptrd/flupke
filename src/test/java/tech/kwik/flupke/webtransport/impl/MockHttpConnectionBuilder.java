@@ -18,13 +18,10 @@
  */
 package tech.kwik.flupke.webtransport.impl;
 
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
 import tech.kwik.flupke.Http3Client;
-import tech.kwik.flupke.core.Capsule;
-import tech.kwik.flupke.core.CapsuleProtocolStream;
 import tech.kwik.flupke.core.Http3ClientConnection;
 import tech.kwik.flupke.core.HttpStream;
+import tech.kwik.flupke.test.WriteableByteArrayInputStream;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -46,8 +43,7 @@ public class MockHttpConnectionBuilder {
 
     private HttpStream bidirectionalStream;
     private HttpStream unidirectionalStream;
-    private CapsuleProtocolStream capsuleProtocolStream;
-
+    private HttpStream extendedConnectStream;
     private Http3ClientConnection http3connection;
 
     public Http3Client buildClient() throws Exception {
@@ -58,15 +54,15 @@ public class MockHttpConnectionBuilder {
         return client;
     }
 
-    public MockHttpConnectionBuilder withCapsuleProtocolStream(InputStream input) throws IOException {
-        capsuleProtocolStream = mock(CapsuleProtocolStream.class);
-        when(capsuleProtocolStream.getStreamId()).thenReturn(4L);
-        when(capsuleProtocolStream.receive()).then(new Answer<Capsule>() {
-            @Override
-            public Capsule answer(InvocationOnMock invocation) throws Throwable {
-                return new CloseWebtransportSessionCapsule(input);
-            }
-        });
+    public MockHttpConnectionBuilder withExtendedConnectStream(InputStream input) throws IOException {
+        return withExtendedConnectStream(input, mock(OutputStream.class));
+    }
+
+    public MockHttpConnectionBuilder withExtendedConnectStream(InputStream input, OutputStream output) throws IOException {
+        extendedConnectStream = mock(HttpStream.class);
+        when(extendedConnectStream.getInputStream()).thenReturn(input);
+        when(extendedConnectStream.getOutputStream()).thenReturn(output);
+        when(extendedConnectStream.getStreamId()).thenReturn(4L);
         return this;
     }
 
@@ -91,8 +87,8 @@ public class MockHttpConnectionBuilder {
 
     private Http3ClientConnection buildHttp3Connection() throws Exception {
         http3connection = mock(Http3ClientConnection.class);
-        if (capsuleProtocolStream == null) {
-            withCapsuleProtocolStream(new ByteArrayInputStream(new byte[0]));
+        if (extendedConnectStream == null) {
+            withExtendedConnectStream(new WriteableByteArrayInputStream());
         }
         if (unidirectionalStream == null) {
             withUnidirectionalStreamInputOuput(new ByteArrayOutputStream());
@@ -101,7 +97,7 @@ public class MockHttpConnectionBuilder {
             withBidirectionalStreamInputOuput(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream());
         }
 
-        when(http3connection.sendExtendedConnectWithCapsuleProtocol(any(HttpRequest.class), anyString(), anyString(), any(Duration.class))).thenReturn(capsuleProtocolStream);
+        when(http3connection.sendExtendedConnect(any(HttpRequest.class), anyString(), anyString(), any(Duration.class))).thenReturn(extendedConnectStream);
         when(http3connection.createUnidirectionalStream(anyLong())).thenReturn(unidirectionalStream);
         when(http3connection.createBidirectionalStream()).thenReturn(bidirectionalStream);
         return http3connection;
@@ -111,8 +107,8 @@ public class MockHttpConnectionBuilder {
         return http3connection;
     }
 
-    public CapsuleProtocolStream getCapsuleProtocolStream() {
-        return capsuleProtocolStream;
+    public HttpStream getExtendedConnectStream() {
+        return extendedConnectStream;
     }
 }
 

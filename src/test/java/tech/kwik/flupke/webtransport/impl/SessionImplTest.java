@@ -22,9 +22,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import tech.kwik.flupke.Http3Client;
+import tech.kwik.flupke.core.CapsuleProtocolStream;
 import tech.kwik.flupke.core.Http3ClientConnection;
 import tech.kwik.flupke.core.HttpError;
 import tech.kwik.flupke.core.HttpStream;
+import tech.kwik.flupke.impl.CapsuleProtocolStreamImpl;
 import tech.kwik.flupke.test.ByteUtils;
 import tech.kwik.flupke.test.WriteableByteArrayInputStream;
 import tech.kwik.flupke.webtransport.Session;
@@ -34,6 +36,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicReference;
@@ -62,7 +65,7 @@ class SessionImplTest {
     void creatingUnidirectionalStreamShouldSendStreamType() throws Exception {
         // Given
         Http3Client client = builder
-                .withCapsuleProtocolStream(createOpenInputStream())
+                .withExtendedConnectStream(createOpenInputStream())
                 .buildClient();
         Session session = createSessionWith(client);
 
@@ -136,7 +139,7 @@ class SessionImplTest {
     void whenSettingUnidirectionalStreamHandlerTheSessionStreamHandlerWillReceiveIt() throws Exception {
         // Given
         Http3Client client = builder
-                .withCapsuleProtocolStream(createOpenInputStream())
+                .withExtendedConnectStream(createOpenInputStream())
                 .buildClient();
         Session session = createSessionWith(client);
 
@@ -161,7 +164,6 @@ class SessionImplTest {
     void settingHandlerToNullValueShouldBePrevented() throws Exception {
         // Given
         Http3Client client = builder
-                .withCapsuleProtocolStream(createOpenInputStream())
                 .buildClient();
         Session session = createSessionWith(client);
 
@@ -176,7 +178,7 @@ class SessionImplTest {
     void whenCreatingSessionWithUnidirectionalStreamHandlerTheSessionStreamHandlerWillReceive() throws Exception {
         // Given
         Http3Client client = builder
-                .withCapsuleProtocolStream(createOpenInputStream())
+                .withExtendedConnectStream(createOpenInputStream())
                 .buildClient();
 
         AtomicReference<String> receivedMessage = new AtomicReference<>();
@@ -198,7 +200,7 @@ class SessionImplTest {
     void whenSettingBidirectionalStreamHandlerTheSessionStreamHandlerWillReceiveIt() throws Exception {
         // Given
         Http3Client client = builder
-                .withCapsuleProtocolStream(createOpenInputStream())
+                .withExtendedConnectStream(createOpenInputStream())
                 .buildClient();
 
         AtomicReference<String> receivedMessage = new AtomicReference<>();
@@ -224,7 +226,7 @@ class SessionImplTest {
     void whenCreatingSessionWithBidirectionalStreamHandlerTheSessionStreamHandlerWillReceive() throws Exception {
         // Given
         Http3Client client = builder
-                .withCapsuleProtocolStream(createOpenInputStream())
+                .withExtendedConnectStream(createOpenInputStream())
                 .buildClient();
 
         AtomicReference<String> receivedMessage = new AtomicReference<>();
@@ -268,15 +270,15 @@ class SessionImplTest {
     @Test
     void whenSessionIsCreatedCapsuleParserShouldHaveBeenRegistered() throws Exception {
         // Given
-        Http3Client client = builder
-                .withCapsuleProtocolStream(new WriteableByteArrayInputStream())
-                .buildClient();
+        HttpStream connectStream = mock(HttpStream.class);
+        when(connectStream.getInputStream()).thenReturn(new WriteableByteArrayInputStream());
+        CapsuleProtocolStream capsuleProtocolStream = spy(new CapsuleProtocolStreamImpl(connectStream));
 
         // When
-        Session session = createSessionWith(client);
+        Session session = new SessionImpl(mock(Http3ClientConnection.class), capsuleProtocolStream, s -> {}, s -> {}, factory);
 
         // Then
-        verify(builder.getCapsuleProtocolStream()).registerCapsuleParser(anyLong(), any(Function.class));
+        verify(capsuleProtocolStream).registerCapsuleParser(anyLong(), any(Function.class));
     }
 
     @Test
@@ -284,7 +286,7 @@ class SessionImplTest {
         // Given
         WriteableByteArrayInputStream inputStream = new WriteableByteArrayInputStream();
         Http3Client client = builder
-                .withCapsuleProtocolStream(inputStream)
+                .withExtendedConnectStream(inputStream)
                 .buildClient();
 
         BiConsumer<Long, String> sessionTerminatedEventListener = mock(BiConsumer.class);
@@ -292,7 +294,7 @@ class SessionImplTest {
         session.registerSessionTerminatedEventListener(sessionTerminatedEventListener);
 
         // When
-        String closeWebtransportSessionCapsuleBinary = "68430400000000";
+        String closeWebtransportSessionCapsuleBinary = "68430400000009";
         inputStream.write(ByteUtils.hexToBytes(closeWebtransportSessionCapsuleBinary));
         // Processing connect stream happens async, so give other thread a chance to proces
         Thread.sleep(10);
@@ -300,7 +302,7 @@ class SessionImplTest {
         // Then
         ArgumentCaptor<Long> errorCodeCaptor = ArgumentCaptor.forClass(Long.class);
         verify(sessionTerminatedEventListener).accept(errorCodeCaptor.capture(), anyString());
-        assertThat(errorCodeCaptor.getValue()).isEqualTo(0L);
+        assertThat(errorCodeCaptor.getValue()).isEqualTo(9L);
     }
 
     @Test
@@ -308,7 +310,7 @@ class SessionImplTest {
         // Given
         WriteableByteArrayInputStream inputStream = new WriteableByteArrayInputStream();
         Http3Client client = builder
-                .withCapsuleProtocolStream(inputStream)
+                .withExtendedConnectStream(inputStream)
                 .buildClient();
         Session session = createSessionWith(client);
 
@@ -331,7 +333,7 @@ class SessionImplTest {
         // Given
         WriteableByteArrayInputStream inputStream = new WriteableByteArrayInputStream();
         Http3Client client = builder
-                .withCapsuleProtocolStream(inputStream)
+                .withExtendedConnectStream(inputStream)
                 .buildClient();
         Session session = createSessionWith(client);
 
@@ -357,7 +359,7 @@ class SessionImplTest {
         HttpStream unidirectionalHttpStream = mockHttpStream();
         InputStream connectStream = new WriteableByteArrayInputStream();
         Http3Client client = builder
-                .withCapsuleProtocolStream(connectStream)
+                .withExtendedConnectStream(connectStream)
                 .with(unidirectionalHttpStream)
                 .buildClient();
         Session session = createSessionWith(client);
@@ -379,7 +381,7 @@ class SessionImplTest {
         // Given
         InputStream connectStream = new WriteableByteArrayInputStream();
         Http3Client client = builder
-                .withCapsuleProtocolStream(connectStream)
+                .withExtendedConnectStream(connectStream)
                 .buildClient();
 
         Consumer<WebTransportStream> unidirectionalStreamHandler = stream -> {};
@@ -407,7 +409,7 @@ class SessionImplTest {
         HttpStream bidirectionalHttpStream = mockHttpStream();
         InputStream connectStream = new WriteableByteArrayInputStream();
         Http3Client client = builder
-                .withCapsuleProtocolStream(connectStream)
+                .withExtendedConnectStream(connectStream)
                 .with(bidirectionalHttpStream)
                 .buildClient();
 
@@ -427,9 +429,7 @@ class SessionImplTest {
     @Test
     void onSessionUnidirectionalStreamCanBeOpened() throws Exception {
         // Given
-        InputStream connectStream = new WriteableByteArrayInputStream();
         Http3Client client = builder
-                .withCapsuleProtocolStream(connectStream)
                 .buildClient();
         Session session = createSessionWith(client);
         // Processing connect stream happens async, so give other thread a chance to process
@@ -447,7 +447,7 @@ class SessionImplTest {
         // Given
         InputStream connectStream = new WriteableByteArrayInputStream();
         Http3Client client = builder
-                .withCapsuleProtocolStream(connectStream)
+                .withExtendedConnectStream(connectStream)
                 .buildClient();
         Session session = createSessionWith(client);
         // Processing connect stream happens async, so give other thread a chance to process
@@ -469,7 +469,7 @@ class SessionImplTest {
         // Given
         InputStream connectStream = new WriteableByteArrayInputStream();
         Http3Client client = builder
-                .withCapsuleProtocolStream(connectStream)
+                .withExtendedConnectStream(connectStream)
                 .buildClient();
         Session session = createSessionWith(client);
         // Processing connect stream happens async, so give other thread a chance to process
@@ -490,7 +490,6 @@ class SessionImplTest {
     void whenClosedUnidirectionalStreamHandlerIsNotCalledAnymoreWhenPeerOpensStream() throws Exception {
         // Given
         Http3Client client = builder
-                .withCapsuleProtocolStream(createOpenInputStream())
                 .buildClient();
         Consumer<WebTransportStream> unidirectionalStreamHandler = mock(Consumer.class);
         SessionImpl session = (SessionImpl) createSessionWith(client, unidirectionalStreamHandler, null);
@@ -509,7 +508,6 @@ class SessionImplTest {
     void whenClosedBidirectionalStreamHandlerIsNotCalledAnymoreWhenPeerOpensStream() throws Exception {
         // Given
         Http3Client client = builder
-                .withCapsuleProtocolStream(createOpenInputStream())
                 .buildClient();
         Consumer<WebTransportStream> bidirectionalStreamHandler = mock(Consumer.class);
         SessionImpl session = (SessionImpl) createSessionWith(client, null, bidirectionalStreamHandler);
@@ -528,7 +526,9 @@ class SessionImplTest {
     @Test
     void closingSessionShouldSendCloseWebtransportSessionCapsule() throws Exception {
         // Given
+        ByteArrayOutputStream connectStreamOutput = new ByteArrayOutputStream();
         Http3Client client = builder
+                .withExtendedConnectStream(new WriteableByteArrayInputStream(), connectStreamOutput)
                 .buildClient();
         Session session = createSessionWith(client);
 
@@ -536,8 +536,8 @@ class SessionImplTest {
         session.close(0, "bye");
 
         // Then
-        verify(builder.getCapsuleProtocolStream()).sendAndClose(argThat(capsule ->
-                ((CloseWebtransportSessionCapsule) capsule).getApplicationErrorCode() == 0));
+        byte[] output = ((ByteArrayOutputStream) builder.getExtendedConnectStream().getOutputStream()).toByteArray();
+        assertThat(output).isEqualTo(ByteUtils.hexToBytes("68430700000000627965"));
     }
 
     @Test
@@ -545,7 +545,7 @@ class SessionImplTest {
         // Given
         WriteableByteArrayInputStream connectStream = new WriteableByteArrayInputStream();
         Http3Client client = builder
-                .withCapsuleProtocolStream(connectStream)
+                .withExtendedConnectStream(connectStream)
                 .buildClient();
         Session session = createSessionWith(client);
 
@@ -556,7 +556,7 @@ class SessionImplTest {
         Thread.sleep(10);
 
         // Then
-        verify(builder.getCapsuleProtocolStream()).close();
+        verify(builder.getExtendedConnectStream().getOutputStream()).close();
     }
 
     @Test
@@ -564,14 +564,17 @@ class SessionImplTest {
         // Given
         Http3Client client = builder
                 .buildClient();
+        OutputStream connectOutputStream = builder.getExtendedConnectStream().getOutputStream();
         Session session = createSessionWith(client);
+        session.close(0, "bye");
+        clearInvocations(connectOutputStream);
 
         // When
         session.close(0, "bye");
-        session.close(0, "bye");
 
         // Then
-        verify(builder.getCapsuleProtocolStream(), times(1)).sendAndClose(any());
+        verify(connectOutputStream, times(0)).write(any(byte[].class));
+        verify(connectOutputStream, times(0)).close();
     }
 
     /**

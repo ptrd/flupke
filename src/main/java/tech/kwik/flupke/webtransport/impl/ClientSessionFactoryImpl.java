@@ -22,6 +22,7 @@ import tech.kwik.flupke.Http3Client;
 import tech.kwik.flupke.core.CapsuleProtocolStream;
 import tech.kwik.flupke.core.Http3ClientConnection;
 import tech.kwik.flupke.core.HttpError;
+import tech.kwik.flupke.impl.CapsuleProtocolStreamImpl;
 import tech.kwik.flupke.webtransport.ClientSessionFactory;
 import tech.kwik.flupke.webtransport.Session;
 import tech.kwik.flupke.webtransport.WebTransportStream;
@@ -106,7 +107,7 @@ public class ClientSessionFactoryImpl extends AbstractSessionFactoryImpl impleme
             String protocol = "webtransport";
             String schema = "https";
             HttpRequest request = HttpRequest.newBuilder(webTransportUri).build();
-            CapsuleProtocolStream connectStream = httpClientConnection.sendExtendedConnectWithCapsuleProtocol(request, protocol, schema, Duration.ofSeconds(5));
+            CapsuleProtocolStream connectStream = new CapsuleProtocolStreamImpl(httpClientConnection.sendExtendedConnect(request, protocol, schema, Duration.ofSeconds(5)));
             SessionImpl session = new SessionImpl(httpClientConnection, connectStream, unidirectionalStreamHandler, bidirectionalStreamHandler, this);
             registerSession(session);
             return session;

@@ -23,17 +23,18 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import tech.kwik.flupke.Http3Client;
-import tech.kwik.flupke.core.CapsuleProtocolStream;
 import tech.kwik.flupke.core.Http3ClientConnection;
 import tech.kwik.flupke.core.HttpError;
 import tech.kwik.flupke.core.HttpStream;
 import tech.kwik.flupke.test.FieldReader;
+import tech.kwik.flupke.test.WriteableByteArrayInputStream;
 import tech.kwik.flupke.webtransport.ClientSessionFactory;
 import tech.kwik.flupke.webtransport.Session;
 import tech.kwik.flupke.webtransport.WebTransportStream;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.nio.charset.StandardCharsets;
@@ -72,7 +73,7 @@ class ClientSessionFactoryTest {
         Session session = factory.createSession(new URI("https://example.com:443/webtransport"));
 
         // Then
-        verify(http3connection).sendExtendedConnectWithCapsuleProtocol(
+        verify(http3connection).sendExtendedConnect(
                 any(HttpRequest.class),
                 argThat(s -> s.equals("webtransport")),
                 argThat(p -> p.equals("https")),
@@ -84,7 +85,7 @@ class ClientSessionFactoryTest {
     void whenExtendedConnectFailsWith404AnHttpErrorIsThrown() throws Exception {
         // Given
         Http3ClientConnection http3connection = createMockHttp3ConnectionForExtendedConnect(client, 10);
-        when(http3connection.sendExtendedConnectWithCapsuleProtocol(any(), any(), any(), any())).thenThrow(new HttpError("", 404));
+        when(http3connection.sendExtendedConnect(any(), any(), any(), any())).thenThrow(new HttpError("", 404));
         factory = new ClientSessionFactoryImpl(URI.create("https://example.com:443/"), client);
 
         assertThatThrownBy(() ->
@@ -264,9 +265,10 @@ class ClientSessionFactoryTest {
     private static Http3ClientConnection createMockHttp3ConnectionForExtendedConnect(Http3Client client, long maxWebTransportSessions) throws Exception {
         Http3ClientConnection http3connection = mock(Http3ClientConnection.class);
         when(client.createConnection(any())).thenReturn(http3connection);
-        CapsuleProtocolStream capsuleProtocolStream = mock(CapsuleProtocolStream.class);
-        when(capsuleProtocolStream.getStreamId()).thenReturn(4L);  // Control stream stream ID
-        when(http3connection.sendExtendedConnectWithCapsuleProtocol(any(), any(), any(), any())).thenReturn(capsuleProtocolStream);
+        HttpStream httpStream = mock(HttpStream.class);
+        when(httpStream.getStreamId()).thenReturn(4L);  // Control stream stream ID
+        when(httpStream.getOutputStream()).thenReturn(mock(OutputStream.class));
+        when(http3connection.sendExtendedConnect(any(), any(), any(), any())).thenReturn(httpStream);
         when(http3connection.getPeerSettingsParameter(SETTINGS_WT_MAX_SESSIONS)).thenReturn(Optional.of(maxWebTransportSessions));
         return http3connection;
     }
@@ -275,15 +277,18 @@ class ClientSessionFactoryTest {
         // Create a simple mock connection that will return a CapsuleProtocolStream after the action has been started.
         Http3ClientConnection http3connection = mock(Http3ClientConnection.class);
         when(client.createConnection(any())).thenReturn(http3connection);
-        CapsuleProtocolStream capsuleProtocolStream = mock(CapsuleProtocolStream.class);
-        when(capsuleProtocolStream.getStreamId()).thenReturn(4L);  // Control stream stream ID
-        when(http3connection.sendExtendedConnectWithCapsuleProtocol(any(), any(), any(), any())).thenReturn(capsuleProtocolStream);
+        HttpStream httpStream = mock(HttpStream.class);
+        when(httpStream.getStreamId()).thenReturn(4L);  // Control stream stream ID
+        when(httpStream.getInputStream()).thenReturn(new WriteableByteArrayInputStream());  // Reading from this stream will block
+        when(httpStream.getOutputStream()).thenReturn(mock(OutputStream.class));
+
+        when(http3connection.sendExtendedConnect(any(), any(), any(), any())).thenReturn(httpStream);
         when(http3connection.getPeerSettingsParameter(SETTINGS_WT_MAX_SESSIONS)).thenReturn(Optional.of(10L));
 
         // Simulate the server performing the action asynchronously before returning the response to the extended CONNECT request.
-        when(http3connection.sendExtendedConnectWithCapsuleProtocol(any(), any(), any(), any())).thenAnswer(invocation -> {
+        when(http3connection.sendExtendedConnect(any(), any(), any(), any())).thenAnswer(invocation -> {
             action.accept(http3connection);
-            return capsuleProtocolStream;
+            return httpStream;
         });
         return http3connection;
     }
