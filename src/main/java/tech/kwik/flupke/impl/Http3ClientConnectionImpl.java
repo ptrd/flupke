@@ -26,7 +26,6 @@ import tech.kwik.core.Statistics;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.log.NullLogger;
 import tech.kwik.flupke.Http3ConnectionSettings;
-import tech.kwik.flupke.core.CapsuleProtocolStream;
 import tech.kwik.flupke.core.Http3ClientConnection;
 import tech.kwik.flupke.core.HttpError;
 import tech.kwik.flupke.core.HttpStream;
@@ -344,30 +343,6 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
 
     private boolean isEnableConnectProtocol() {
         return getPeerSettingsParameter(SETTINGS_ENABLE_CONNECT_PROTOCOL).orElse(0L) == 1L;
-    }
-
-    @Override
-    public CapsuleProtocolStream sendExtendedConnectWithCapsuleProtocol(HttpRequest request, String protocol, String scheme, Duration settingsFrameTimeout) throws InterruptedException, HttpError, IOException {
-        if (! settingsFrameReceived.await(settingsFrameTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
-            throw new HttpError("No SETTINGS frame received in time.");
-        }
-        if (! isEnableConnectProtocol()) {
-            throw new HttpError("Server does not support Extended Connect (RFC 9220).");
-        }
-
-        // https://www.rfc-editor.org/rfc/rfc8441#section-4
-        // "A new pseudo-header field :protocol MAY be included on request HEADERS indicating the desired protocol to be
-        //  spoken on the tunnel created by CONNECT. The pseudo-header field is single valued and contains a value from
-        //  the "Hypertext Transfer Protocol (HTTP) Upgrade Token Registry located at <https://www.iana.org/assignments/http-upgrade-tokens/>"
-        // "On requests that contain the :protocol pseudo-header field, the :scheme and :path pseudo-header fields of
-        //  the target URI (see Section 5) MUST also be included."
-        HeadersFrame headersFrame = new HeadersFrame(request.headers(), Map.of(
-                ":authority", extractAuthority(request.uri()),
-                ":method", "CONNECT",
-                ":protocol", protocol,
-                ":scheme", scheme,
-                ":path", extractPath(request.uri())));
-        return new CapsuleProtocolStreamImpl(new HttpStreamImpl(createHttpStream(headersFrame)));
     }
 
     @Override

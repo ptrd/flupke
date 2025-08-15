@@ -25,8 +25,6 @@ import org.mockito.stubbing.Answer;
 import tech.kwik.core.QuicClientConnection;
 import tech.kwik.core.QuicStream;
 import tech.kwik.core.generic.VariableLengthInteger;
-import tech.kwik.flupke.core.CapsuleProtocolStream;
-import tech.kwik.flupke.core.GenericCapsule;
 import tech.kwik.flupke.core.Http3ClientConnection;
 import tech.kwik.flupke.core.HttpError;
 import tech.kwik.flupke.core.HttpStream;
@@ -775,7 +773,7 @@ public class Http3ClientConnectionImplTest {
     }
 
     @Test
-    public void testSendCapsuleOnConnectStream() throws Exception {
+    public void testSendDataOnConnectStream() throws Exception {
         // Given
         ByteArrayOutputStream quicOutputStream = new ByteArrayOutputStream();
         Http3ClientConnection http3Connection = new Http3ClientConnectionBuilder()
@@ -785,26 +783,25 @@ public class Http3ClientConnectionImplTest {
         HttpRequest connectRequest = HttpRequest.newBuilder()
                 .uri(new URI("http://example.com"))
                 .build();
-        CapsuleProtocolStream capsuleProtocolStream = http3Connection.sendExtendedConnectWithCapsuleProtocol(connectRequest, "websocket", "https", Duration.ofMillis(100));
+        HttpStream connectStream = http3Connection.sendExtendedConnect(connectRequest, "websocket", "https", Duration.ofMillis(100));
 
         // When
         int position = quicOutputStream.size();
-        capsuleProtocolStream.send(new GenericCapsule(0x68, new byte[] { 0x01, 0x02, 0x03 }));
+        connectStream.getOutputStream().write(new byte[] { 0x01, 0x02, 0x03 });
 
         // Then
         byte[] data = Arrays.copyOfRange(quicOutputStream.toByteArray(), position, quicOutputStream.size());
-        // 0x00: DataFrame type, 0x06: frame length, 0x4068: capsule type (2-byte var int), 0x03: capsule length, 0x01, 0x02, 0x03: capsule data
-        assertThat(data).isEqualTo(new byte[] { 0x00, 0x06, 0x40, 0x68, 0x03, 0x01, 0x02, 0x03 });
+        // 0x00: DataFrame type, 0x03: frame length.
+        assertThat(data).isEqualTo(new byte[] { 0x00, 0x03, 0x01, 0x02, 0x03 });
     }
 
     @Test
-    public void testReceiveCapsuleOnConnectStream() throws Exception {
+    public void testReceiveDataOnConnectStream() throws Exception {
         // Given
         ByteArrayInputStream quicInputStream = new ByteArrayInputStream(new byte[] {
                 FRAME_TYPE_HEADERS, 0x00,
-                FRAME_TYPE_DATA, 0x06,
-                0x40, 0x68, 0x03, 0x75, 0x49, (byte) 0xde  // 0x4068: capsule type (2-byte var int), 0x03: capsule length,  0x75, 0x49, 0xde: capsule data
-
+                FRAME_TYPE_DATA, 0x04,
+                0x00, 0x01, 0x02, 0x03
         });
         Http3ClientConnection http3Connection = new Http3ClientConnectionBuilder()
                 .withEnableConnectProtocolSettings()
@@ -813,123 +810,13 @@ public class Http3ClientConnectionImplTest {
         HttpRequest connectRequest = HttpRequest.newBuilder()
                 .uri(new URI("http://example.com"))
                 .build();
-        CapsuleProtocolStream capsuleProtocolStream = http3Connection.sendExtendedConnectWithCapsuleProtocol(connectRequest, "websocket", "https", Duration.ofMillis(100));
+        HttpStream connectStream = http3Connection.sendExtendedConnect(connectRequest, "websocket", "https", Duration.ofMillis(100));
 
         // When
-        GenericCapsule received = (GenericCapsule) capsuleProtocolStream.receive();
+        byte[] received = connectStream.getInputStream().readAllBytes();
 
         // Then
-        assertThat(received.getType()).isEqualTo(0x68);
-        assertThat(received.getData()).isEqualTo(new byte[] { 0x75, 0x49, (byte) 0xde });
-    }
-
-    @Test
-    public void testCapsuleParsingOnConnectStream() throws Exception {
-        // Given
-        ByteArrayInputStream quicInputStream = new ByteArrayInputStream(new byte[] {
-                FRAME_TYPE_HEADERS, 0x00,
-                FRAME_TYPE_DATA, 0x06,
-                0x40, 0x68, 0x03, 0x75, 0x49, (byte) 0xde  // 0x4068: capsule type (2-byte var int), 0x03: capsule length,  0x75, 0x49, 0xde: capsule data
-        });
-        Http3ClientConnection http3Connection = new Http3ClientConnectionBuilder()
-                .withEnableConnectProtocolSettings()
-                .withBidirectionalQuicStream(quicInputStream)
-                .build();
-        HttpRequest connectRequest = HttpRequest.newBuilder()
-                .uri(new URI("http://example.com"))
-                .build();
-        CapsuleProtocolStream capsuleProtocolStream = http3Connection.sendExtendedConnectWithCapsuleProtocol(connectRequest, "websocket", "https", Duration.ofMillis(100));
-
-        // When
-        capsuleProtocolStream.registerCapsuleParser(0x68, input -> {
-            try {
-                byte[] data = input.readNBytes(6);
-                return new TestCapsule(Arrays.copyOfRange(data, 3, 6));
-            }
-            catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
-        });
-
-        GenericCapsule received = (GenericCapsule) capsuleProtocolStream.receive();
-
-        // Then
-        assertThat(received).isInstanceOf(TestCapsule.class);
-        assertThat(received.getType()).isEqualTo(0x68);
-        assertThat(received.getData()).isEqualTo(new byte[] { 0x75, 0x49, (byte) 0xde });
-    }
-
-    @Test
-    public void whenCapsuleParserThrowsIORuntimeExceptionThisIsConvertedToIoException() throws Exception {
-        // Given
-        Http3ClientConnection http3Connection = new Http3ClientConnectionBuilder()
-                .withEnableConnectProtocolSettings()
-                .withBidirectionalQuicStream(new ByteArrayInputStream(new byte[] {
-                        FRAME_TYPE_HEADERS, 0x00,
-                        FRAME_TYPE_DATA, 0x01,
-                        0x2f }))
-                .build();
-        HttpRequest connectRequest = HttpRequest.newBuilder()
-                .uri(new URI("http://example.com"))
-                .build();
-        CapsuleProtocolStream capsuleProtocolStream = http3Connection.sendExtendedConnectWithCapsuleProtocol(connectRequest, "websocket", "https", Duration.ofMillis(100));
-
-        // When
-        capsuleProtocolStream.registerCapsuleParser(0x2f, input -> {
-            throw new UncheckedIOException(new IOException("missing data"));
-        });
-
-        // Then
-        assertThatThrownBy(() -> capsuleProtocolStream.receive())
-                .isInstanceOf(IOException.class)
-                .hasMessage("missing data");
-    }
-
-    @Test
-    public void closeOnCapsuleStreamClosesOutputStreamOfUnderlyingQuicStream() throws Exception {
-        // Given
-        OutputStream quicOutputStream = mock(OutputStream.class);
-        Http3ClientConnection http3Connection = new Http3ClientConnectionBuilder()
-                .withEnableConnectProtocolSettings()
-                .withBidirectionalQuicStream(new ByteArrayInputStream(MOCK_HEADER), quicOutputStream)
-                .build();
-        HttpRequest connectRequest = HttpRequest.newBuilder()
-                .uri(new URI("http://example.com"))
-                .build();
-        CapsuleProtocolStream capsuleProtocolStream = http3Connection.sendExtendedConnectWithCapsuleProtocol(connectRequest, "websocket", "https", Duration.ofMillis(100));
-
-        // When
-        capsuleProtocolStream.close();
-
-        // Then
-        verify(quicOutputStream).close();
-    }
-
-    @Test
-    public void sendAndcloseOnCapsuleStreamClosesOutputStreamOfUnderlyingQuicStream() throws Exception {
-        // Given
-        OutputStream quicOutputStream = mock(OutputStream.class);
-        Http3ClientConnection http3Connection = new Http3ClientConnectionBuilder()
-                .withEnableConnectProtocolSettings()
-                .withBidirectionalQuicStream(new ByteArrayInputStream(MOCK_HEADER), quicOutputStream)
-                .build();
-        HttpRequest connectRequest = HttpRequest.newBuilder()
-                .uri(new URI("http://example.com"))
-                .build();
-        CapsuleProtocolStream capsuleProtocolStream = http3Connection.sendExtendedConnectWithCapsuleProtocol(connectRequest, "websocket", "https", Duration.ofMillis(100));
-
-        // When
-        capsuleProtocolStream.sendAndClose(new GenericCapsule(0x68, new byte[] { 0x01, 0x02, 0x03 }));
-
-        // Then
-        verify(quicOutputStream, atLeast(1)).write(any());
-        verify(quicOutputStream).close();
-    }
-
-    static class TestCapsule extends GenericCapsule {
-        public TestCapsule(byte[] data) {
-            super(0x68, data);
-        }
+        assertThat(received).isEqualTo(new byte[] { 0x00, 0x01, 0x02, 0x03 });
     }
 
     private QuicStream createControlStream(Integer... additionalBytes) {
