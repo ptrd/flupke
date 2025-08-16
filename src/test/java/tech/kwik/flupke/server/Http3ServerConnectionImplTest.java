@@ -20,6 +20,8 @@ package tech.kwik.flupke.server;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.QuicStream;
 import tech.kwik.core.server.ServerConnection;
@@ -48,12 +50,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 
 import static java.util.Collections.emptyMap;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 import static tech.kwik.flupke.impl.Http3ConnectionImpl.FRAME_TYPE_DATA;
 
@@ -362,7 +368,8 @@ public class Http3ServerConnectionImplTest {
     void extendedConnectShouldNotCloseRequestStream() throws Exception {
         // Given
         Http3ServerExtension extensionHandler = mock(Http3ServerExtension.class);
-        when(extensionHandler.handleExtendedConnect(any(HttpHeaders.class), anyString(), anyString(), anyString(), any(HttpStream.class))).thenReturn(200);
+        doAnswer(new StatusCallbackAnswer(200))
+                .when(extensionHandler).handleExtendedConnect(any(HttpHeaders.class), anyString(), anyString(), anyString(), any(IntConsumer.class), any(HttpStream.class));
         Http3ServerExtensionFactory extensionFactory = http3ServerConnection -> extensionHandler;
 
         CapturingEncoder encoder = new CapturingEncoder();
@@ -406,14 +413,16 @@ public class Http3ServerConnectionImplTest {
                 0x08,  // identifier: SETTINGS_ENABLE_CONNECT_PROTOCOL
                 1      // value
         });
-
     }
+    //endregion
 
+    //region HTTP/3 extensions
     @Test
     void http3serverExtensionIsCalledWhenRegisteredProperly() throws Exception {
         // Given
         Http3ServerExtension extensionHandler = mock(Http3ServerExtension.class);
-        when(extensionHandler.handleExtendedConnect(any(HttpHeaders.class), anyString(), anyString(), anyString(), any(HttpStream.class))).thenReturn(200);
+        doAnswer(new StatusCallbackAnswer(200))
+                .when(extensionHandler).handleExtendedConnect(any(HttpHeaders.class), anyString(), anyString(), anyString(), any(IntConsumer.class), any(HttpStream.class));
         Http3ServerExtensionFactory extensionFactory = http3ServerConnection -> extensionHandler;
 
         CapturingEncoder encoder = new CapturingEncoder();
@@ -433,12 +442,66 @@ public class Http3ServerConnectionImplTest {
                 argThat(p -> p.equals("webtransport")),
                 argThat(a -> a.equals("example.com")),
                 argThat(p -> p.equals("/")),
+                any(IntConsumer.class),
                 any(HttpStream.class));
         assertThat(encoder.getCapturedHeaders().get(":status")).isEqualTo("200");
     }
-    //endregion
 
-    //region HTTP/3 extensions
+    @Test
+    void whenExtensionReturns404ConnectStreamShouldBeClosed() throws Exception {
+        // Given
+        Http3ServerExtension extensionHandler = mock(Http3ServerExtension.class);
+        doAnswer(new StatusCallbackAnswer(404))
+                .when(extensionHandler).handleExtendedConnect(any(HttpHeaders.class), anyString(), anyString(), anyString(), any(IntConsumer.class), any(HttpStream.class));
+        Http3ServerExtensionFactory extensionFactory = http3ServerConnection -> extensionHandler;
+
+        Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
+                .withHeaders(Map.of(":method", "CONNECT", ":protocol", "webtransport", ":authority", "example.com", ":path", "/"))
+                .withEncoder(new NoOpEncoder())
+                .withExtensionHandler("webtransport", extensionFactory)
+                .buildServerConnection();
+        OutputStream outputStream = mock(OutputStream.class);
+        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData(), outputStream);
+
+        // When
+        http3Connection.handleBidirectionalStream(requestResponseStream);
+
+        // Then
+        verify(outputStream).close();
+    }
+
+    @Test
+    void whenExtensionAccessesStreamBeforeSettingStatusExceptionShouldBeThrown() throws Exception {
+        // Given
+        AtomicReference<Exception> exceptionHolder = new AtomicReference<>();
+
+        Http3ServerExtension extensionHandler = new Http3ServerExtension() {
+            @Override
+            public void handleExtendedConnect(HttpHeaders headers, String protocol, String authority, String path, IntConsumer statusCallback, HttpStream stream) {
+                // Accessing the stream before setting the status
+                try {
+                    stream.getOutputStream().write("This should not be allowed".getBytes());
+                }
+                catch (Exception e) {
+                    exceptionHolder.set(e);
+                }
+            }
+        };
+
+        Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
+                .withHeaders(Map.of(":method", "CONNECT", ":protocol", "webtransport", ":authority", "example.com", ":path", "/"))
+                .withEncoder(new NoOpEncoder())
+                .withExtensionHandler("webtransport", http3ServerConnection -> extensionHandler)
+                .buildServerConnection();
+        QuicStream requestResponseStream = mockQuicStreamWithInputData(fakeHeadersFrameData());
+
+        // When
+        http3Connection.handleBidirectionalStream(requestResponseStream);
+
+        // Then
+        assertThat(exceptionHolder.get()).isNotNull();
+    }
+
     @Test
     void whenExtensionHandlerForBidirectionalStreamsIsRegisteredItShouldBeCalled() throws Exception {
         // Given
@@ -543,6 +606,20 @@ public class Http3ServerConnectionImplTest {
         @Override
         public List<Map.Entry<String, String>> decodeStream(InputStream inputStream) {
             return mockEncoderCompressedHeaders;
+        }
+    }
+
+    private static class StatusCallbackAnswer implements Answer<Void> {
+        final int status;
+
+        public StatusCallbackAnswer(int status) {
+            this.status = status;
+        }
+
+        public Void answer(InvocationOnMock invocation) {
+            IntConsumer statusCallback = (IntConsumer) invocation.getArguments()[4];
+            statusCallback.accept(status);
+            return null;
         }
     }
     //endregion

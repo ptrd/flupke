@@ -22,8 +22,22 @@ package tech.kwik.flupke.server;
 import tech.kwik.flupke.core.HttpStream;
 
 import java.net.http.HttpHeaders;
+import java.util.function.IntConsumer;
 
 public interface Http3ServerExtension {
 
-    int handleExtendedConnect(HttpHeaders headers, String protocol, String authority, String pathAndQuery, HttpStream requestResponseStream);
+    /**
+     * Handle an extended CONNECT request, by returning a status code and consuming the request/response stream.
+     * The status callback must be called before consuming the request/response stream.
+     * The request/response stream is only available if the status code is in the 2xx range.
+     * This method should return immediately.
+     * @param headers
+     * @param protocol
+     * @param authority
+     * @param pathAndQuery
+     * @param statusCallback
+     * @param requestResponseStream
+     * @return
+     */
+    void handleExtendedConnect(HttpHeaders headers, String protocol, String authority, String pathAndQuery, IntConsumer statusCallback, HttpStream requestResponseStream);
 }

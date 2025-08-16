@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 
 public class WebTransportExtension implements Http3ServerExtension {
 
@@ -46,15 +47,15 @@ public class WebTransportExtension implements Http3ServerExtension {
     }
 
     @Override
-    public int handleExtendedConnect(HttpHeaders headers, String protocol, String authority, String pathAndQuery, HttpStream requestResponseSteam) {
+    public void handleExtendedConnect(HttpHeaders headers, String protocol, String authority, String pathAndQuery, IntConsumer statusCallback, HttpStream requestResponseSteam) {
         Optional<Consumer<Session>> handler = findHandler(pathAndQuery);
         if (handler.isPresent()) {
+            statusCallback.accept(200);
             Session session = sessionFactory.createServerSession(new CapsuleProtocolStreamImpl(requestResponseSteam));
             async(() -> handler.get().accept(session));
-            return 200;
         }
         else {
-            return 404;
+            statusCallback.accept(404);
         }
     }
 

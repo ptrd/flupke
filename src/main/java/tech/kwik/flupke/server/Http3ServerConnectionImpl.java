@@ -38,8 +38,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 
 import static tech.kwik.flupke.impl.SettingsFrame.SETTINGS_ENABLE_CONNECT_PROTOCOL;
 
@@ -167,8 +169,23 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
         if (http3ServerExtension != null) {
             String authority = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_AUTHORITY);
             String path = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PATH);
-            int statusCode = http3ServerExtension.handleExtendedConnect(headersFrame.headers(), extensionType, authority, path, new HttpStreamImpl(quicStream));
-            sendHttpStatus(statusCode, null, quicStream, statusCode != 200);
+
+            AtomicInteger returnedStatusCode = new AtomicInteger();
+            IntConsumer statusCallback = statusCode -> {
+                returnedStatusCode.set(statusCode);
+                sendHttpStatus(statusCode, null, quicStream, statusCode != 200);
+            };
+            HttpStream streamWrapper = new HttpStreamImpl(quicStream) {
+                @Override
+                public OutputStream getOutputStream() {
+                    if (returnedStatusCode.get() != 200) {
+                        // If the status code is not 200, we should not write to the output stream
+                        throw new IllegalStateException("Cannot get output stream when status code is not 200");
+                    }
+                    return super.getOutputStream();
+                }
+            };
+            http3ServerExtension.handleExtendedConnect(headersFrame.headers(), extensionType, authority, path, statusCallback, streamWrapper);
         }
         else {
             // https://www.rfc-editor.org/rfc/rfc9220.html#name-websockets-upgrade-over-htt
