@@ -18,18 +18,17 @@
  */
 package tech.kwik.flupke.webtransport.sample;
 
-import tech.kwik.flupke.server.HttpRequestHandler;
-import tech.kwik.flupke.webtransport.Session;
-import tech.kwik.flupke.webtransport.impl.WebTransportHttp3ApplicationProtocolFactory;
 import tech.kwik.core.log.SysOutLogger;
 import tech.kwik.core.server.ServerConnectionConfig;
 import tech.kwik.core.server.ServerConnector;
+import tech.kwik.flupke.server.HttpRequestHandler;
+import tech.kwik.flupke.webtransport.Session;
+import tech.kwik.flupke.webtransport.impl.WebTransportHttp3ApplicationProtocolFactory;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
 
 /**
  * A simple echo server for WebTransport.
@@ -105,10 +104,8 @@ public class WebTransportEchoServer {
     private void startEchoHandler(Session session) {
         System.out.println("Starting echo handler for WebTransport session: " + session.getSessionId());
 
-        final CountDownLatch finished = new CountDownLatch(1);
         session.registerSessionTerminatedEventListener((errorCode, message) -> {
             System.out.println("Session " + session.getSessionId() + " closed with error code " + errorCode);
-            finished.countDown();
         });
 
         session.setBidirectionalStreamReceiveHandler(stream -> {
@@ -124,10 +121,5 @@ public class WebTransportEchoServer {
 
         // Make sure the session is opened _after_ setting the handlers, otherwise we might miss incoming streams.
         session.open();
-
-        try {
-            finished.await();
-        }
-        catch (InterruptedException e) { /* ignore */ }
     }
 }
