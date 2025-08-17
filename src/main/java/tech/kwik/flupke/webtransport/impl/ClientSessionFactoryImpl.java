@@ -95,11 +95,10 @@ public class ClientSessionFactoryImpl extends AbstractSessionFactoryImpl impleme
         // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-limiting-the-number-of-simu
         // "The client MUST NOT open more sessions than indicated in the server SETTINGS parameters. "
         if (sessionRegistry.size() >= maxSessions) {
-            throw new IllegalStateException("Maximum number of sessions reached");
+            throw new IllegalStateException("Maximum number of sessions (" + maxSessions + ") reached");
         }
 
         try {
-
             // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-creating-a-new-session
             // "In order to create a new WebTransport session, a client can send an HTTP CONNECT request.
             //  The :protocol pseudo-header field ([RFC8441]) MUST be set to webtransport.

@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import static tech.kwik.flupke.impl.SettingsFrame.QPACK_BLOCKED_STREAMS;
@@ -206,6 +207,12 @@ public class Http3ConnectionImpl implements Http3Connection {
 
     @Override
     public Optional<Long> getPeerSettingsParameter(long identifier) {
+        try {
+            settingsFrameReceived.await(10, TimeUnit.SECONDS);
+        }
+        catch (InterruptedException e) {
+            return Optional.empty();
+        }
         return Optional.ofNullable(peerSettingsParameters.get(identifier));
     }
 
