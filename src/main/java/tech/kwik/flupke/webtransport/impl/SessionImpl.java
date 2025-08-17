@@ -51,6 +51,7 @@ public class SessionImpl implements Session {
     }
 
     private final Http3Connection http3Connection;
+    private final WebTransportContext context;
     private final CapsuleProtocolStream connectStream;
     private final long sessionId;
     private final SessionFactory sessionFactory;
@@ -63,10 +64,15 @@ public class SessionImpl implements Session {
     private Queue<HttpStream> sendingStreams = new ConcurrentLinkedQueue();
     private Queue<HttpStream> receivingStreams = new ConcurrentLinkedQueue();
 
-    SessionImpl(Http3Connection http3Connection, CapsuleProtocolStream connectStream,
+    SessionImpl(Http3Connection http3Connection, WebTransportContext context, CapsuleProtocolStream connectStream, SessionFactory sessionFactory) {
+        this(http3Connection, context, connectStream, s -> {}, s -> {}, sessionFactory);
+    }
+
+    SessionImpl(Http3Connection http3Connection, WebTransportContext context, CapsuleProtocolStream connectStream,
                 Consumer<WebTransportStream> unidirectionalStreamHandler, Consumer<WebTransportStream> bidirectionalStreamHandler,
                 SessionFactory sessionFactory) {
         this.http3Connection = http3Connection;
+        this.context = context;
         this.connectStream = connectStream;
         sessionId = connectStream.getStreamId();
         this.sessionFactory = sessionFactory;
@@ -338,5 +344,10 @@ public class SessionImpl implements Session {
     @Override
     public long getSessionId() {
         return sessionId;
+    }
+
+    @Override
+    public String getPath() {
+        return context.getPathAndQuery();
     }
 }

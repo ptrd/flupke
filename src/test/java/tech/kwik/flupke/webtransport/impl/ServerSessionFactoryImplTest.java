@@ -18,23 +18,23 @@
  */
 package tech.kwik.flupke.webtransport.impl;
 
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import tech.kwik.flupke.core.CapsuleProtocolStream;
 import tech.kwik.flupke.server.Http3ServerConnection;
 import tech.kwik.flupke.webtransport.Session;
 import tech.kwik.flupke.webtransport.WebTransportStream;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.function.Consumer;
 
-import static tech.kwik.flupke.webtransport.impl.SessionImplTest.httpStreamWith;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static tech.kwik.flupke.webtransport.impl.SessionImplTest.httpStreamWith;
 
 class ServerSessionFactoryImplTest {
 
@@ -43,7 +43,7 @@ class ServerSessionFactoryImplTest {
         // Given
         ServerSessionFactoryImpl factory = new ServerSessionFactoryImpl(mock(Http3ServerConnection.class));
 
-        Session session = factory.createServerSession(emptyCapsuleProtocolStream());
+        Session session = factory.createServerSession(mock(WebTransportContext.class), emptyCapsuleProtocolStream());
         Consumer<WebTransportStream> bidirectionalStreamHandler = mock(Consumer.class);
         session.setBidirectionalStreamReceiveHandler(bidirectionalStreamHandler);
         session.open();

@@ -275,7 +275,7 @@ class SessionImplTest {
         CapsuleProtocolStream capsuleProtocolStream = spy(new CapsuleProtocolStreamImpl(connectStream));
 
         // When
-        Session session = new SessionImpl(mock(Http3ClientConnection.class), capsuleProtocolStream, s -> {}, s -> {}, factory);
+        Session session = new SessionImpl(mock(Http3ClientConnection.class), mock(WebTransportContext.class), capsuleProtocolStream, s -> {}, s -> {}, factory);
 
         // Then
         verify(capsuleProtocolStream).registerCapsuleParser(anyLong(), any(Function.class));

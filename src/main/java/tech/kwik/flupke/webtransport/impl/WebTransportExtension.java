@@ -51,7 +51,8 @@ public class WebTransportExtension implements Http3ServerExtension {
         Optional<Consumer<Session>> handler = findHandler(pathAndQuery);
         if (handler.isPresent()) {
             statusCallback.accept(200);
-            Session session = sessionFactory.createServerSession(new CapsuleProtocolStreamImpl(requestResponseSteam));
+            WebTransportContext context = new WebTransportContext(headers, authority, pathAndQuery);
+            Session session = sessionFactory.createServerSession(context, new CapsuleProtocolStreamImpl(requestResponseSteam));
             async(() -> handler.get().accept(session));
         }
         else {

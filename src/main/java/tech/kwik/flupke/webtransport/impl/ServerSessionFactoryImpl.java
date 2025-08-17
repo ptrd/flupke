@@ -33,10 +33,10 @@ public class ServerSessionFactoryImpl extends AbstractSessionFactoryImpl {
         this.http3ServerConnection = http3ServerConnection;
     }
 
-    public Session createServerSession(CapsuleProtocolStream connectStream) {
+    public Session createServerSession(WebTransportContext context, CapsuleProtocolStream connectStream) {
         http3ServerConnection.registerBidirectionalStreamHandler(FRAME_TYPE_WEBTRANSPORT_STREAM, this::handleBidirectionalStream);
         http3ServerConnection.registerUnidirectionalStreamType(STREAM_TYPE_WEBTRANSPORT, this::handleUnidirectionalStream);
-        SessionImpl session = new SessionImpl(http3ServerConnection, connectStream, s -> {}, s -> {}, this);
+        SessionImpl session = new SessionImpl(http3ServerConnection, context, connectStream, this);
         registerSession(session);
         return session;
     }

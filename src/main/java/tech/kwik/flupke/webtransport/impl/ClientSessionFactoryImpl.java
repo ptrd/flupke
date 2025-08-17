@@ -107,7 +107,8 @@ public class ClientSessionFactoryImpl extends AbstractSessionFactoryImpl impleme
             String schema = "https";
             HttpRequest request = HttpRequest.newBuilder(webTransportUri).build();
             CapsuleProtocolStream connectStream = new CapsuleProtocolStreamImpl(httpClientConnection.sendExtendedConnect(request, protocol, schema, Duration.ofSeconds(5)));
-            SessionImpl session = new SessionImpl(httpClientConnection, connectStream, unidirectionalStreamHandler, bidirectionalStreamHandler, this);
+            WebTransportContext context = new WebTransportContext(webTransportUri);
+            SessionImpl session = new SessionImpl(httpClientConnection, context, connectStream, unidirectionalStreamHandler, bidirectionalStreamHandler, this);
             registerSession(session);
             return session;
         }

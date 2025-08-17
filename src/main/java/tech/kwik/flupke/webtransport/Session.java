@@ -109,4 +109,10 @@ public interface Session {
      * @return  the session id
      */
     long getSessionId();
+
+    /**
+     * Gets the path (including query parameters) of the URL that started this session.
+     * @return
+     */
+    String getPath();
 }
