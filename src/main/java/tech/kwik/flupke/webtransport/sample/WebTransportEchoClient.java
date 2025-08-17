@@ -53,7 +53,7 @@ public class WebTransportEchoClient {
         try {
             ClientSessionFactoryImpl clientSessionFactory = new ClientSessionFactoryImpl(serverUrl, client);
 
-            int count = 3;
+            int count = clientSessionFactory.getMaxConcurrentSessions();
             for (int i = 0; i < count; i++) {
                 Session session = clientSessionFactory.createSession(serverUrl);
                 session.open();
