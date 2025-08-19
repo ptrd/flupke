@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package tech.kwik.flupke.webtransport.sample;
+package tech.kwik.flupke.sample.webtransport;
 
 import tech.kwik.core.log.SysOutLogger;
 import tech.kwik.core.server.ServerConnectionConfig;

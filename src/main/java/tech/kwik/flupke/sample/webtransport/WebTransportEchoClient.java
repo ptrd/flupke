@@ -16,16 +16,16 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package tech.kwik.flupke.webtransport.sample;
+package tech.kwik.flupke.sample.webtransport;
 
+import tech.kwik.core.log.Logger;
+import tech.kwik.core.log.SysOutLogger;
 import tech.kwik.flupke.Http3Client;
 import tech.kwik.flupke.Http3ClientBuilder;
 import tech.kwik.flupke.core.HttpError;
 import tech.kwik.flupke.webtransport.Session;
 import tech.kwik.flupke.webtransport.WebTransportStream;
 import tech.kwik.flupke.webtransport.impl.ClientSessionFactoryImpl;
-import tech.kwik.core.log.Logger;
-import tech.kwik.core.log.SysOutLogger;
 
 import java.io.IOException;
 import java.net.URI;
