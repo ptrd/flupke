@@ -101,7 +101,7 @@ public class SessionImpl implements Session {
 
     @Override
     public void open() {
-        changeState(State.OPEN, state -> state == State.CREATED);
+        changeState(State.OPEN, state -> state == State.CREATED, state -> state == State.OPEN);
 
         sessionFactory.startSession(this);
     }

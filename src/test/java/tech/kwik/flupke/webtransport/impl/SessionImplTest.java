@@ -46,6 +46,7 @@ import java.util.function.Function;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -59,6 +60,15 @@ class SessionImplTest {
     void setupDefaults() {
         defaultWebtransportUri = URI.create("https://example.com:443/webtransport");
         builder = new MockHttpConnectionBuilder();
+    }
+
+    @Test
+    void callingOpenWhenAlreadyOpenShouldHaveNoEffect() throws Exception {
+        // Given
+        Session session = createSessionWith(builder.buildClient());
+
+        // Then
+        assertDoesNotThrow(() -> session.open());
     }
 
     @Test
