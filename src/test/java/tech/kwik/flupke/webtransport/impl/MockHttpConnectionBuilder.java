@@ -50,7 +50,7 @@ public class MockHttpConnectionBuilder {
         Http3ClientConnection http3connection = buildHttp3Connection();
         Http3Client client = mock(Http3Client.class);
         when(client.createConnection(any(HttpRequest.class))).thenReturn(http3connection);
-        when(http3connection.getPeerSettingsParameter(SETTINGS_WT_MAX_SESSIONS)).thenReturn(Optional.of(10L));
+        when(http3connection.getPeerSettingsParameter(SETTINGS_WT_MAX_SESSIONS)).thenReturn(Optional.of(1L));
         return client;
     }
 

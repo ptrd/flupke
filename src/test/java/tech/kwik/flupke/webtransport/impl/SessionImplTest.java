@@ -340,6 +340,20 @@ class SessionImplTest {
     }
 
     @Test
+    void whenMaxSessionsIsReachedCreateSessionShouldFail() throws Exception {
+        // Given
+        Http3Client client = builder.buildClient();
+        ClientSessionFactoryImpl clientSessionFactory = new ClientSessionFactoryImpl(defaultWebtransportUri, client);
+        clientSessionFactory.createSession(defaultWebtransportUri);
+
+        // When
+        assertThatThrownBy(() -> clientSessionFactory.createSession(defaultWebtransportUri))
+                // Then
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Maximum number of sessions");
+    }
+
+    @Test
     void whenReadingConnectStreamFailsSessionIsClosed() throws Exception {
         // Given
         WriteableByteArrayInputStream inputStream = new WriteableByteArrayInputStream();
