@@ -195,6 +195,7 @@ public class SessionImpl implements Session {
         resetSenders();
         abortReading();
         stopReceivingCapsules();
+        sessionTerminatedEventListener.accept(applicationErrorCode, applicationErrorMessage);
         sessionFactory.removeSession(this);
     }
 

@@ -39,6 +39,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -548,6 +549,23 @@ class SessionImplTest {
         // Then
         byte[] output = ((ByteArrayOutputStream) builder.getExtendedConnectStream().getOutputStream()).toByteArray();
         assertThat(output).isEqualTo(ByteUtils.hexToBytes("68430700000000627965"));
+    }
+
+    @Test
+    void closingSessionShouldCallCallback() throws Exception {
+        // Given
+        Session session = createSessionWith(builder.buildClient());
+
+        AtomicBoolean callbackCalled = new AtomicBoolean(false);
+        session.registerSessionTerminatedEventListener((errorCode, reason) -> {
+            callbackCalled.set(true);
+        });
+
+        // When
+        session.close(0, "");
+
+        // Then
+        assertThat(callbackCalled.get()).isTrue();
     }
 
     @Test
