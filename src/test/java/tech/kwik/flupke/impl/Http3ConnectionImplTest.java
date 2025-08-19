@@ -289,7 +289,9 @@ public class Http3ConnectionImplTest {
     @Test
     void localSettingsParameterShouldNotBeReturnedWhenReadingPeersParameters() throws Exception {
         // Given
-        Http3ConnectionImpl connection = new Http3ClientConnectionBuilder().build();
+        Http3ConnectionImpl connection = new Http3ClientConnectionBuilder()
+                .withDefaultSettingsFrame()
+                .build();
 
         // When
         connection.addSettingsParameter(0x22, 0x33);
