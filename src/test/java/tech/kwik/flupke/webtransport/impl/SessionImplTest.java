@@ -354,6 +354,37 @@ class SessionImplTest {
     }
 
     @Test
+    void withMaxSessionReachedWhenSessionIsClosedNewOneCanBeOpenedImmediately() throws Exception {
+        // Given
+        WriteableByteArrayInputStream inputStream = new WriteableByteArrayInputStream();
+        Http3Client client = builder
+                .withExtendedConnectStream(inputStream)
+                .buildClient();
+        ClientSessionFactoryImpl clientSessionFactory = new ClientSessionFactoryImpl(defaultWebtransportUri, client);
+        Session firstSession = clientSessionFactory.createSession(defaultWebtransportUri);
+
+        // Register a listener that will open a new session when the first one is closed
+        AtomicReference<Session> newSession = new AtomicReference<>();
+        firstSession.registerSessionTerminatedEventListener((errorCode, reason) -> {
+            try {
+                newSession.set(clientSessionFactory.createSession(defaultWebtransportUri));
+            }
+            catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        // When
+        inputStream.close();
+
+        // Processing connect stream happens async, so give other thread a chance to process
+        Thread.sleep(10);
+
+        // Then
+        assertThat(newSession.get()).isNotNull();
+    }
+
+    @Test
     void whenReadingConnectStreamFailsSessionIsClosed() throws Exception {
         // Given
         WriteableByteArrayInputStream inputStream = new WriteableByteArrayInputStream();

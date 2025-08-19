@@ -273,8 +273,8 @@ public class SessionImpl implements Session {
         }
         catch (IOException e) {}
 
-        sessionTerminatedEventListener.accept(applicationErrorCode, applicationErrorMessage);
         sessionFactory.removeSession(this);
+        sessionTerminatedEventListener.accept(applicationErrorCode, applicationErrorMessage);
     }
 
     private void stopSending() {
