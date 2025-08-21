@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Peter Doornbosch
+ * Copyright © 2024, 2025 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *

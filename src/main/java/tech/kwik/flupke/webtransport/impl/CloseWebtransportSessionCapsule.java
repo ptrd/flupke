@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023 Peter Doornbosch
+ * Copyright © 2023, 2024, 2025 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *
@@ -18,8 +18,8 @@
  */
 package tech.kwik.flupke.webtransport.impl;
 
-import tech.kwik.flupke.core.Capsule;
 import tech.kwik.core.generic.VariableLengthInteger;
+import tech.kwik.flupke.core.Capsule;
 
 import java.io.EOFException;
 import java.io.IOException;
