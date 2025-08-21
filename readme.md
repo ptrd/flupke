@@ -13,6 +13,10 @@ header compression is supported by the [QPACK](https://bitbucket.org/pjtr/qpack/
 Initially, Flupke was only a HTTP3 Client, but since June 2021 it also provides a plugin that, when used with Kwik,
 acts as a (simple) HTTP3 webserver server.
 
+WebTransport ([draft-ietf-webtrans-http3-13](https://datatracker.ietf.org/doc/draft-ietf-webtrans-http3/)) is also supported,
+but is still experimental.
+See [samples](https://github.com/ptrd/flupke/tree/master/src/main/java/tech/kwik/flupke/sample/webtransport) for how to create WebTransport client or server.
+
 Flupke is created and maintained by Peter Doornbosch. The latest greatest can always be found on [BitBucket](https://bitbucket.org/pjtr/flupke/).
 
 ## Usage
