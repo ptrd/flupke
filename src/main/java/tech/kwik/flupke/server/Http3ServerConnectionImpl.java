@@ -20,6 +20,7 @@ package tech.kwik.flupke.server;
 
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.QuicStream;
+import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.core.server.ApplicationProtocolConnection;
 import tech.kwik.core.server.ServerConnection;
@@ -28,11 +29,12 @@ import tech.kwik.flupke.core.HttpStream;
 import tech.kwik.flupke.impl.*;
 import tech.kwik.qpack.Encoder;
 
-import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.PushbackInputStream;
 import java.net.InetAddress;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -102,10 +104,11 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
     @Override
     protected void handleBidirectionalStream(QuicStream quicStream) {
         try {
-            InputStream requestStream = new BufferedInputStream(quicStream.getInputStream());
-            requestStream.mark(8);  // variable length integer can be up to 8 bytes
-            long frameType = VariableLengthInteger.parseLong(requestStream);
-            requestStream.reset();
+            PushbackInputStream requestStream = new PushbackInputStream(quicStream.getInputStream(), 8);
+            ByteBuffer buffer = ByteBuffer.allocate(8);
+            int bytesRead = requestStream.read(buffer.array());
+            long frameType = VariableLengthInteger.parseLong(buffer);
+            requestStream.unread(buffer.array(), 0, bytesRead);
             if (bidirectionalStreamHandler.containsKey(frameType)) {
                 bidirectionalStreamHandler.get(frameType).accept(wrapWith(quicStream, requestStream));
             }
@@ -113,7 +116,7 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
                 handleStandardRequestResponseStream(quicStream, requestStream);
             }
         }
-        catch (IOException e) {
+        catch (IOException | InvalidIntegerEncodingException e) {
             quicStream.abortReading(H3_INTERNAL_ERROR);
             sendHttpErrorResponse(500, "", quicStream);
         }
