@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023, 2024, 2025 Peter Doornbosch
+ * Copyright © 2024 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *
@@ -16,30 +16,11 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
+package tech.kwik.flupke.webtransport.impl;
 
-package tech.kwik.flupke.core;
+public interface SessionFactory {
 
-import java.io.InputStream;
-import java.io.OutputStream;
+    void startSession(SessionImpl session);
 
-/**
- * A generic stream that runs over HTTP.
- */
-public interface HttpStream {
-
-    OutputStream getOutputStream();
-
-    InputStream getInputStream();
-
-    long getStreamId();
-
-    default boolean isUnidirectional() {
-        return !isBidirectional();
-    }
-
-    boolean isBidirectional();
-
-    void abortReading(long errorCode);
-
-    void resetStream(long errorCode);
+    void removeSession(SessionImpl session);
 }

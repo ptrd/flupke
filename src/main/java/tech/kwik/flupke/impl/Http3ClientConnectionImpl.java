@@ -23,13 +23,18 @@ import tech.kwik.core.QuicClientConnection;
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.QuicStream;
 import tech.kwik.core.Statistics;
-import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.log.NullLogger;
-import tech.kwik.flupke.core.*;
+import tech.kwik.flupke.Http3ConnectionSettings;
+import tech.kwik.flupke.core.Http3ClientConnection;
+import tech.kwik.flupke.core.HttpError;
+import tech.kwik.flupke.core.HttpStream;
 import tech.kwik.qpack.Encoder;
 
-import java.io.*;
+import java.io.EOFException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.ProtocolException;
 import java.net.SocketException;
 import java.net.URI;
@@ -44,11 +49,11 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
-import java.util.function.Function;
+
+import static tech.kwik.flupke.impl.SettingsFrame.SETTINGS_ENABLE_CONNECT_PROTOCOL;
 
 
 public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Http3ClientConnection {
@@ -56,24 +61,20 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     private InputStream serverPushStream;
     private Statistics connectionStats;
     private boolean initialized;
-    private final CountDownLatch settingsFrameReceived;
-    private boolean settingsEnableConnectProtocol;
     private Consumer<HttpStream> bidirectionalStreamHandler;
 
     public Http3ClientConnectionImpl(String host, int port) throws IOException {
-        this(host, port, DEFAULT_CONNECT_TIMEOUT, false, null, null);
+        this(host, port, DEFAULT_CONNECT_TIMEOUT, defaultConnectionSettings(), null, null);
     }
 
-    public Http3ClientConnectionImpl(String host, int port, Duration connectTimeout, boolean disableCertificateCheck, DatagramSocketFactory datagramSocketFactory, Logger logger) throws IOException {
-        this(createQuicConnection(host, port, connectTimeout, disableCertificateCheck, datagramSocketFactory, logger));
+    public Http3ClientConnectionImpl(String host, int port, Duration connectTimeout, Http3ConnectionSettings connectionSettings, DatagramSocketFactory datagramSocketFactory, Logger logger) throws IOException {
+        this(createQuicConnection(host, port, connectTimeout, connectionSettings, datagramSocketFactory, logger));
     }
 
     public Http3ClientConnectionImpl(QuicConnection quicConnection) {
         super(quicConnection);
 
         quicConnection.setPeerInitiatedStreamCallback(stream -> doAsync(() -> handleIncomingStream(stream)));
-
-        settingsFrameReceived = new CountDownLatch(1);
     }
 
     public Http3ClientConnectionImpl(String host, int port, Encoder encoder) throws IOException {
@@ -111,7 +112,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         }
     }
 
-    private static QuicConnection createQuicConnection(String host, int port, Duration connectTimeout, boolean disableCertificateCheck, DatagramSocketFactory datagramSocketFactory, Logger logger) throws SocketException, UnknownHostException {
+    private static QuicConnection createQuicConnection(String host, int port, Duration connectTimeout, Http3ConnectionSettings connectionSettings, DatagramSocketFactory datagramSocketFactory, Logger logger) throws SocketException, UnknownHostException {
         QuicClientConnection.Builder builder = QuicClientConnection.newBuilder();
         try {
             builder.uri(new URI("//" + host + ":" + port));
@@ -126,12 +127,12 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         // "Therefore, the transport parameters sent by both clients and servers MUST allow the peer to create at least
         //  three unidirectional streams. These transport parameters SHOULD also provide at least 1,024 bytes of
         //  flow-control credit to each unidirectional stream."
-        builder.maxOpenPeerInitiatedUnidirectionalStreams(3);
+        builder.maxOpenPeerInitiatedUnidirectionalStreams(3 + connectionSettings.maxAdditionalPeerInitiatedUnidirectionalStreams());
         // https://www.rfc-editor.org/rfc/rfc9114.html#name-bidirectional-streams
         // "HTTP/3 does not use server-initiated bidirectional streams, though an extension could define a use for
         //  these streams."
-        builder.maxOpenPeerInitiatedBidirectionalStreams(0);
-        if (disableCertificateCheck) {
+        builder.maxOpenPeerInitiatedBidirectionalStreams(0 + connectionSettings.maxAdditionalPeerInitiatedBidirectionalStreams());
+        if (connectionSettings.disableCertificateCheck()) {
             builder.noServerCertificateCheck();
         }
         builder.socketFactory(datagramSocketFactory);
@@ -265,20 +266,6 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         serverPushStream = stream;
     }
 
-    @Override
-    protected SettingsFrame processControlStream(InputStream controlStream) {
-        SettingsFrame settingsFrame = super.processControlStream(controlStream);
-        if (settingsFrame != null) {
-            // Read settings that only apply to client role.
-            settingsEnableConnectProtocol = settingsFrame.isSettingsEnableConnectProtocol();
-        }
-
-        // Unblock who is waiting for settings frame to be received.
-        settingsFrameReceived.countDown();
-
-        return settingsFrame;
-    }
-
     private void doAsync(Runnable task) {
         new Thread(task).start();
     }
@@ -334,7 +321,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         if (! settingsFrameReceived.await(settingsFrameTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
             throw new HttpError("No SETTINGS frame received in time.");
         }
-        if (! settingsEnableConnectProtocol) {
+        if (! isEnableConnectProtocol()) {
             throw new HttpError("Server does not support Extended Connect (RFC 9220).");
         }
 
@@ -354,88 +341,8 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         return new HttpStreamImpl(createHttpStream(headersFrame));
     }
 
-    @Override
-    public CapsuleProtocolStream sendExtendedConnectWithCapsuleProtocol(HttpRequest request, String protocol, String scheme, Duration settingsFrameTimeout) throws InterruptedException, HttpError, IOException {
-        if (! settingsFrameReceived.await(settingsFrameTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
-            throw new HttpError("No SETTINGS frame received in time.");
-        }
-        if (! settingsEnableConnectProtocol) {
-            throw new HttpError("Server does not support Extended Connect (RFC 9220).");
-        }
-
-        // https://www.rfc-editor.org/rfc/rfc8441#section-4
-        // "A new pseudo-header field :protocol MAY be included on request HEADERS indicating the desired protocol to be
-        //  spoken on the tunnel created by CONNECT. The pseudo-header field is single valued and contains a value from
-        //  the "Hypertext Transfer Protocol (HTTP) Upgrade Token Registry located at <https://www.iana.org/assignments/http-upgrade-tokens/>"
-        // "On requests that contain the :protocol pseudo-header field, the :scheme and :path pseudo-header fields of
-        //  the target URI (see Section 5) MUST also be included."
-        HeadersFrame headersFrame = new HeadersFrame(request.headers(), Map.of(
-                ":authority", extractAuthority(request.uri()),
-                ":method", "CONNECT",
-                ":protocol", protocol,
-                ":scheme", scheme,
-                ":path", extractPath(request.uri())));
-
-        return capsuleProtocol(createHttpStream(headersFrame));
-    }
-
-    private CapsuleProtocolStream capsuleProtocol(QuicStream httpStream) {
-        return new CapsuleProtocolStream() {
-
-            private Map<Long, Function<InputStream, Capsule>> capsuleParsers = new HashMap<>();
-            private PushbackInputStream inputStream = new PushbackInputStream(httpStream.getInputStream(), 8);
-
-            @Override
-            public Capsule receive() throws IOException {
-                long type = VariableLengthIntegerUtil.peekLong(inputStream);
-                if (capsuleParsers.containsKey(type)) {
-                    try {
-                        return capsuleParsers.get(type).apply(inputStream);
-                    }
-                    catch (UncheckedIOException ioException) {
-                        throw ioException.getCause();
-                    }
-                }
-                else {
-                    return parseGenericCapsule();
-                }
-            }
-
-            @Override
-            public void send(Capsule capsule) throws IOException {
-                capsule.write(httpStream.getOutputStream());
-                httpStream.getOutputStream().flush();
-            }
-
-            @Override
-            public void sendAndClose(Capsule capsule) throws IOException {
-                capsule.write(httpStream.getOutputStream());
-                httpStream.getOutputStream().close();
-            }
-
-            @Override
-            public void close() throws IOException {
-                httpStream.getOutputStream().close();
-            }
-
-            @Override
-            public long getStreamId() {
-                return httpStream.getStreamId();
-            }
-
-            @Override
-            public void registerCapsuleParser(long type, Function<InputStream, Capsule> parser) {
-                capsuleParsers.put(type, parser);
-            }
-
-            private Capsule parseGenericCapsule() throws IOException {
-                long type = VariableLengthInteger.parseLong(inputStream);
-                long length = VariableLengthInteger.parseLong(inputStream);
-                byte[] data = new byte[(int) length];
-                httpStream.getInputStream().read(data);
-                return new GenericCapsule(type, data);
-            }
-        };
+    private boolean isEnableConnectProtocol() {
+        return getPeerSettingsParameter(SETTINGS_ENABLE_CONNECT_PROTOCOL).orElse(0L) == 1L;
     }
 
     @Override
@@ -501,6 +408,25 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         return uri.getHost() + ":" + port;
     }
 
+    private static Http3ConnectionSettings defaultConnectionSettings() {
+        return new Http3ConnectionSettings() {
+            @Override
+            public boolean disableCertificateCheck() {
+                return false;
+            }
+
+            @Override
+            public int maxAdditionalPeerInitiatedUnidirectionalStreams() {
+                return 0;
+            }
+
+            @Override
+            public int maxAdditionalPeerInitiatedBidirectionalStreams() {
+                return 0;
+            }
+        };
+    }
+
     private static class HttpResponseInfo implements HttpResponse.ResponseInfo {
         private HttpHeaders headers;
         private final int statusCode;
@@ -548,140 +474,6 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         }
     }
 
-    /**
-     * Implementation of HttpStream that sends and receives data encapsulated in HTTP3 (data) frames.
-     */
-    public class HttpStreamImpl implements HttpStream {
-
-        private final QuicStream quicStream;
-        private final OutputStream outputStream;
-        private final InputStream inputStream;
-
-        public HttpStreamImpl(QuicStream quicStream) {
-            this.quicStream = quicStream;
-
-            outputStream = new OutputStream() {
-                @Override
-                public void write(int b) throws IOException {
-                    quicStream.getOutputStream().write(new DataFrame(new byte[] { (byte) b }).toBytes());
-                }
-
-                @Override
-                public void write(byte[] b) throws IOException {
-                    quicStream.getOutputStream().write(new DataFrame(b).toBytes());
-                }
-
-                @Override
-                public void write(byte[] b, int off, int len) throws IOException {
-                    ByteBuffer data = ByteBuffer.wrap(b);
-                    data.position(off);
-                    data.limit(len);
-                    quicStream.getOutputStream().write(new DataFrame(data).toBytes());
-                }
-
-                @Override
-                public void flush() throws IOException {
-                    quicStream.getOutputStream().flush();
-                }
-
-                @Override
-                public void close() throws IOException {
-                    quicStream.getOutputStream().close();
-                }
-            };
-
-            inputStream = new InputStream() {
-
-                private ByteBuffer dataBuffer;
-
-                @Override
-                public int available() throws IOException {
-                    if (checkData()) {
-                        return dataBuffer.remaining();
-                    }
-                    else {
-                        return 0;
-                    }
-                }
-
-                @Override
-                public int read() throws IOException {
-                    if (checkData()) {
-                        return dataBuffer.get();
-                    }
-                    else {
-                        return -1;
-                    }
-                }
-
-                @Override
-                public int read(byte[] b) throws IOException {
-                   if (checkData()) {
-                        int count = Integer.min(dataBuffer.remaining(), b.length);
-                        dataBuffer.get(b, 0, count);
-                        return count;
-                    }
-                    else {
-                        return -1;
-                    }
-                }
-
-                @Override
-                public int read(byte[] b, int off, int len) throws IOException {
-                   if (checkData()) {
-                        int count = Integer.min(dataBuffer.remaining(), len - off);
-                        dataBuffer.get(b, off, count);
-                        return count;
-                    }
-                    else {
-                        return -1;
-                    }
-
-                }
-
-                private boolean checkData() throws IOException {
-                    if (dataBuffer == null || dataBuffer.position() == dataBuffer.limit()) {
-                        return readData();
-                    }
-                    else {
-                        return dataBuffer.position() < dataBuffer.limit();
-                    }
-                }
-
-                private boolean readData() throws IOException {
-                    Http3Frame frame = null;
-                    try {
-                        frame = readFrame(quicStream.getInputStream());
-                    } catch (HttpError e) {
-                        throw new IOException(e);
-                    }
-                    if (frame instanceof DataFrame) {
-                        dataBuffer = ByteBuffer.wrap(((DataFrame) frame).getPayload());
-                        return true;
-                    }
-                    else if (frame == null) {
-                        // End of stream
-                        return false;
-                    }
-                    return false;
-                }
-            };
-        }
-
-        public OutputStream getOutputStream() {
-            return outputStream;
-        }
-
-        public InputStream getInputStream() {
-            return inputStream;
-        }
-
-        @Override
-        public long getStreamId() {
-            return quicStream.getStreamId();
-        }
-
-    }
 
     private static class ResponseFramesSequenceChecker {
 

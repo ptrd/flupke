@@ -46,21 +46,27 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 
-public class Http3Client extends HttpClient {
+public class Http3Client extends HttpClient implements Http3ConnectionSettings {
 
     private final Duration connectTimeout;
     private final Long receiveBufferSize;
     private final boolean disableCertificateCheck;
+    private final int maxAdditionalPeerInitiatedUnidirectionalStreams;
+    private final int maxAdditionalPeerInitiatedBidirectionalStreams;
     private final DatagramSocketFactory datagramSocketFactory;
     private final Logger logger;
     private Http3ClientConnection http3Connection;
     protected Http3ConnectionFactory http3ConnectionFactory;
     private final ExecutorService executorService;
 
-    Http3Client(Duration connectTimeout, Long receiveBufferSize, boolean disableCertificateCheck, InetAddress inetAddress, Logger logger) {
+    Http3Client(Duration connectTimeout, Long receiveBufferSize, boolean disableCertificateCheck,
+                int maxAdditionalPeerInitiatedUnidirectionalStreams, int maxAdditionalPeerInitiatedBidirectionalStreams,
+                InetAddress inetAddress, Logger logger) {
         this.connectTimeout = connectTimeout;
         this.receiveBufferSize = receiveBufferSize;
         this.disableCertificateCheck = disableCertificateCheck;
+        this.maxAdditionalPeerInitiatedUnidirectionalStreams = maxAdditionalPeerInitiatedUnidirectionalStreams;
+        this.maxAdditionalPeerInitiatedBidirectionalStreams = maxAdditionalPeerInitiatedBidirectionalStreams;
         this.logger = logger;
         this.http3ConnectionFactory = new Http3ConnectionFactory(this);
         this.datagramSocketFactory = new InterfaceBoundDatagramSocketFactory(inetAddress);
@@ -125,8 +131,24 @@ public class Http3Client extends HttpClient {
         return Optional.empty();
     }
 
+    @Deprecated
     public boolean isDisableCertificateCheck() {
         return disableCertificateCheck;
+    }
+
+    @Override
+    public boolean disableCertificateCheck() {
+        return disableCertificateCheck;
+    }
+
+    @Override
+    public int maxAdditionalPeerInitiatedUnidirectionalStreams() {
+        return maxAdditionalPeerInitiatedUnidirectionalStreams;
+    }
+
+    @Override
+    public int maxAdditionalPeerInitiatedBidirectionalStreams() {
+        return maxAdditionalPeerInitiatedBidirectionalStreams;
     }
 
     public DatagramSocketFactory getDatagramSocketFactory() {

@@ -100,7 +100,7 @@ public class Http3ConnectionFactory {
         Http3ClientConnection http3Connection;
         try {
             Duration connectTimeout = http3Client.connectTimeout().orElse(DEFAULT_CONNECT_TIMEOUT);
-            http3Connection = new Http3ClientConnectionImpl(address.host, address.port, connectTimeout, http3Client.isDisableCertificateCheck(), http3Client.getDatagramSocketFactory(), http3Client.getLogger());
+            http3Connection = new Http3ClientConnectionImpl(address.host, address.port, connectTimeout, http3Client, http3Client.getDatagramSocketFactory(), http3Client.getLogger());
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023, 2024, 2025 Peter Doornbosch
+ * Copyright © 2024 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *
@@ -18,30 +18,27 @@
  */
 package tech.kwik.flupke.test;
 
-import java.lang.reflect.Field;
 
-public class FieldReader {
+import tech.kwik.qpack.impl.EncoderImpl;
 
-    private final Object target;
-    private final Field field;
+import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
-    public FieldReader(Object target, Class type, String fieldName) throws Exception {
-        this.target = target;
-        this.field = type.getDeclaredField(fieldName);
-        field.setAccessible(true);
+/**
+ * An encoder that captures the headers that are passed to it, so a test can easily verify which headers are send to the encoder.
+ */
+public class CapturingEncoder extends EncoderImpl {
+
+    private Map<String, String> capturedHeaders = new HashMap<>();
+
+    public ByteBuffer compressHeaders(List<Map.Entry<String, String>> headers) {
+        headers.forEach(header -> capturedHeaders.put(header.getKey(), header.getValue()));
+        return ByteBuffer.allocate(0);
     }
 
-    public FieldReader(Object target, Field field) {
-        this.target = target;
-        this.field = field;
-        field.setAccessible(true);
-    }
-
-    public Object read() {
-        try {
-            return field.get(target);
-        } catch (IllegalAccessException e) {
-            throw new RuntimeException("Failed to read " + field.getName() + " of object", e);
-        }
+    public Map<String, String> getCapturedHeaders() {
+        return capturedHeaders;
     }
 }

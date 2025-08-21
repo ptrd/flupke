@@ -18,12 +18,12 @@
  */
 package tech.kwik.flupke.impl;
 
-import tech.kwik.flupke.core.Http3Connection;
-import tech.kwik.flupke.core.HttpError;
-import tech.kwik.flupke.core.HttpStream;
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.QuicStream;
 import tech.kwik.core.generic.VariableLengthInteger;
+import tech.kwik.flupke.core.Http3Connection;
+import tech.kwik.flupke.core.HttpError;
+import tech.kwik.flupke.core.HttpStream;
 import tech.kwik.qpack.Decoder;
 import tech.kwik.qpack.Encoder;
 
@@ -36,6 +36,9 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import static tech.kwik.flupke.impl.SettingsFrame.QPACK_BLOCKED_STREAMS;
@@ -105,6 +108,8 @@ public class Http3ConnectionImpl implements Http3Connection {
     protected Map<Long, Consumer<HttpStream>> unidirectionalStreamHandler = new HashMap<>();
     protected final Decoder qpackDecoder;
     protected final Map<Long, Long> settingsParameters;
+    protected final Map<Long, Long> peerSettingsParameters;
+    protected final CountDownLatch settingsFrameReceived;
     private final List<Long> internalSettingsParameterIds = List.of(
             (long) QPACK_MAX_TABLE_CAPACITY,
             (long) QPACK_BLOCKED_STREAMS,
@@ -117,6 +122,12 @@ public class Http3ConnectionImpl implements Http3Connection {
         this.quicConnection = quicConnection;
         qpackDecoder = Decoder.newBuilder().build();
         settingsParameters = new HashMap<>();
+        settingsParameters.put((long) QPACK_MAX_TABLE_CAPACITY, 0L);
+        settingsParameters.put((long) QPACK_BLOCKED_STREAMS, 0L);
+
+        peerSettingsParameters = new HashMap<>();
+
+        settingsFrameReceived = new CountDownLatch(1);
 
         registerStandardStreamHandlers();
         qpackEncoder = Encoder.newBuilder().build();
@@ -160,6 +171,21 @@ public class Http3ConnectionImpl implements Http3Connection {
             public long getStreamId() {
                 return quicStream.getStreamId();
             }
+
+            @Override
+            public boolean isBidirectional() {
+                return false;
+            }
+
+            @Override
+            public void abortReading(long errorCode) {
+                quicStream.abortReading(errorCode);
+            }
+
+            @Override
+            public void resetStream(long errorCode) {
+                quicStream.resetStream(errorCode);
+            }
         };
     }
 
@@ -177,6 +203,17 @@ public class Http3ConnectionImpl implements Http3Connection {
             throw new IllegalArgumentException("Cannot overwrite internal settings parameter");
         }
         settingsParameters.put(identifier, value);
+    }
+
+    @Override
+    public Optional<Long> getPeerSettingsParameter(long identifier) {
+        try {
+            settingsFrameReceived.await(10, TimeUnit.SECONDS);
+        }
+        catch (InterruptedException e) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(peerSettingsParameters.get(identifier));
     }
 
     private boolean isReservedStreamType(long streamType) {
@@ -229,6 +266,10 @@ public class Http3ConnectionImpl implements Http3Connection {
     }
 
     protected HttpStream wrap(QuicStream quicStream) {
+        return wrapWith(quicStream, quicStream.getInputStream());
+    }
+
+    protected HttpStream wrapWith(QuicStream quicStream, InputStream inputStream) {
         return new HttpStream() {
             @Override
             public OutputStream getOutputStream() {
@@ -237,12 +278,27 @@ public class Http3ConnectionImpl implements Http3Connection {
 
             @Override
             public InputStream getInputStream() {
-                return quicStream.getInputStream();
+                return inputStream;
             }
 
             @Override
             public long getStreamId() {
                 return quicStream.getStreamId();
+            }
+
+            @Override
+            public boolean isBidirectional() {
+                return quicStream.isBidirectional();
+            }
+
+            @Override
+            public void abortReading(long errorCode) {
+                quicStream.abortReading(errorCode);
+            }
+
+            @Override
+            public void resetStream(long errorCode) {
+                quicStream.resetStream(errorCode);
             }
         };
     }
@@ -256,8 +312,8 @@ public class Http3ConnectionImpl implements Http3Connection {
             OutputStream clientControlOutput = clientControlStream.getOutputStream();
             clientControlOutput.write(STREAM_TYPE_CONTROL_STREAM);
 
-            SettingsFrame settingsFrame = new SettingsFrame(0, 0);
-            settingsFrame.addAdditionalSettings(settingsParameters);
+            SettingsFrame settingsFrame = new SettingsFrame();
+            settingsFrame.addParameters(settingsParameters);
             ByteBuffer serializedSettings = settingsFrame.getBytes();
             clientControlStream.getOutputStream().write(serializedSettings.array(), 0, serializedSettings.limit());
             // https://www.rfc-editor.org/rfc/rfc9114.html#name-control-streams
@@ -273,7 +329,7 @@ public class Http3ConnectionImpl implements Http3Connection {
         }
     }
 
-    protected SettingsFrame processControlStream(InputStream controlStream) {
+    protected void processControlStream(InputStream controlStream) {
         try {
             // https://www.rfc-editor.org/rfc/rfc9114.html#name-control-streams
             // "Each side MUST initiate a single control stream at the beginning of the connection and send its SETTINGS
@@ -283,7 +339,6 @@ public class Http3ConnectionImpl implements Http3Connection {
             //  of type H3_MISSING_SETTINGS."
             if (frameType != (long) FRAME_TYPE_SETTINGS) {
                 connectionError(H3_MISSING_SETTINGS);
-                return null;
             }
             int frameLength = VariableLengthInteger.parse(controlStream);
             byte[] payload = readExact(controlStream, frameLength);
@@ -291,12 +346,13 @@ public class Http3ConnectionImpl implements Http3Connection {
             SettingsFrame settingsFrame = new SettingsFrame().parsePayload(ByteBuffer.wrap(payload));
             peerQpackMaxTableCapacity = settingsFrame.getQpackMaxTableCapacity();
             peerQpackBlockedStreams = settingsFrame.getQpackBlockedStreams();
-            return settingsFrame;
-        } catch (IOException e) {
+            peerSettingsParameters.putAll(settingsFrame.getAllParameters());
+            settingsFrameReceived.countDown();
+        }
+        catch (IOException e) {
             // "If either control stream is closed at any point, this MUST be treated as a connection error of type
             //  H3_CLOSED_CRITICAL_STREAM."
             connectionError(H3_CLOSED_CRITICAL_STREAM);
-            return null;
         }
     }
 
@@ -360,9 +416,21 @@ public class Http3ConnectionImpl implements Http3Connection {
         return frame;
     }
 
-    // https://www.rfc-editor.org/rfc/rfc9114.html#name-error-handling
-    protected void connectionError(int http3ErrorCode) {
+    protected void connectionError(long http3ErrorCode) {
+        // https://www.rfc-editor.org/rfc/rfc9114.html#name-error-handling
+        // "If an entire connection needs to be terminated, QUIC similarly provides mechanisms to communicate a reason;
+        //  see Section 5.3 of [QUIC-TRANSPORT]. This is referred to as a "connection error". Similar to stream errors,
+        //  an HTTP/3 implementation can terminate a QUIC connection and communicate the reason using an error code
+        //  from Section 8.1."
         quicConnection.close(http3ErrorCode, null);
+    }
+
+    protected void streamError(long http3ErrorCode, QuicStream quicStream) {
+        // https://www.rfc-editor.org/rfc/rfc9114.html#name-error-handling
+        // "When a stream cannot be completed successfully, QUIC allows the application to abruptly terminate (reset)
+        //  that stream and communicate a reason; see Section 2.4 of [QUIC-TRANSPORT]. This is referred to as a
+        //  "stream error". An HTTP/3 implementation can decide to close a QUIC stream and communicate the type of error."
+        quicStream.resetStream(http3ErrorCode);
     }
 
     protected byte[] readExact(InputStream inputStream, int length) throws IOException {
@@ -382,4 +450,153 @@ public class Http3ConnectionImpl implements Http3Connection {
     }
 
     protected void handleBidirectionalStream(QuicStream quicStream) {}
+
+    /**
+     * Implementation of HttpStream that sends and receives data encapsulated in HTTP3 (data) frames.
+     */
+    public class HttpStreamImpl implements HttpStream {
+
+        private final QuicStream quicStream;
+        private final OutputStream outputStream;
+        private final InputStream inputStream;
+
+        public HttpStreamImpl(QuicStream quicStream) {
+            this.quicStream = quicStream;
+
+            outputStream = new OutputStream() {
+                @Override
+                public void write(int b) throws IOException {
+                    quicStream.getOutputStream().write(new DataFrame(new byte[] { (byte) b }).toBytes());
+                }
+
+                @Override
+                public void write(byte[] b) throws IOException {
+                    quicStream.getOutputStream().write(new DataFrame(b).toBytes());
+                }
+
+                @Override
+                public void write(byte[] b, int off, int len) throws IOException {
+                    ByteBuffer data = ByteBuffer.wrap(b);
+                    data.position(off);
+                    data.limit(len);
+                    quicStream.getOutputStream().write(new DataFrame(data).toBytes());
+                }
+
+                @Override
+                public void flush() throws IOException {
+                    quicStream.getOutputStream().flush();
+                }
+
+                @Override
+                public void close() throws IOException {
+                    quicStream.getOutputStream().close();
+                }
+            };
+
+            inputStream = new InputStream() {
+
+                private ByteBuffer dataBuffer;
+
+                @Override
+                public int available() throws IOException {
+                    if (checkData()) {
+                        return dataBuffer.remaining();
+                    }
+                    else {
+                        return 0;
+                    }
+                }
+
+                @Override
+                public int read() throws IOException {
+                    if (checkData()) {
+                        return dataBuffer.get();
+                    }
+                    else {
+                        return -1;
+                    }
+                }
+
+                @Override
+                public int read(byte[] b) throws IOException {
+                    if (checkData()) {
+                        int count = Integer.min(dataBuffer.remaining(), b.length);
+                        dataBuffer.get(b, 0, count);
+                        return count;
+                    }
+                    else {
+                        return -1;
+                    }
+                }
+
+                @Override
+                public int read(byte[] b, int off, int len) throws IOException {
+                    if (checkData()) {
+                        int count = Integer.min(dataBuffer.remaining(), len);
+                        dataBuffer.get(b, off, count);
+                        return count;
+                    }
+                    else {
+                        return -1;
+                    }
+
+                }
+
+                private boolean checkData() throws IOException {
+                    if (dataBuffer == null || dataBuffer.position() == dataBuffer.limit()) {
+                        return readData();
+                    }
+                    else {
+                        return dataBuffer.position() < dataBuffer.limit();
+                    }
+                }
+
+                private boolean readData() throws IOException {
+                    Http3Frame frame = null;
+                    try {
+                        frame = readFrame(quicStream.getInputStream());
+                    } catch (HttpError e) {
+                        throw new IOException(e);
+                    }
+                    if (frame instanceof DataFrame) {
+                        dataBuffer = ByteBuffer.wrap(((DataFrame) frame).getPayload());
+                        return true;
+                    }
+                    else if (frame == null) {
+                        // End of stream
+                        return false;
+                    }
+                    return false;
+                }
+            };
+        }
+
+        public OutputStream getOutputStream() {
+            return outputStream;
+        }
+
+        public InputStream getInputStream() {
+            return inputStream;
+        }
+
+        @Override
+        public long getStreamId() {
+            return quicStream.getStreamId();
+        }
+
+        @Override
+        public boolean isBidirectional() {
+            return quicStream.isBidirectional();
+        }
+
+        @Override
+        public void abortReading(long errorCode) {
+            quicStream.abortReading(errorCode);
+        }
+
+        @Override
+        public void resetStream(long errorCode) {
+            quicStream.resetStream(errorCode);
+        }
+    }
 }

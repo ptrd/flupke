@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023, 2024, 2025 Peter Doornbosch
+ * Copyright © 2024 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *
@@ -16,30 +16,26 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
+package tech.kwik.flupke.server;
 
-package tech.kwik.flupke.core;
+import java.util.Map;
 
-import java.io.InputStream;
-import java.io.OutputStream;
+import static java.util.Collections.emptyMap;
 
-/**
- * A generic stream that runs over HTTP.
- */
-public interface HttpStream {
+public interface Http3ServerExtensionFactory {
 
-    OutputStream getOutputStream();
+    /**
+     * Creates an extension that is bound to the given HTTP/3 connection.
+     * @param http3ServerConnection
+     * @return  the extension
+     */
+    Http3ServerExtension createExtension(Http3ServerConnection http3ServerConnection);
 
-    InputStream getInputStream();
-
-    long getStreamId();
-
-    default boolean isUnidirectional() {
-        return !isBidirectional();
+    /**
+     * Return the extension specific HTTP3 settings for this extension.
+     * @return
+     */
+    default Map<Long, Long> getExtensionSettings() {
+        return emptyMap();
     }
-
-    boolean isBidirectional();
-
-    void abortReading(long errorCode);
-
-    void resetStream(long errorCode);
 }

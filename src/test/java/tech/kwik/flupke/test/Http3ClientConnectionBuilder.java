@@ -18,12 +18,12 @@
  */
 package tech.kwik.flupke.test;
 
-import tech.kwik.flupke.impl.Http3ClientConnectionImpl;
-import tech.kwik.flupke.impl.Http3ConnectionImpl;
-import tech.kwik.flupke.impl.SettingsFrame;
 import tech.kwik.core.QuicClientConnection;
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.QuicStream;
+import tech.kwik.flupke.impl.Http3ClientConnectionImpl;
+import tech.kwik.flupke.impl.Http3ConnectionImpl;
+import tech.kwik.flupke.impl.SettingsFrame;
 import tech.kwik.qpack.Decoder;
 
 import java.io.ByteArrayInputStream;
@@ -34,10 +34,10 @@ import java.nio.ByteBuffer;
 import java.util.AbstractMap;
 import java.util.List;
 
-import static tech.kwik.flupke.impl.Http3ConnectionImpl.STREAM_TYPE_CONTROL_STREAM;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static tech.kwik.flupke.impl.Http3ConnectionImpl.STREAM_TYPE_CONTROL_STREAM;
 
 
 public class Http3ClientConnectionBuilder {
@@ -124,6 +124,12 @@ public class Http3ClientConnectionBuilder {
 
     public Http3ClientConnectionBuilder withEnableConnectProtocolSettings() {
         settingsFrame = new SettingsFrame(0, 0, true);
+        return this;
+    }
+
+    public Http3ClientConnectionBuilder withDefaultSettingsFrameSupplementedWith(long id, long value) {
+        settingsFrame = new SettingsFrame(0, 0);
+        settingsFrame.putParameter(id, value);
         return this;
     }
 

@@ -108,7 +108,7 @@ public class SettingsFrameTest {
     public void additionalSettingsAreSerialized() throws InvalidIntegerEncodingException {
         // Given
         SettingsFrame settingsFrame = new SettingsFrame();
-        settingsFrame.addAdditionalSettings(Map.of(0xc671706aL, 1L, 0x22L, 2L));
+        settingsFrame.addParameters(Map.of(0xc671706aL, 1L, 0x22L, 2L));
 
         // When
         ByteBuffer serializedFrame = settingsFrame.getBytes();
@@ -128,7 +128,7 @@ public class SettingsFrameTest {
     public void additionalSettingsAreParsed() throws Exception {
         // Given
         SettingsFrame originalSettingsFrame = new SettingsFrame();
-        originalSettingsFrame.addAdditionalSettings(Map.of(0xc671706aL, 1L, 0x22L, 2L));
+        originalSettingsFrame.addParameters(Map.of(0xc671706aL, 1L, 0x22L, 2L));
         ByteBuffer serializedFrame = originalSettingsFrame.getBytes();
         serializedFrame.rewind();
 

@@ -19,6 +19,7 @@
 package tech.kwik.flupke.core;
 
 import java.io.IOException;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 public interface Http3Connection {
@@ -59,4 +60,13 @@ public interface Http3Connection {
      * Note that this method must be called before the connection is established.
      */
     void addSettingsParameter(long identifier, long value);
+
+    /**
+     * HTTP/3 extension method for retrieving settings sent by the peer.
+     * This method will block until the peer's SETTINGS frame has been received.
+     * https://www.rfc-editor.org/rfc/rfc9114.html#name-extensions-to-http-3
+     * "Extensions are permitted to use new frame types (Section 7.2), new settings (Section 7.2.4.1), ..."
+     * Note that this method must be called after the peer's SETTINGS frame has been received.
+     */
+    Optional<Long> getPeerSettingsParameter(long identifier);
 }

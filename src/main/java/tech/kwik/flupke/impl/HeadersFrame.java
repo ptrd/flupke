@@ -41,6 +41,8 @@ public class HeadersFrame extends Http3Frame {
     public static final String PSEUDO_HEADER_PATH = ":path";
     // https://www.rfc-editor.org/rfc/rfc9114.html#name-response-pseudo-header-fiel
     public static final String PSEUDO_HEADER_STATUS = ":status";
+    // https://www.rfc-editor.org/rfc/rfc9220.html#name-websockets-upgrade-over-htt
+    public static final String PSEUDO_HEADER_PROTOCOL = ":protocol";
 
     protected HttpHeaders httpHeaders;
     protected Map<String, String> pseudoHeaders;

@@ -47,6 +47,8 @@ public class Http3ClientBuilder implements HttpClient.Builder {
     private Long receiveBufferSize;
     private boolean disableCertificateCheck;
     private Logger logger;
+    private int additionalUnidirectionalStreams;
+    private int additionalBidirectionalStreams;
     private InetAddress address;
 
     public Http3ClientBuilder receiveBufferSize(long bufferSize) {
@@ -134,6 +136,22 @@ public class Http3ClientBuilder implements HttpClient.Builder {
         return this;
     }
 
+    public Http3ClientBuilder maxAdditionalOpenPeerInitiatedUnidirectionalStreams(int max) {
+        if (max < 0) {
+            throw new IllegalArgumentException("max must be >= 0");
+        }
+        additionalUnidirectionalStreams = max;
+        return this;
+    }
+
+    public Http3ClientBuilder maxAdditionalOpenPeerInitiatedBidirectionalStreams(int max) {
+        if (max < 0) {
+            throw new IllegalArgumentException("max must be >= 0");
+        }
+        additionalBidirectionalStreams = max;
+        return this;
+    }
+
     public Http3ClientBuilder logger(Logger logger) {
         this.logger = logger;
         return this;
@@ -141,6 +159,6 @@ public class Http3ClientBuilder implements HttpClient.Builder {
 
     @Override
     public HttpClient build() {
-        return new Http3Client(connectTimeout, receiveBufferSize, disableCertificateCheck, address, logger);
+        return new Http3Client(connectTimeout, receiveBufferSize, disableCertificateCheck, additionalUnidirectionalStreams, additionalBidirectionalStreams, address, logger);
     }
 }
