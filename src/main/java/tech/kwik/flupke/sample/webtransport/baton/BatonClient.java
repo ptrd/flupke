@@ -46,22 +46,23 @@ public class BatonClient {
                 .build();
 
         sessionFactory = new ClientSessionFactoryImpl(serverUrl, httpClient);
+        this.serverUrl = serverUrl;
+    }
 
+    CountDownLatch startSession() throws URISyntaxException {
         int minInitial = 150;
         int start = minInitial + new Random().nextInt(256 - minInitial);
         String parameters = "?baton=" + start;
-        this.serverUrl = new URI(serverUrl + parameters);
-    }
+        URI sessionUrl = new URI(serverUrl + parameters);
 
-    CountDownLatch startSession() {
         CountDownLatch sessionActive = new CountDownLatch(1);
         try {
             BatonSession baton = new BatonSession();
-            Session session = sessionFactory.createSession(serverUrl, baton::unidirectionalStreamHandler, baton::bidirectionalStreamHandler);
+            Session session = sessionFactory.createSession(sessionUrl, baton::unidirectionalStreamHandler, baton::bidirectionalStreamHandler);
             session.registerSessionTerminatedEventListener((code, msg) -> {
                 sessionActive.countDown();
             });
-            System.out.println("Starting session with " + serverUrl);
+            System.out.println("Starting session with " + sessionUrl);
             baton.setWebTransportSession(session);
         }
         catch (HttpError httpError) {
