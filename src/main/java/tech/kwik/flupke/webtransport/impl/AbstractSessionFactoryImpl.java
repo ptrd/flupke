@@ -91,11 +91,11 @@ public abstract class AbstractSessionFactoryImpl implements SessionFactory {
         registrationLock.lock();
         try {
             SessionImpl session = sessionRegistry.get(sessionId);
-            if (session != null) {
+            if (session != null && session.isOpen()) {
                 session.handleStream(httpStream);
             }
             else {
-                if (sessionId <= latestSessionId) {
+                if (session == null && sessionId <= latestSessionId) {
                     // Session already closed, ignore the stream
                     httpStream.abortReading(WEBTRANSPORT_SESSION_GONE);
                     if (httpStream.isBidirectional()) {

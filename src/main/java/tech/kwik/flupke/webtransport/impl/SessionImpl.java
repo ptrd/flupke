@@ -351,4 +351,9 @@ public class SessionImpl implements Session {
     public String getPath() {
         return context.getPathAndQuery();
     }
+
+    @Override
+    public boolean isOpen() {
+        return state == State.OPEN;
+    }
 }

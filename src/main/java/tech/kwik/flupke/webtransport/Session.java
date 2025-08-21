@@ -115,4 +115,6 @@ public interface Session {
      * @return
      */
     String getPath();
+
+    boolean isOpen();
 }
