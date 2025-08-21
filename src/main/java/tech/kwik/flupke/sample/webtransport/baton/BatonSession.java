@@ -121,6 +121,7 @@ public class BatonSession {
         debug("Padding length: " + paddingLength);
         inputStream.skip(paddingLength);
         int baton = inputStream.read();
+        int eof = inputStream.read();
         out("<< " + baton);
         return baton;
     }
