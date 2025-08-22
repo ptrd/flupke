@@ -91,9 +91,11 @@ public class FileServer implements HttpRequestHandler {
                     long sizeInBytes = size * (unit.equals("k")? 1024: unit.equals("m")? 1024 * 1024: 1);
                     if (sizeInBytes > MAX_DOWNLOAD_SIZE) {
                         response.setStatus(509); // Bandwidth Limit Exceeded
-                        return;
                     }
-                    transferFileOfSize(sizeInBytes, response.getOutputStream());
+                    else {
+                        response.setStatus(200);
+                        transferFileOfSize(sizeInBytes, response.getOutputStream());
+                    }
                 }
                 else {
                     response.setStatus(404);
