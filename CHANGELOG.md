@@ -1,5 +1,12 @@
 # Releases
 
+## 0.7 (2025-08-22)
+
+- added support for WebTransport ([draft-13](https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-13.html))
+- server handler: receive request headers and set response headers
+- upgraded kwik dependency to latest (0.10.4)
+- upgraded qpack dependency to latest (2.0.1)
+
 ## 0.6 (2025-01-21)
 
 **Note: this release has a breaking change (which is, however, easy to fix)**
