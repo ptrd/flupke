@@ -267,6 +267,7 @@ class ClientSessionFactoryTest {
         when(client.createConnection(any())).thenReturn(http3connection);
         HttpStream httpStream = mock(HttpStream.class);
         when(httpStream.getStreamId()).thenReturn(4L);  // Control stream stream ID
+        when(httpStream.getInputStream()).thenReturn(new WriteableByteArrayInputStream());  // Reading from this stream will block
         when(httpStream.getOutputStream()).thenReturn(mock(OutputStream.class));
         when(http3connection.sendExtendedConnect(any(), any(), any(), any())).thenReturn(httpStream);
         when(http3connection.getPeerSettingsParameter(SETTINGS_WT_MAX_SESSIONS)).thenReturn(Optional.of(maxWebTransportSessions));
