@@ -38,7 +38,7 @@ import java.time.Duration;
 public class PostExample {
 
     public static void main(String[] args) throws IOException, InterruptedException {
-        boolean ignoreInvalidServerCertificate = false;
+        boolean ignoreInvalidServerCertificate = true;
 
         try {
             if (args.length != 2) {

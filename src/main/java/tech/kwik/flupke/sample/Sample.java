@@ -18,10 +18,10 @@
  */
 package tech.kwik.flupke.sample;
 
-import tech.kwik.flupke.Http3Client;
-import tech.kwik.flupke.Http3ClientBuilder;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.log.SysOutLogger;
+import tech.kwik.flupke.Http3Client;
+import tech.kwik.flupke.Http3ClientBuilder;
 
 import java.io.IOException;
 import java.net.URI;
@@ -58,6 +58,7 @@ public class Sample {
         stdoutLogger.logPackets(true);
 
         HttpClient client = ((Http3ClientBuilder) Http3Client.newBuilder())
+                .disableCertificateCheck()
                 .logger(stdoutLogger)
                 .connectTimeout(Duration.ofSeconds(4))
                 .build();
