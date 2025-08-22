@@ -28,8 +28,12 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.http.HttpHeaders;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -43,16 +47,20 @@ import java.util.regex.Pattern;
 public class FileServer implements HttpRequestHandler {
 
     private static final int MAX_DOWNLOAD_SIZE = 100 * 1024 * 1024;
-    private final DateTimeFormatter timeFormatter;
+    private final DateTimeFormatter requestLogTimeFormatter;
     private final File wwwDir;
 
     public FileServer(File wwwDir) {
         this.wwwDir = wwwDir;
-        timeFormatter = DateTimeFormatter.ofPattern("d/MMM/yyyy:HH:mm:ss Z").withZone(ZoneId.systemDefault());
+        requestLogTimeFormatter = DateTimeFormatter.ofPattern("d/MMM/yyyy:HH:mm:ss Z").withZone(ZoneId.systemDefault());
     }
 
     @Override
     public void handleRequest(HttpServerRequest request, HttpServerResponse response) throws IOException {
+        response.setHeaders(HttpHeaders.of(Map.of(
+                "Server", List.of("Flupke/" + FlupkeVersion.getVersion()),
+                "Date", List.of(DateTimeFormatter.RFC_1123_DATE_TIME.format(ZonedDateTime.now()))),
+                (k, v) -> true));
         if (request.method().equals("GET")) {
             String path = request.path();
             if (path.equals("/version")) {
@@ -122,7 +130,7 @@ public class FileServer implements HttpRequestHandler {
                 // client userid
                 "- " +
                 // time that the request was received
-                "[" + timeFormatter.format(request.time()) + "] " +
+                "[" + requestLogTimeFormatter.format(request.time()) + "] " +
                 // request line
                 request.method() + " " + request.path() + " " + "HTTP/3 " +
                 // status code
