@@ -39,6 +39,7 @@ public class Http3ApplicationProtocolFactory implements ApplicationProtocolConne
 
     public Http3ApplicationProtocolFactory(HttpRequestHandler requestHandler) {
         this.httpRequestHandler = Objects.requireNonNull(requestHandler);
+        this.extensions = Map.of();
         executorService = Executors.newCachedThreadPool(new DaemonThreadFactory("http3-connection"));
     }
 
@@ -101,6 +102,6 @@ public class Http3ApplicationProtocolFactory implements ApplicationProtocolConne
     }
 
     public void setExtensions(Map<String, Http3ServerExtensionFactory> extensions) {
-        this.extensions = extensions;
+        this.extensions = Objects.requireNonNull(extensions);
     }
 }
