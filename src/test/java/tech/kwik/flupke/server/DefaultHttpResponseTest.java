@@ -37,6 +37,19 @@ import static org.mockito.Mockito.when;
 class DefaultHttpResponseTest {
 
     @Test
+    void whenStatusNotSetGetOutputStreamShouldThrow() {
+        // Given
+        NoOpEncoderDecoderBuilder encoderBuilder = new NoOpEncoderDecoderBuilder();
+        QuicStream quicStream = mock(QuicStream.class);
+        DefaultHttpResponse response = new DefaultHttpResponse(quicStream, encoderBuilder.encoder());
+
+        // When / Then
+        assertThatThrownBy(response::getOutputStream)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("status not set");
+    }
+
+    @Test
     void callingSetHeadersAfterGetOutputStreamShouldThrow() {
         // Given
         NoOpEncoderDecoderBuilder encoderBuilder = new NoOpEncoderDecoderBuilder();
