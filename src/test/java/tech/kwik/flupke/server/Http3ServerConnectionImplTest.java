@@ -45,7 +45,6 @@ import java.net.URI;
 import java.net.http.HttpHeaders;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -236,7 +235,7 @@ public class Http3ServerConnectionImplTest {
 
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         QuicStream stream = new QuicStreamBuilder().withOutputStream(output).build();
-        http3Connection.handleHttpRequest(List.of(requestHeadersFrame), stream, noOpEncoderDecoderBuilder.encoder());
+        http3Connection.handleHttpRequest(requestHeadersFrame, stream, noOpEncoderDecoderBuilder.encoder());
 
         // Then
         HeadersFrame responseHeadersFrame = new HeadersFrame().parsePayload(output.toByteArray(), noOpEncoderDecoderBuilder.decoder());
@@ -260,7 +259,7 @@ public class Http3ServerConnectionImplTest {
         HeadersFrame requestHeadersFrame = new HeadersFrame();
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         QuicStream stream = new QuicStreamBuilder().withOutputStream(output).build();
-        http3Connection.handleHttpRequest(List.of(requestHeadersFrame), stream, noOpEncoderDecoderBuilder.encoder());
+        http3Connection.handleHttpRequest(requestHeadersFrame, stream, noOpEncoderDecoderBuilder.encoder());
 
         // Then
         // Strip of header frame (two bytes: header type and header length (== 0), because of dummy encoder)
@@ -280,7 +279,7 @@ public class Http3ServerConnectionImplTest {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         QuicStream stream = new QuicStreamBuilder().withOutputStream(output).build();
         CapturingEncoder encoder = new CapturingEncoder();
-        http3Connection.handleHttpRequest(List.of(requestHeadersFrame), stream, encoder);
+        http3Connection.handleHttpRequest(requestHeadersFrame, stream, encoder);
 
         // Then
         assertThat(encoder.getCapturedHeaders()).containsKey(":status").containsValue("500");

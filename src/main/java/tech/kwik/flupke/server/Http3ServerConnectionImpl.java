@@ -132,9 +132,7 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
                 handleConnectMethod(quicStream, headersFrame);
             }
             else {
-                List<Http3Frame> receivedFrames = parseHttp3Frames(requestStream);
-                receivedFrames.add(headersFrame);
-                handleHttpRequest(receivedFrames, quicStream, encoder);
+                handleHttpRequest(headersFrame, quicStream, encoder);
             }
         }
         catch (IOException ioError) {
@@ -319,12 +317,7 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
         return receivedFrames;
     }
 
-    void handleHttpRequest(List<Http3Frame> receivedFrames, QuicStream quicStream, Encoder qpackEncoder) throws HttpError {
-        HeadersFrame headersFrame = (HeadersFrame) receivedFrames.stream()
-                .filter(f -> f instanceof HeadersFrame)
-                .findFirst()
-                .orElseThrow(() -> new HttpError("", 400));  // TODO
-
+    void handleHttpRequest(HeadersFrame headersFrame, QuicStream quicStream, Encoder qpackEncoder) throws HttpError {
         String method = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_METHOD);
         String path = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PATH);
         HttpServerRequest request = new HttpServerRequest(method, path, headersFrame.headers(), clientAddress);
