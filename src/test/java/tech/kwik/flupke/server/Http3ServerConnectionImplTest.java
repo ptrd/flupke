@@ -283,7 +283,7 @@ public class Http3ServerConnectionImplTest {
         http3Connection.handleHttpRequest(List.of(requestHeadersFrame), stream, encoder);
 
         // Then
-        assertThat(encoder.getCapturedHeaders()).containsKey(":status");
+        assertThat(encoder.getCapturedHeaders()).containsKey(":status").containsValue("500");
     }
     //endregion
 
