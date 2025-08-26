@@ -19,6 +19,7 @@
 package tech.kwik.flupke.sample;
 
 import org.json.JSONObject;
+import org.json.JSONTokener;
 import tech.kwik.flupke.server.HttpRequestHandler;
 import tech.kwik.flupke.server.HttpServerRequest;
 import tech.kwik.flupke.server.HttpServerResponse;
@@ -26,6 +27,7 @@ import tech.kwik.flupke.server.HttpServerResponse;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.net.http.HttpHeaders;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -35,7 +37,8 @@ public class HttpBinRequestHandler implements HttpRequestHandler {
     public void handleRequest(HttpServerRequest request, HttpServerResponse response) {
         if (request.method().equals("GET") && request.path().equals("/headers")) {
             getHeadersRequest(request, response);
-        } else if (request.method().equals("POST") && request.path().equals("/headers")) {
+        }
+        else if (request.method().equals("POST") && request.path().equals("/headers")) {
             postHeadersRequest(request, response);
         }
     }
@@ -62,7 +65,20 @@ public class HttpBinRequestHandler implements HttpRequestHandler {
             Map.of("Content-Type", List.of("application/json")),
             (s, s2) -> true
         );
-        response.setHeaders(headers);
+
+        JSONObject headersJson = new JSONObject(new JSONTokener(request.body()));
+        if (headersJson.has("headers")) {
+            Map<String, List<String>> headersMap = new HashMap<>();
+            headersJson.getJSONObject("headers").toMap().forEach((key, value) -> {
+                if (value instanceof List) {
+                    headersMap.put(key, (List<String>) value);
+                }
+                else {
+                    headersMap.put(key, List.of(value.toString()));
+                }
+            });
+            response.setHeaders(HttpHeaders.of(headersMap, (s, s2) -> true));
+        }
     }
 
 }

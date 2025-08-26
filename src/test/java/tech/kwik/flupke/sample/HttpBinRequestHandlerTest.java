@@ -18,17 +18,21 @@
  */
 package tech.kwik.flupke.sample;
 
+import org.json.JSONObject;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import tech.kwik.flupke.server.HttpServerRequest;
 import tech.kwik.flupke.server.HttpServerResponse;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.OutputStream;
 import java.net.http.HttpHeaders;
 import java.util.List;
 import java.util.Map;
 
 import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -46,7 +50,8 @@ class HttpBinRequestHandlerTest {
         HttpServerRequest request = new HttpServerRequest("GET",
                 "/headers",
                 HttpHeaders.of(Map.of("User-Agent", List.of("JUnit-Test")), (s1, s2) -> true),
-                null);
+                null,
+                mock(java.io.InputStream.class));
         HttpServerResponse response = mock(HttpServerResponse.class);
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         when(response.getOutputStream()).thenReturn(output);
@@ -55,4 +60,46 @@ class HttpBinRequestHandlerTest {
         assertThatJson(output.toString()).isEqualTo("{headers:{'User-Agent':['JUnit-Test']}}");
     }
 
+    @Test
+    void postingHeadersShouldReturnHeaders() throws Exception {
+        JSONObject body = new JSONObject()
+                .put("headers", new JSONObject()
+                        .put("Content-Type", "application/json")
+                        .put("Set-Cookie", List.of("sessionId=abc123", "theme=light", "lang=en-US"))
+                        .put("User-Agent", "JUnit-Test"));
+        HttpServerRequest request = new HttpServerRequest("POST",
+                "/headers",
+                HttpHeaders.of(Map.of(), (s1, s2) -> true),
+                null,
+                new ByteArrayInputStream(body.toString().getBytes()));
+        HttpServerResponseWithHeaders response = new HttpServerResponseWithHeaders();
+
+        httpBinRequestHandler.handleRequest(request, response);
+
+        HttpHeaders responseHeaders = response.getHeaders();
+
+        assertThat(responseHeaders.firstValue("Content-Type")).hasValue("application/json");
+        assertThat(responseHeaders.firstValue("User-Agent")).hasValue("JUnit-Test");
+        List<String> setCookieHeaders = responseHeaders.allValues("Set-Cookie");
+        assertThat(setCookieHeaders).containsExactly("sessionId=abc123", "theme=light", "lang=en-US");
+    }
+
+    private static class HttpServerResponseWithHeaders extends HttpServerResponse {
+
+        private HttpHeaders headers;
+
+        public HttpHeaders getHeaders() {
+            return headers;
+        }
+
+        @Override
+        public OutputStream getOutputStream() {
+            return mock(OutputStream.class);
+        }
+
+        @Override
+        public void setHeaders(HttpHeaders headers) {
+            this.headers = headers;
+        }
+    }
 }
