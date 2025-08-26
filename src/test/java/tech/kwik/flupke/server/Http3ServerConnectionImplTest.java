@@ -112,6 +112,31 @@ public class Http3ServerConnectionImplTest {
                 argThat(req -> req.headers().firstValue("X-Custom-Header").orElse("").equals("CustomValue")),
                 any(HttpServerResponse.class));
     }
+
+    @Test
+    void requestBodyShouldBePassedToHandler() throws Exception {
+        // Given
+        HttpRequestHandler handler = mock(HttpRequestHandler.class);
+        Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
+                .withHeaders(Map.of(":method", "POST", ":scheme", "https", ":authority", "example.com", ":path", "/index.html"))
+                .withHandler(handler)
+                .buildServerConnection();
+
+        ByteBuffer requestData = ByteBuffer.allocate(600);
+        requestData.put(fakeHeadersFrameData());
+        requestData.put(new byte[] { FRAME_TYPE_DATA, 0x04, 0x62, 0x6f, 0x64, 0x79 });
+        QuicStream requestResponseStream = new QuicStreamBuilder().withInputData(requestData.array()).build();
+
+        // When
+        http3Connection.handleBidirectionalStream(requestResponseStream);
+
+        // Then
+        ArgumentCaptor<HttpServerRequest> requestArgumentCaptor = ArgumentCaptor.forClass(HttpServerRequest.class);
+        verify(handler).handleRequest(requestArgumentCaptor.capture(), any(HttpServerResponse.class));
+        HttpServerRequest request = requestArgumentCaptor.getValue();
+        byte[] bodyBytes = request.body().readAllBytes();
+        assertThat(bodyBytes).isEqualTo("body".getBytes());
+    }
     //endregion
 
     //region request correctness

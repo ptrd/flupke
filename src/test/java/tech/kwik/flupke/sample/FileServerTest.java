@@ -18,14 +18,15 @@
  */
 package tech.kwik.flupke.sample;
 
-import tech.kwik.flupke.server.HttpServerRequest;
-import tech.kwik.flupke.server.HttpServerResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import tech.kwik.flupke.server.HttpServerRequest;
+import tech.kwik.flupke.server.HttpServerResponse;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.Inet4Address;
 import java.nio.file.Files;
 
@@ -74,6 +75,6 @@ public class FileServerTest {
     }
 
     private HttpServerRequest createGetRequest(String filename) throws IOException {
-        return new HttpServerRequest("GET", filename, null, Inet4Address.getByAddress(new byte[] { 10, 0, 0, 58 }));
+        return new HttpServerRequest("GET", filename, null, Inet4Address.getByAddress(new byte[] { 10, 0, 0, 58 }), mock(InputStream.class));
     }
 }

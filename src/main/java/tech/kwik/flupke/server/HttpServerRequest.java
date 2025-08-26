@@ -18,6 +18,7 @@
  */
 package tech.kwik.flupke.server;
 
+import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.http.HttpHeaders;
 import java.time.Instant;
@@ -30,11 +31,13 @@ public class HttpServerRequest {
     private final HttpHeaders headers;
     private final InetAddress clientAddress;
     private final Instant requestTime;
+    private final InputStream bodyInputStream;
 
-    public HttpServerRequest(String method, String path, HttpHeaders headers, InetAddress clientAddress) {
+    public HttpServerRequest(String method, String path, HttpHeaders headers, InetAddress clientAddress, InputStream bodyInputStream) {
         this.method = method;
         this.path = path;
         this.headers = headers;
+        this.bodyInputStream = bodyInputStream;
         this.clientAddress = clientAddress;
         requestTime = Instant.now();
     }
@@ -49,6 +52,10 @@ public class HttpServerRequest {
 
     public HttpHeaders headers() {
         return headers;
+    }
+
+    public InputStream body() {
+        return bodyInputStream;
     }
 
     public InetAddress clientAddress() {
