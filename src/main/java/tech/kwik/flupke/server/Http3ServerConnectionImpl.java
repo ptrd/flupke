@@ -113,7 +113,7 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
                 bidirectionalStreamHandler.get(frameType).accept(wrapWith(quicStream, requestStream));
             }
             else {
-                handleStandardRequestResponseStream(quicStream, requestStream);
+                handleStandardRequestResponseStream(replaceInputBy(quicStream, requestStream));
             }
         }
         catch (IOException | InvalidIntegerEncodingException e) {
@@ -122,11 +122,11 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
         }
     }
 
-    protected void handleStandardRequestResponseStream(QuicStream quicStream, InputStream requestStream) {
+    protected void handleStandardRequestResponseStream(QuicStream quicStream) {
         // https://www.rfc-editor.org/rfc/rfc9114.html#name-bidirectional-streams
         // "All client-initiated bidirectional streams are used for HTTP requests and responses."
         try {
-            HeadersFrame headersFrame = readRequestHeadersFrame(requestStream, maxHeaderSize);
+            HeadersFrame headersFrame = readRequestHeadersFrame(quicStream.getInputStream(), maxHeaderSize);
             String httpMethod = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_METHOD);
             if (httpMethod.equals("CONNECT")) {
                 handleConnectMethod(quicStream, headersFrame);
@@ -336,4 +336,55 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
         }
     }
 
+    /**
+     * Wraps the given QuicStream, replacing its input stream by the given input stream (which, to make sense, should
+     * be some wrapper around the original input stream of the QuicStream).
+     * @param quicStream
+     * @param inputStream
+     * @return
+     */
+    private QuicStream replaceInputBy(QuicStream quicStream, InputStream inputStream) {
+        return new QuicStream() {
+
+            @Override
+            public InputStream getInputStream() {
+                return inputStream;
+            }
+
+            @Override
+            public OutputStream getOutputStream() {
+                return quicStream.getOutputStream();
+            }
+
+            @Override
+            public int getStreamId() {
+                return quicStream.getStreamId();
+            }
+
+            @Override
+            public boolean isUnidirectional() {
+                return quicStream.isUnidirectional();
+            }
+
+            @Override
+            public boolean isClientInitiatedBidirectional() {
+                return quicStream.isClientInitiatedBidirectional();
+            }
+
+            @Override
+            public boolean isServerInitiatedBidirectional() {
+                return quicStream.isServerInitiatedBidirectional();
+            }
+
+            @Override
+            public void abortReading(long applicationProtocolErrorCode) {
+                quicStream.abortReading(applicationProtocolErrorCode);
+            }
+
+            @Override
+            public void resetStream(long applicationProtocolErrorCode) {
+                quicStream.resetStream(applicationProtocolErrorCode);
+            }
+        };
+    }
 }
