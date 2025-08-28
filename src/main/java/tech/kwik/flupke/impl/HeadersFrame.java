@@ -58,6 +58,21 @@ public class HeadersFrame extends Http3Frame {
         httpHeaders = HttpHeaders.of(Collections.emptyMap(), (a,b) -> true);
     }
 
+    public HeadersFrame(String... keyOrValues) {
+        pseudoHeaders = new HashMap<>();
+        if (keyOrValues.length % 2 != 0) {
+            throw new IllegalArgumentException("Even number of arguments expected");
+        }
+        for (int i = 0; i < keyOrValues.length; i += 2) {
+            String key = keyOrValues[i];
+            String value = keyOrValues[i+1];
+            if (key.startsWith(":")) {
+                pseudoHeaders.put(key, value);
+            }
+        }
+        httpHeaders = HttpHeaders.of(Collections.emptyMap(), (a,b) -> true);
+    }
+
     public HeadersFrame(HttpHeaders headers, Map<String, String> pseudoHeaders) {
         if (pseudoHeaders.keySet().stream().anyMatch(key -> ! key.startsWith(":"))) {
             throw new IllegalArgumentException("Pseudo headers must start with ':'");

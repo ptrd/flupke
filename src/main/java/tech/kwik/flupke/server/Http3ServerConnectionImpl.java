@@ -317,7 +317,7 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
         return receivedFrames;
     }
 
-    void handleHttpRequest(HeadersFrame headersFrame, QuicStream quicStream, Encoder qpackEncoder) throws HttpError {
+    void handleHttpRequest(HeadersFrame headersFrame, QuicStream quicStream, Encoder qpackEncoder) throws ConnectionError {
         String method = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_METHOD);
         String path = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PATH);
         DataFramesReader dataFramesReader = new DataFramesReader(quicStream.getInputStream(), maxDataSize);
@@ -326,6 +326,7 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
 
         try {
             requestHandler.handleRequest(request, response);
+            dataFramesReader.checkForConnectionError();
             if (!response.isStatusSet()) {
                 response.setStatus(500);
             }

@@ -28,6 +28,7 @@ import tech.kwik.core.QuicStream;
 import tech.kwik.core.server.ServerConnection;
 import tech.kwik.flupke.core.HttpError;
 import tech.kwik.flupke.core.HttpStream;
+import tech.kwik.flupke.impl.ConnectionError;
 import tech.kwik.flupke.impl.DataFrame;
 import tech.kwik.flupke.impl.HeadersFrame;
 import tech.kwik.flupke.impl.SettingsFrame;
@@ -240,6 +241,78 @@ public class Http3ServerConnectionImplTest {
 
         // Then
         verify(requestResponseStream).resetStream(anyLong());
+    }
+
+    @Test
+    void whenDataFrameIsShorterThanIndicatedConnectionErrorIsThrown() throws Exception {
+        // Given
+        HttpRequestHandler handler = (request, response) -> {
+            request.body().readAllBytes();
+            response.setStatus(200);
+        };
+        Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
+                .withHeaders(Map.of(":method", "POST", ":scheme", "https", ":authority", "example.com", ":path", "/index.html"))
+                .withHandler(handler)
+                .buildServerConnection();
+
+        byte dataFrameLength = 0x39;
+        QuicStream requestResponseStream = new QuicStreamBuilder().withInputData(new byte[] { FRAME_TYPE_DATA, dataFrameLength, 0x62, 0x6f, 0x64, 0x79 }).build();
+
+        // When
+        assertThatThrownBy(() ->
+                http3Connection.handleHttpRequest(new HeadersFrame(":method", "GET", ":path", "/"), requestResponseStream, noOpEncoderDecoderBuilder.encoder()))
+                // Then
+                .isInstanceOf(ConnectionError.class)
+                .hasMessageContaining("262");
+    }
+
+    @Test
+    void whenDataFrameIsShorterThanIndicatedSingleReadShouldThrowConnectionError() throws Exception {
+        // Given
+        HttpRequestHandler handler = (request, response) -> {
+            int read;
+            do {
+                read = request.body().read();
+            } while (read != -1);
+            response.setStatus(200);
+        };
+        Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
+                .withHeaders(Map.of(":method", "POST", ":scheme", "https", ":authority", "example.com", ":path", "/index.html"))
+                .withHandler(handler)
+                .buildServerConnection();
+
+        byte dataFrameLength = 0x39;
+        QuicStream requestResponseStream = new QuicStreamBuilder().withInputData(new byte[] { FRAME_TYPE_DATA, dataFrameLength, 0x62, 0x6f, 0x64, 0x79 }).build();
+
+        // When
+        assertThatThrownBy(() ->
+                http3Connection.handleHttpRequest(new HeadersFrame(":method", "GET", ":path", "/"), requestResponseStream, noOpEncoderDecoderBuilder.encoder()))
+                // Then
+                .isInstanceOf(ConnectionError.class)
+                .hasMessageContaining("262");
+    }
+
+    @Test
+    void whenDataFrameIsIncompleteConnectionErrorIsThrown() throws Exception {
+        // Given
+        HttpRequestHandler handler = (request, response) -> {
+            request.body().readAllBytes();
+            response.setStatus(200);
+        };
+        Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
+                .withHeaders(Map.of(":method", "POST", ":scheme", "https", ":authority", "example.com", ":path", "/index.html"))
+                .withHandler(handler)
+                .buildServerConnection();
+
+        byte[] invalidVarInt = new byte[] { 0x40 };
+        QuicStream requestResponseStream = new QuicStreamBuilder().withInputData(invalidVarInt).build();
+
+        // When
+        assertThatThrownBy(() ->
+                http3Connection.handleHttpRequest(new HeadersFrame(":method", "GET", ":path", "/"), requestResponseStream, noOpEncoderDecoderBuilder.encoder()))
+                // Then
+                .isInstanceOf(ConnectionError.class)
+                .hasMessageContaining("262");
     }
     //endregion
 
