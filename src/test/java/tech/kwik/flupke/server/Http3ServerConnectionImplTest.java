@@ -138,6 +138,37 @@ public class Http3ServerConnectionImplTest {
         byte[] bodyBytes = request.body().readAllBytes();
         assertThat(bodyBytes).isEqualTo("body".getBytes());
     }
+
+    @Test
+    void requestBodyStreamMayContainUnknownFrames() throws Exception {
+        // Given
+        HttpRequestHandler handler = mock(HttpRequestHandler.class);
+        Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
+                .withHeaders(Map.of(":method", "POST", ":scheme", "https", ":authority", "example.com", ":path", "/index.html"))
+                .withHandler(handler)
+                .buildServerConnection();
+
+        byte[] streamData = new byte[] {
+                FRAME_TYPE_DATA, 0x04, 0x62, 0x6f, 0x64, 0x79, // DATA frame with "body"
+                0x21, 0x00,                                   // unknown frame type with zero length
+                0x40, 0x40, 0x07, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, // unknown frame type with length and payload
+                FRAME_TYPE_DATA, 0x04, 0x62, 0x6f, 0x64, 0x79  // another DATA frame with "body"
+        };
+        ByteBuffer requestData = ByteBuffer.allocate(600);
+        requestData.put(fakeHeadersFrameData());
+        requestData.put(streamData);
+        QuicStream requestResponseStream = new QuicStreamBuilder().withInputData(requestData.array()).build();
+
+        // When
+        http3Connection.handleBidirectionalStream(requestResponseStream);
+
+        // Then
+        ArgumentCaptor<HttpServerRequest> requestArgumentCaptor = ArgumentCaptor.forClass(HttpServerRequest.class);
+        verify(handler).handleRequest(requestArgumentCaptor.capture(), any(HttpServerResponse.class));
+        HttpServerRequest request = requestArgumentCaptor.getValue();
+        byte[] bodyBytes = request.body().readAllBytes();
+        assertThat(bodyBytes).isEqualTo("bodybody".getBytes());
+    }
     //endregion
 
     //region request correctness

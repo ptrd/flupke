@@ -46,18 +46,27 @@ public class DataFramesReader extends InputStream {
     private boolean checkForMoreData() {
         if (remainingDataFrameContent == 0) {
             try {
-                int read = dataFramesStream.read();
-                if (read == -1) {
-                    // End of file, so no more data.
-                    return false;
-                }
-                dataFramesStream.unread(read);
-                long type = VariableLengthInteger.parseLong(dataFramesStream);
-                long frameLength = VariableLengthInteger.parseLong(dataFramesStream);
+                long frameType;
+                long frameLength;
+                do {
+                    int read = dataFramesStream.read();
+                    if (read == -1) {
+                        // End of file, so no more data.
+                        return false;
+                    }
+                    dataFramesStream.unread(read);
 
-                if (type != FRAME_TYPE_DATA) {
-                    // TODO: handle other frame types
+                    frameType = VariableLengthInteger.parseLong(dataFramesStream);
+                    frameLength = VariableLengthInteger.parseLong(dataFramesStream);
+                    // https://www.rfc-editor.org/rfc/rfc9114.html#section-7.2.8
+                    // "These frames have no semantics, and they MAY be sent on any stream where frames are allowed to be sent. "
+                    // https://www.rfc-editor.org/rfc/rfc9114.html#section-9
+                    // "Implementations MUST ignore unknown or unsupported values in all extensible protocol elements."
+                    if (frameType != FRAME_TYPE_DATA) {
+                        handleNonDataFrame(frameType, frameLength, dataFramesStream);
+                    }
                 }
+                while (frameType != FRAME_TYPE_DATA);
                 remainingDataFrameContent = frameLength;
             }
             catch (IOException e) {
@@ -70,6 +79,10 @@ public class DataFramesReader extends InputStream {
             }
         }
         return remainingDataFrameContent > 0;
+    }
+
+    private void handleNonDataFrame(long frameType, long frameLength, PushbackInputStream dataFramesStream) throws IOException {
+        dataFramesStream.skip(frameLength);
     }
 
     public InputStream getDataFramesStream() {
