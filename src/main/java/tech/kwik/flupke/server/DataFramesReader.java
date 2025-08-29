@@ -134,6 +134,11 @@ public class DataFramesReader extends InputStream {
         return read;
     }
 
+    @Override
+    public void close() throws IOException {
+        dataFramesStream.close();
+    }
+
     public void checkForConnectionError() throws ConnectionError {
         if (dataFramesStreamException != null) {
             throw dataFramesStreamException;

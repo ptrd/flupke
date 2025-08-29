@@ -41,6 +41,7 @@ import tech.kwik.qpack.Encoder;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.http.HttpHeaders;
@@ -117,7 +118,11 @@ public class Http3ServerConnectionImplTest {
     @Test
     void requestBodyShouldBePassedToHandler() throws Exception {
         // Given
-        HttpRequestHandler handler = mock(HttpRequestHandler.class);
+        AtomicReference<String> bodyContent = new AtomicReference<>("");
+        HttpRequestHandler handler = (request, response) -> {
+            bodyContent.set(new String(request.body().readAllBytes()));
+            response.setStatus(200);
+        };
         Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
                 .withHeaders(Map.of(":method", "POST", ":scheme", "https", ":authority", "example.com", ":path", "/index.html"))
                 .withHandler(handler)
@@ -132,17 +137,17 @@ public class Http3ServerConnectionImplTest {
         http3Connection.handleBidirectionalStream(requestResponseStream);
 
         // Then
-        ArgumentCaptor<HttpServerRequest> requestArgumentCaptor = ArgumentCaptor.forClass(HttpServerRequest.class);
-        verify(handler).handleRequest(requestArgumentCaptor.capture(), any(HttpServerResponse.class));
-        HttpServerRequest request = requestArgumentCaptor.getValue();
-        byte[] bodyBytes = request.body().readAllBytes();
-        assertThat(bodyBytes).isEqualTo("body".getBytes());
+        assertThat(bodyContent.get()).isEqualTo("body");
     }
 
     @Test
     void requestBodyStreamMayContainUnknownFrames() throws Exception {
         // Given
-        HttpRequestHandler handler = mock(HttpRequestHandler.class);
+        AtomicReference<String> bodyContent = new AtomicReference<>("");
+        HttpRequestHandler handler = (request, response) -> {
+            bodyContent.set(new String(request.body().readAllBytes()));
+            response.setStatus(200);
+        };
         Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
                 .withHeaders(Map.of(":method", "POST", ":scheme", "https", ":authority", "example.com", ":path", "/index.html"))
                 .withHandler(handler)
@@ -163,11 +168,7 @@ public class Http3ServerConnectionImplTest {
         http3Connection.handleBidirectionalStream(requestResponseStream);
 
         // Then
-        ArgumentCaptor<HttpServerRequest> requestArgumentCaptor = ArgumentCaptor.forClass(HttpServerRequest.class);
-        verify(handler).handleRequest(requestArgumentCaptor.capture(), any(HttpServerResponse.class));
-        HttpServerRequest request = requestArgumentCaptor.getValue();
-        byte[] bodyBytes = request.body().readAllBytes();
-        assertThat(bodyBytes).isEqualTo("bodybody".getBytes());
+        assertThat(bodyContent.get()).isEqualTo("bodybody");
     }
     //endregion
 
@@ -344,6 +345,29 @@ public class Http3ServerConnectionImplTest {
                 // Then
                 .isInstanceOf(ConnectionError.class)
                 .hasMessageContaining("262");
+    }
+
+    @Test
+    void afterReadingRequestStreamItShouldBeClosed() throws Exception {
+        // Given
+        HttpRequestHandler handler = (request, response) -> {
+            request.body().readAllBytes();
+            response.setStatus(200);
+        };
+        Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
+                .withHeaders(Map.of(":method", "POST", ":scheme", "https", ":authority", "example.com", ":path", "/index.html"))
+                .withHandler(handler)
+                .buildServerConnection();
+
+        QuicStream requestResponseStream = mock(QuicStream.class);
+        when(requestResponseStream.getInputStream()).thenReturn(mock(InputStream.class));
+        when(requestResponseStream.getOutputStream()).thenReturn(mock(OutputStream.class));
+
+        // When
+        http3Connection.handleHttpRequest(new HeadersFrame(":method", "GET", ":path", "/"), requestResponseStream, noOpEncoderDecoderBuilder.encoder());
+
+        // Then
+        verify(requestResponseStream.getInputStream()).close();
     }
     //endregion
 

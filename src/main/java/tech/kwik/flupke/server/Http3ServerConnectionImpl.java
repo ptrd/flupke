@@ -327,6 +327,7 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
         try {
             requestHandler.handleRequest(request, response);
             dataFramesReader.checkForConnectionError();
+            dataFramesReader.close();
             if (!response.isStatusSet()) {
                 response.setStatus(500);
             }
