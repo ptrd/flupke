@@ -31,10 +31,13 @@ import static tech.kwik.flupke.impl.Http3ConnectionImpl.H3_FRAME_ERROR;
 public class DataFramesReader extends InputStream {
 
     private final PushbackInputStream dataFramesStream;
+    private final long maxDataSize;
     private long remainingDataFrameContent;
     private ConnectionError dataFramesStreamException;
+    private long totalDataRead;
 
     public DataFramesReader(InputStream inputStream, long maxDataSize) {
+        this.maxDataSize = maxDataSize;
         if (inputStream instanceof PushbackInputStream) {
             this.dataFramesStream = (PushbackInputStream) inputStream;
         }
@@ -91,6 +94,7 @@ public class DataFramesReader extends InputStream {
 
     @Override
     public int read() throws IOException {
+        checkMaxData();
         if (!checkForMoreData()) {
             return -1;
         }
@@ -102,7 +106,14 @@ public class DataFramesReader extends InputStream {
             return -1;
         }
         remainingDataFrameContent--;
+        totalDataRead++;
         return data;
+    }
+
+    private void checkMaxData() throws IOException {
+        if (maxDataSize > 0 && totalDataRead >= maxDataSize) {
+            throw new IOException("Maximum data size exceeded");
+        }
     }
 
     @Override
@@ -112,17 +123,19 @@ public class DataFramesReader extends InputStream {
 
     @Override
     public int read(byte[] b, int off, int len) throws IOException {
+        checkMaxData();
         if (!checkForMoreData()) {
             return -1;
         }
         assert remainingDataFrameContent > 0;
 
         int read;
+        int max = (maxDataSize - totalDataRead > Integer.MAX_VALUE) ? Integer.MAX_VALUE : (int) (maxDataSize - totalDataRead);
         if (remainingDataFrameContent < len) {
-            read = dataFramesStream.read(b, off, (int) remainingDataFrameContent);
+            read = dataFramesStream.read(b, off, Integer.min((int) remainingDataFrameContent, max));
         }
         else {
-            read = dataFramesStream.read(b, off, len);
+            read = dataFramesStream.read(b, off, Integer.min(len, max));
         }
         if (read == -1) {
             // https://www.rfc-editor.org/rfc/rfc9114.html#section-7.1
@@ -131,6 +144,7 @@ public class DataFramesReader extends InputStream {
             return -1;
         }
         remainingDataFrameContent -= read;
+        totalDataRead += read;
         return read;
     }
 

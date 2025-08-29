@@ -21,9 +21,11 @@ package tech.kwik.flupke.server;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.util.Arrays;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 import static tech.kwik.flupke.impl.Http3ConnectionImpl.FRAME_TYPE_DATA;
 
 class DataFramesReaderTest {
@@ -91,7 +93,7 @@ class DataFramesReaderTest {
         byte[] inputData = new byte[] {
                 FRAME_TYPE_DATA, 0x04, 0x01, 0x02, 0x03, 0x04
         };
-        DataFramesReader reader = new DataFramesReader(new ByteArrayInputStream(inputData), 100);
+        DataFramesReader reader = new DataFramesReader(new ByteArrayInputStream(inputData), Long.MAX_VALUE);
 
         byte[] buffer = new byte[2];
         int read = reader.read(buffer);
@@ -105,4 +107,34 @@ class DataFramesReaderTest {
         read = reader.read(buffer);
         assertThat(read).isEqualTo(-1);
     }
+
+    @Test
+    void readingOneByteMoreThanLimitShouldThrow() throws Exception {
+        // Given
+        byte[] inputData = new byte[] {
+                FRAME_TYPE_DATA, 0x12, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11
+        };
+        DataFramesReader reader = new DataFramesReader(new ByteArrayInputStream(inputData), 12);
+
+        // When
+        reader.read(new byte[12]);
+        assertThatThrownBy(() -> reader.read())
+                // Then
+                .isInstanceOf(IOException.class);
+    }
+
+    @Test
+    void readingMoreThanLimitShouldThrow() throws Exception {
+        // Given
+        byte[] inputData = new byte[] {
+                FRAME_TYPE_DATA, 0x12, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11
+        };
+        DataFramesReader reader = new DataFramesReader(new ByteArrayInputStream(inputData), 12);
+
+        // When
+        assertThatThrownBy(() -> reader.readAllBytes())
+                // Then
+                .isInstanceOf(IOException.class);
+    }
+
 }
