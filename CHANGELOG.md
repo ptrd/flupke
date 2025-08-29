@@ -1,5 +1,9 @@
 # Releases
 
+## 0.8 (2025-08-29)
+
+- server handler: receive request body (as stream)
+
 ## 0.7 (2025-08-22)
 
 - added support for WebTransport ([draft-13](https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-13.html))
