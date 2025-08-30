@@ -31,6 +31,7 @@ import tech.kwik.flupke.core.HttpError;
 import tech.kwik.flupke.core.HttpStream;
 import tech.kwik.qpack.Encoder;
 
+import javax.net.ssl.X509TrustManager;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -116,7 +117,8 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         QuicClientConnection.Builder builder = QuicClientConnection.newBuilder();
         try {
             builder.uri(new URI("//" + host + ":" + port));
-        } catch (URISyntaxException e) {
+        }
+        catch (URISyntaxException e) {
             // Impossible
             throw new RuntimeException();
         }
@@ -135,6 +137,10 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         if (connectionSettings.disableCertificateCheck()) {
             builder.noServerCertificateCheck();
         }
+        if (connectionSettings.trustManager() != null) {
+            builder.customTrustManager(connectionSettings.trustManager());
+        }
+
         builder.socketFactory(datagramSocketFactory);
         builder.logger(logger != null? logger: new NullLogger());
         return builder.build();
@@ -413,6 +419,11 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
             @Override
             public boolean disableCertificateCheck() {
                 return false;
+            }
+
+            @Override
+            public X509TrustManager trustManager() {
+                return null;
             }
 
             @Override

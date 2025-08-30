@@ -22,6 +22,7 @@ import tech.kwik.core.log.Logger;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
+import javax.net.ssl.X509TrustManager;
 import java.net.Authenticator;
 import java.net.CookieHandler;
 import java.net.InetAddress;
@@ -50,6 +51,7 @@ public class Http3ClientBuilder implements HttpClient.Builder {
     private int additionalUnidirectionalStreams;
     private int additionalBidirectionalStreams;
     private InetAddress address;
+    private X509TrustManager trustManager;
 
     public Http3ClientBuilder receiveBufferSize(long bufferSize) {
         receiveBufferSize = bufferSize;
@@ -157,8 +159,13 @@ public class Http3ClientBuilder implements HttpClient.Builder {
         return this;
     }
 
+    public Http3ClientBuilder trustManager(X509TrustManager trustManager) {
+        this.trustManager = trustManager;
+        return this;
+    }
+
     @Override
     public HttpClient build() {
-        return new Http3Client(connectTimeout, receiveBufferSize, disableCertificateCheck, additionalUnidirectionalStreams, additionalBidirectionalStreams, address, logger);
+        return new Http3Client(connectTimeout, receiveBufferSize, disableCertificateCheck, additionalUnidirectionalStreams, additionalBidirectionalStreams, address, trustManager, logger);
     }
 }

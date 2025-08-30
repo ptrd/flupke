@@ -18,8 +18,8 @@
  */
 package tech.kwik.flupke;
 
-import tech.kwik.flupke.impl.Http3SingleConnectionFactory;
 import tech.kwik.core.QuicConnection;
+import tech.kwik.flupke.impl.Http3SingleConnectionFactory;
 
 import java.net.InetAddress;
 import java.time.Duration;
@@ -30,7 +30,7 @@ import java.time.Duration;
 public class Http3SingleConnectionClient extends Http3Client {
 
     public Http3SingleConnectionClient(QuicConnection quicConnection, Duration connectTimeout, Long receiveBufferSize, InetAddress localAddress) {
-        super(connectTimeout, receiveBufferSize, false, 0, 0, localAddress, null);
+        super(connectTimeout, receiveBufferSize, false, 0, 0, localAddress, null, null);
 
         http3ConnectionFactory = new Http3SingleConnectionFactory(quicConnection);
     }

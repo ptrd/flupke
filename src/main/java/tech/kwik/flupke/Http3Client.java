@@ -18,18 +18,19 @@
  */
 package tech.kwik.flupke;
 
+import tech.kwik.core.DatagramSocketFactory;
+import tech.kwik.core.Statistics;
+import tech.kwik.core.concurrent.DaemonThreadFactory;
+import tech.kwik.core.log.Logger;
 import tech.kwik.flupke.core.Http3ClientConnection;
 import tech.kwik.flupke.core.HttpError;
 import tech.kwik.flupke.core.HttpStream;
 import tech.kwik.flupke.impl.Http3ConnectionFactory;
 import tech.kwik.flupke.impl.InterfaceBoundDatagramSocketFactory;
-import tech.kwik.core.DatagramSocketFactory;
-import tech.kwik.core.Statistics;
-import tech.kwik.core.concurrent.DaemonThreadFactory;
-import tech.kwik.core.log.Logger;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
+import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
 import java.net.Authenticator;
 import java.net.CookieHandler;
@@ -54,6 +55,7 @@ public class Http3Client extends HttpClient implements Http3ConnectionSettings {
     private final int maxAdditionalPeerInitiatedUnidirectionalStreams;
     private final int maxAdditionalPeerInitiatedBidirectionalStreams;
     private final DatagramSocketFactory datagramSocketFactory;
+    private final X509TrustManager trustManager;
     private final Logger logger;
     private Http3ClientConnection http3Connection;
     protected Http3ConnectionFactory http3ConnectionFactory;
@@ -61,12 +63,13 @@ public class Http3Client extends HttpClient implements Http3ConnectionSettings {
 
     Http3Client(Duration connectTimeout, Long receiveBufferSize, boolean disableCertificateCheck,
                 int maxAdditionalPeerInitiatedUnidirectionalStreams, int maxAdditionalPeerInitiatedBidirectionalStreams,
-                InetAddress inetAddress, Logger logger) {
+                InetAddress inetAddress, X509TrustManager trustManager, Logger logger) {
         this.connectTimeout = connectTimeout;
         this.receiveBufferSize = receiveBufferSize;
         this.disableCertificateCheck = disableCertificateCheck;
         this.maxAdditionalPeerInitiatedUnidirectionalStreams = maxAdditionalPeerInitiatedUnidirectionalStreams;
         this.maxAdditionalPeerInitiatedBidirectionalStreams = maxAdditionalPeerInitiatedBidirectionalStreams;
+        this.trustManager = trustManager;
         this.logger = logger;
         this.http3ConnectionFactory = new Http3ConnectionFactory(this);
         this.datagramSocketFactory = new InterfaceBoundDatagramSocketFactory(inetAddress);
@@ -149,6 +152,11 @@ public class Http3Client extends HttpClient implements Http3ConnectionSettings {
     @Override
     public int maxAdditionalPeerInitiatedBidirectionalStreams() {
         return maxAdditionalPeerInitiatedBidirectionalStreams;
+    }
+
+    @Override
+    public X509TrustManager trustManager() {
+        return trustManager;
     }
 
     public DatagramSocketFactory getDatagramSocketFactory() {

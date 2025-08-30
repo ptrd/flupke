@@ -18,11 +18,14 @@
  */
 package tech.kwik.flupke.sample;
 
-import tech.kwik.flupke.Http3Client;
-import tech.kwik.flupke.Http3ClientBuilder;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.log.SysOutLogger;
+import tech.kwik.flupke.Http3Client;
+import tech.kwik.flupke.Http3ClientBuilder;
 
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509TrustManager;
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -30,11 +33,12 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.security.KeyStore;
 import java.time.Duration;
 
 public class Sample {
 
-    public static void main(String[] args) throws IOException, InterruptedException {
+    public static void main(String[] args) throws Exception {
 
         if (args.length != 1) {
             System.err.println("Missing argument: server URL");
@@ -53,12 +57,23 @@ public class Sample {
         HttpClient defaultClient = Http3Client.newHttpClient();
 
         // For non-default configuration, use the builder
+        // ... with logging enabled
         Logger stdoutLogger = new SysOutLogger();
         stdoutLogger.useRelativeTime(true);
         stdoutLogger.logPackets(true);
-
+        // ... with truststore
+        X509TrustManager trustManager = null;
+        String truststore = "truststore.jks";
+        if (new File(truststore).exists()) {
+            TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance("PKIX");
+            KeyStore customTrustStore = KeyStore.getInstance(new File(truststore), "secret".toCharArray());
+            trustManagerFactory.init(customTrustStore);
+            trustManager = (X509TrustManager) trustManagerFactory.getTrustManagers()[0];
+        }
+        // ... with other options as needed
         HttpClient client = ((Http3ClientBuilder) Http3Client.newBuilder())
                 .logger(stdoutLogger)
+                .trustManager(trustManager)
                 .connectTimeout(Duration.ofSeconds(4))
                 .build();
 

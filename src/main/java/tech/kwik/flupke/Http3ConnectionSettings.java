@@ -18,6 +18,8 @@
  */
 package tech.kwik.flupke;
 
+import javax.net.ssl.X509TrustManager;
+
 public interface Http3ConnectionSettings {
 
     /**
@@ -27,6 +29,12 @@ public interface Http3ConnectionSettings {
      * @return
      */
     boolean disableCertificateCheck();
+
+    /**
+     * Get the custom trust manager, the source of peer authentication trust decisions.
+     * @return   the custom trust manager, or null if the system default is to be used
+     */
+    X509TrustManager trustManager();
 
     /**
      * The maximum number of additional unidirectional streams that the peer is allowed to initiate.
