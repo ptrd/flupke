@@ -37,7 +37,6 @@ public interface Http3ServerExtension {
      * @param pathAndQuery
      * @param statusCallback
      * @param requestResponseStream
-     * @return
      */
     void handleExtendedConnect(HttpHeaders headers, String protocol, String authority, String pathAndQuery, IntConsumer statusCallback, HttpStream requestResponseStream);
 }
