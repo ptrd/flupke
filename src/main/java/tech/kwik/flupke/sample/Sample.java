@@ -23,7 +23,9 @@ import tech.kwik.core.log.SysOutLogger;
 import tech.kwik.flupke.Http3Client;
 import tech.kwik.flupke.Http3ClientBuilder;
 
+import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509ExtendedKeyManager;
 import javax.net.ssl.X509TrustManager;
 import java.io.File;
 import java.io.IOException;
@@ -70,10 +72,20 @@ public class Sample {
             trustManagerFactory.init(customTrustStore);
             trustManager = (X509TrustManager) trustManagerFactory.getTrustManagers()[0];
         }
+        // ... with key manager (for client certificate authentication)
+        X509ExtendedKeyManager keyManager = null;
+        String clientKeysKeystore = "clientkeys.jks";
+        if (new File(clientKeysKeystore).exists()) {
+            KeyStore keyStore = KeyStore.getInstance(new File(clientKeysKeystore), "secret".toCharArray());
+            KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+            keyManagerFactory.init(keyStore, "secret".toCharArray());
+            keyManager = (X509ExtendedKeyManager) keyManagerFactory.getKeyManagers()[0];
+        }
         // ... with other options as needed
         HttpClient client = ((Http3ClientBuilder) Http3Client.newBuilder())
                 .logger(stdoutLogger)
                 .trustManager(trustManager)
+                .keyManager(keyManager)
                 .connectTimeout(Duration.ofSeconds(4))
                 .build();
 

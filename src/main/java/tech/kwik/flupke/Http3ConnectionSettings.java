@@ -18,6 +18,7 @@
  */
 package tech.kwik.flupke;
 
+import javax.net.ssl.X509ExtendedKeyManager;
 import javax.net.ssl.X509TrustManager;
 
 public interface Http3ConnectionSettings {
@@ -35,6 +36,12 @@ public interface Http3ConnectionSettings {
      * @return   the custom trust manager, or null if the system default is to be used
      */
     X509TrustManager trustManager();
+
+    /**
+     * Get the custom key manager, the source of authentication keys and certificates.
+     * @return
+     */
+    X509ExtendedKeyManager keyManager();
 
     /**
      * The maximum number of additional unidirectional streams that the peer is allowed to initiate.

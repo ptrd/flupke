@@ -31,6 +31,7 @@ import tech.kwik.flupke.core.HttpError;
 import tech.kwik.flupke.core.HttpStream;
 import tech.kwik.qpack.Encoder;
 
+import javax.net.ssl.X509ExtendedKeyManager;
 import javax.net.ssl.X509TrustManager;
 import java.io.EOFException;
 import java.io.IOException;
@@ -139,6 +140,9 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         }
         if (connectionSettings.trustManager() != null) {
             builder.customTrustManager(connectionSettings.trustManager());
+        }
+        if (connectionSettings.keyManager() != null) {
+            builder.clientKeyManager(connectionSettings.keyManager());
         }
 
         builder.socketFactory(datagramSocketFactory);
@@ -423,6 +427,11 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
 
             @Override
             public X509TrustManager trustManager() {
+                return null;
+            }
+
+            @Override
+            public X509ExtendedKeyManager keyManager() {
                 return null;
             }
 

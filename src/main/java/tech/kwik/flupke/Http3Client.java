@@ -30,6 +30,7 @@ import tech.kwik.flupke.impl.InterfaceBoundDatagramSocketFactory;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
+import javax.net.ssl.X509ExtendedKeyManager;
 import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
 import java.net.Authenticator;
@@ -56,6 +57,7 @@ public class Http3Client extends HttpClient implements Http3ConnectionSettings {
     private final int maxAdditionalPeerInitiatedBidirectionalStreams;
     private final DatagramSocketFactory datagramSocketFactory;
     private final X509TrustManager trustManager;
+    private final X509ExtendedKeyManager keyManager;
     private final Logger logger;
     private Http3ClientConnection http3Connection;
     protected Http3ConnectionFactory http3ConnectionFactory;
@@ -63,13 +65,14 @@ public class Http3Client extends HttpClient implements Http3ConnectionSettings {
 
     Http3Client(Duration connectTimeout, Long receiveBufferSize, boolean disableCertificateCheck,
                 int maxAdditionalPeerInitiatedUnidirectionalStreams, int maxAdditionalPeerInitiatedBidirectionalStreams,
-                InetAddress inetAddress, X509TrustManager trustManager, Logger logger) {
+                InetAddress inetAddress, X509TrustManager trustManager, X509ExtendedKeyManager keyManager, Logger logger) {
         this.connectTimeout = connectTimeout;
         this.receiveBufferSize = receiveBufferSize;
         this.disableCertificateCheck = disableCertificateCheck;
         this.maxAdditionalPeerInitiatedUnidirectionalStreams = maxAdditionalPeerInitiatedUnidirectionalStreams;
         this.maxAdditionalPeerInitiatedBidirectionalStreams = maxAdditionalPeerInitiatedBidirectionalStreams;
         this.trustManager = trustManager;
+        this.keyManager = keyManager;
         this.logger = logger;
         this.http3ConnectionFactory = new Http3ConnectionFactory(this);
         this.datagramSocketFactory = new InterfaceBoundDatagramSocketFactory(inetAddress);
@@ -157,6 +160,11 @@ public class Http3Client extends HttpClient implements Http3ConnectionSettings {
     @Override
     public X509TrustManager trustManager() {
         return trustManager;
+    }
+
+    @Override
+    public X509ExtendedKeyManager keyManager() {
+        return keyManager;
     }
 
     public DatagramSocketFactory getDatagramSocketFactory() {
