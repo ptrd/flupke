@@ -18,17 +18,19 @@
  */
 package tech.kwik.flupke.sample;
 
-import tech.kwik.flupke.Http3Client;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.log.SysOutLogger;
+import tech.kwik.flupke.Http3Client;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
 import java.time.Duration;
 
 public class BodyHandlerWithStream {
@@ -61,8 +63,9 @@ public class BodyHandlerWithStream {
         try {
             long start = System.currentTimeMillis();
             HttpResponse<InputStream> httpResponse = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
-            byte[] content = httpResponse.body().readAllBytes();
-            int contentSize = content.length;
+
+            OutputStream outputFile = Files.newOutputStream(java.nio.file.Paths.get("http3response.dat"));
+            long contentSize = httpResponse.body().transferTo(outputFile);
             long end = System.currentTimeMillis();
             System.out.println("Request (" + contentSize + " bytes) completed in " + (end - start) + " ms");
         }
