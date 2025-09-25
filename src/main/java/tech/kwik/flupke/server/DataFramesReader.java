@@ -24,6 +24,9 @@ import tech.kwik.flupke.impl.ConnectionError;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PushbackInputStream;
+import java.io.UncheckedIOException;
+import java.util.function.BiConsumer;
+import java.util.function.LongConsumer;
 
 import static tech.kwik.flupke.impl.Http3ConnectionImpl.FRAME_TYPE_DATA;
 import static tech.kwik.flupke.impl.Http3ConnectionImpl.H3_FRAME_ERROR;
@@ -35,6 +38,8 @@ public class DataFramesReader extends InputStream {
     private long remainingDataFrameContent;
     private ConnectionError dataFramesStreamException;
     private long totalDataRead;
+    private BiConsumer<Long, PushbackInputStream> nonDataFrameHandler = this::handleNonDataFrame;
+    private LongConsumer gotDataFrameCallback = (x) -> {};
 
     public DataFramesReader(InputStream inputStream, long maxDataSize) {
         this.maxDataSize = maxDataSize;
@@ -46,11 +51,17 @@ public class DataFramesReader extends InputStream {
         }
     }
 
+    public DataFramesReader(InputStream input, long maxData, BiConsumer<Long, PushbackInputStream> nonDataFrameHandler,
+                            LongConsumer dataFrameCallback) {
+        this(input, maxData);
+        this.nonDataFrameHandler = nonDataFrameHandler;
+        this.gotDataFrameCallback = dataFrameCallback;
+    }
+
     private boolean checkForMoreData() {
         if (remainingDataFrameContent == 0) {
             try {
                 long frameType;
-                long frameLength;
                 do {
                     int read = dataFramesStream.read();
                     if (read == -1) {
@@ -60,19 +71,16 @@ public class DataFramesReader extends InputStream {
                     dataFramesStream.unread(read);
 
                     frameType = VariableLengthInteger.parseLong(dataFramesStream);
-                    frameLength = VariableLengthInteger.parseLong(dataFramesStream);
-                    // https://www.rfc-editor.org/rfc/rfc9114.html#section-7.2.8
-                    // "These frames have no semantics, and they MAY be sent on any stream where frames are allowed to be sent. "
-                    // https://www.rfc-editor.org/rfc/rfc9114.html#section-9
-                    // "Implementations MUST ignore unknown or unsupported values in all extensible protocol elements."
                     if (frameType != FRAME_TYPE_DATA) {
-                        handleNonDataFrame(frameType, frameLength, dataFramesStream);
+                        nonDataFrameHandler.accept(frameType, dataFramesStream);
                     }
                 }
                 while (frameType != FRAME_TYPE_DATA);
+                long frameLength = VariableLengthInteger.parseLong(dataFramesStream);
+                gotDataFrameCallback.accept(frameLength);
                 remainingDataFrameContent = frameLength;
             }
-            catch (IOException e) {
+            catch (IOException | UncheckedIOException e) {
                 // https://www.rfc-editor.org/rfc/rfc9114.html#section-7.1
                 // "Each frame's payload MUST contain exactly the fields identified in its description. A frame payload
                 //  that contains additional bytes after the identified fields or a frame payload that terminates before
@@ -84,8 +92,18 @@ public class DataFramesReader extends InputStream {
         return remainingDataFrameContent > 0;
     }
 
-    private void handleNonDataFrame(long frameType, long frameLength, PushbackInputStream dataFramesStream) throws IOException {
-        dataFramesStream.skip(frameLength);
+    private void handleNonDataFrame(long frameType, PushbackInputStream dataFramesStream) {
+        try {
+            long frameLength = VariableLengthInteger.parseLong(dataFramesStream);
+            // https://www.rfc-editor.org/rfc/rfc9114.html#section-7.2.8
+            // "These frames have no semantics, and they MAY be sent on any stream where frames are allowed to be sent. "
+            // https://www.rfc-editor.org/rfc/rfc9114.html#section-9
+            // "Implementations MUST ignore unknown or unsupported values in all extensible protocol elements."
+            dataFramesStream.skip(frameLength);
+        }
+        catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     public InputStream getDataFramesStream() {
