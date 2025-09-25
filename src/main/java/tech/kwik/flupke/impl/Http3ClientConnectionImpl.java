@@ -23,20 +23,19 @@ import tech.kwik.core.QuicClientConnection;
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.QuicStream;
 import tech.kwik.core.Statistics;
+import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.log.NullLogger;
 import tech.kwik.flupke.Http3ConnectionSettings;
 import tech.kwik.flupke.core.Http3ClientConnection;
 import tech.kwik.flupke.core.HttpError;
 import tech.kwik.flupke.core.HttpStream;
+import tech.kwik.flupke.server.DataFramesReader;
 import tech.kwik.qpack.Encoder;
 
 import javax.net.ssl.X509ExtendedKeyManager;
 import javax.net.ssl.X509TrustManager;
-import java.io.EOFException;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.ProtocolException;
 import java.net.SocketException;
 import java.net.URI;
@@ -59,6 +58,8 @@ import static tech.kwik.flupke.impl.SettingsFrame.SETTINGS_ENABLE_CONNECT_PROTOC
 
 
 public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Http3ClientConnection {
+
+    public static final int MAX_DATA_FRAME_READ_CHUNK_SIZE = 8192;
 
     private InputStream serverPushStream;
     private Statistics connectionStats;
@@ -543,9 +544,13 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
 
 
         public void gotOther(Http3Frame frame) throws ProtocolException {
-            if (frame instanceof UnknownFrame) {
-                // Ignore, no status change.
-            } else {
+            if (! (frame instanceof UnknownFrame)) {
+                throw new ProtocolException("only header and body frames are allowed on response stream");
+            }
+        }
+
+        public void gotOther(Long frameType) throws ProtocolException {
+            if (! unknownFrameType(frameType)) {
                 throw new ProtocolException("only header and body frames are allowed on response stream");
             }
         }
@@ -558,44 +563,54 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     }
 
     private class BodySubscriptionHandler<T> implements Flow.Subscription {
-        private final InputStream inputStream;
         private final QuicStream httpStream;
         private final ResponseFramesSequenceChecker frameSequenceChecker;
         private final HttpResponse.BodySubscriber<T> bodySubscriber;
         private final HttpResponseInfo responseInfo;
+        private final DataFramesReader dataFramesReader;
         private volatile IOException bodyReadException;
 
         public BodySubscriptionHandler(QuicStream httpStream, ResponseFramesSequenceChecker frameSequenceChecker,
                                        HttpResponse.BodySubscriber bodySubscriber, HttpResponseInfo responseInfo) {
-            this.inputStream = httpStream.getInputStream();
             this.httpStream = httpStream;
             this.frameSequenceChecker = frameSequenceChecker;
             this.bodySubscriber = bodySubscriber;
             this.responseInfo = responseInfo;
+            dataFramesReader = new DataFramesReader(httpStream.getInputStream(), Long.MAX_VALUE, this::handleNonDataFrame,
+                    this::gotDataFrame);
         }
 
         @Override
         public void request(long n) {
             try {
-                DataFrame dataFrame;
+                int bytesRead;
                 do {
-                    dataFrame = readDataFrame(inputStream);
-                    if (dataFrame != null) {
-                        frameSequenceChecker.gotData();
+                    byte[] buffer = new byte[MAX_DATA_FRAME_READ_CHUNK_SIZE];
+                    bytesRead = dataFramesReader.read(buffer);
+                    if (bytesRead > 0) {
                         n--;
-                        bodySubscriber.onNext(List.of(ByteBuffer.wrap(dataFrame.getPayload())));
+                        bodySubscriber.onNext(List.of(ByteBuffer.wrap(buffer, 0, bytesRead)));
                     }
-                } while (n > 0 && dataFrame != null);
+                } while (n > 0 && bytesRead > 0);
 
-                if (dataFrame == null) {
+                dataFramesReader.checkForConnectionError();
+
+                if (bytesRead < 0) {
                     // End of stream
                     frameSequenceChecker.done();
                     bodySubscriber.onComplete();
                     close();
                 }
-            } catch (IOException e) {
+            }
+            catch (IOException e) {
                 bodyReadException = e;
                 bodySubscriber.onError(e);
+                close();
+            }
+            catch (ConnectionError e) {
+                connectionError(e.getHttp3ErrorCode());
+                bodyReadException = new EOFException();
+                bodySubscriber.onError(bodyReadException);
                 close();
             }
         }
@@ -613,34 +628,47 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
             }
         }
 
-        private void close() {
-            connectionStats = quicConnection.getStats();
-        }
-
-        private DataFrame readDataFrame(InputStream inputStream) throws IOException {
-            Http3Frame frame;
-            try {
-                frame = readFrame(inputStream);
-                if (frame == null) {
-                    return null;
+        private void handleNonDataFrame(Long frameType, PushbackInputStream inputStream) {
+            if (frameType == FRAME_TYPE_HEADERS) {
+                try {
+                    inputStream.unread(FRAME_TYPE_HEADERS);
+                    Http3Frame frame = readHeadersFrame(inputStream, frameSequenceChecker);
+                    addTrailingHeaders((HeadersFrame) frame);
                 }
-            } catch (HttpError e) {
-                throw new IOException(e);
-            }
-            if (frame instanceof DataFrame) {
-                return (DataFrame) frame;
-            }
-            if (frame instanceof HeadersFrame) {
-                frameSequenceChecker.gotHeader();
-                addTrailingHeaders((HeadersFrame) frame);
-                // No additional frames expected, but if more frames follow, an error must be generated, so
-                return readDataFrame(inputStream);
+                catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+                catch (HttpError e) {
+                    // Cannot happen, because readHeadersFrame only throws HttpError when the headers exceeds max size, but client does not impose a max size
+                    bodyReadException = new IOException(e);
+                    bodySubscriber.onError(bodyReadException);
+                    close();
+                }
             }
             else {
-                frameSequenceChecker.gotOther(frame);
-                // If it gets here, the unknown frame is ignored, continue to (try to) read a data frame
-                return readDataFrame(inputStream);
+                try {
+                    frameSequenceChecker.gotOther(frameType);
+                    // If it gets here, the frame can and should be ignored.
+                    long frameLength = VariableLengthInteger.parseLong(inputStream);
+                    inputStream.skip(frameLength);
+                }
+                catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
             }
+        }
+
+        private void gotDataFrame(long dataFrameLength) {
+            try {
+                frameSequenceChecker.gotData();
+            }
+            catch (ProtocolException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+
+        private void close() {
+            connectionStats = quicConnection.getStats();
         }
 
         private void addTrailingHeaders(HeadersFrame headersFrame) {

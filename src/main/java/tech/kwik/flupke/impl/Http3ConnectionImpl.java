@@ -451,6 +451,17 @@ public class Http3ConnectionImpl implements Http3Connection {
 
     protected void handleBidirectionalStream(QuicStream quicStream) {}
 
+    protected static boolean unknownFrameType(Long frameType) {
+        assert frameType != null && frameType >= 0;
+        return frameType != FRAME_TYPE_DATA &&
+                frameType != FRAME_TYPE_HEADERS &&
+                frameType != FRAME_TYPE_CANCEL_PUSH &&
+                frameType != FRAME_TYPE_SETTINGS &&
+                frameType != FRAME_TYPE_PUSH_PROMISE &&
+                frameType != FRAME_TYPE_GOAWAY &&
+                frameType != FRAME_TYPE_MAX_PUSH_ID;
+    }
+
     /**
      * Implementation of HttpStream that sends and receives data encapsulated in HTTP3 (data) frames.
      */
