@@ -56,7 +56,6 @@ jar {
     from {
         configurations.compileClasspath.findAll { it.name =~ /qpack.*\.jar/ }.collect { it.isDirectory() ? it : zipTree(it) }
     }
-    exclude 'module-info.class'
 }
 
 task uberJar(type: Jar) {
@@ -66,7 +65,7 @@ task uberJar(type: Jar) {
     archiveBaseName = "flupke-uber"
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
-    exclude 'META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.txt', 'module-info.class'
+    exclude 'META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.txt'
     with jar
 }
 
