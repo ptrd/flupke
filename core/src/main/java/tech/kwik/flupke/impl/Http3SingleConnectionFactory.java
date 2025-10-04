@@ -18,8 +18,8 @@
  */
 package tech.kwik.flupke.impl;
 
-import tech.kwik.flupke.core.Http3ClientConnection;
 import tech.kwik.core.QuicConnection;
+import tech.kwik.flupke.Http3ClientConnection;
 
 import java.io.IOException;
 import java.net.http.HttpRequest;

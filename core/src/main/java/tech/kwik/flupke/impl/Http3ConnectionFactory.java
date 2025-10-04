@@ -19,7 +19,7 @@
 package tech.kwik.flupke.impl;
 
 import tech.kwik.flupke.Http3Client;
-import tech.kwik.flupke.core.Http3ClientConnection;
+import tech.kwik.flupke.Http3ClientConnection;
 
 import java.io.IOException;
 import java.net.http.HttpRequest;
@@ -28,8 +28,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
-import static tech.kwik.flupke.core.Http3ClientConnection.DEFAULT_CONNECT_TIMEOUT;
-import static tech.kwik.flupke.core.Http3ClientConnection.DEFAULT_HTTP3_PORT;
+import static tech.kwik.flupke.Http3ClientConnection.DEFAULT_CONNECT_TIMEOUT;
+import static tech.kwik.flupke.Http3ClientConnection.DEFAULT_HTTP3_PORT;
 
 
 public class Http3ConnectionFactory {

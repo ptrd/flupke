@@ -18,10 +18,10 @@
  */
 package tech.kwik.flupke.webtransport.impl;
 
+import tech.kwik.flupke.Http3Connection;
 import tech.kwik.flupke.HttpStream;
 import tech.kwik.flupke.core.Capsule;
 import tech.kwik.flupke.core.CapsuleProtocolStream;
-import tech.kwik.flupke.core.Http3Connection;
 import tech.kwik.flupke.impl.VariableLengthIntegerUtil;
 import tech.kwik.flupke.webtransport.Session;
 import tech.kwik.flupke.webtransport.WebTransportStream;

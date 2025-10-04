@@ -21,9 +21,9 @@ package tech.kwik.flupke.impl;
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.QuicStream;
 import tech.kwik.core.generic.VariableLengthInteger;
+import tech.kwik.flupke.Http3Connection;
 import tech.kwik.flupke.HttpError;
 import tech.kwik.flupke.HttpStream;
-import tech.kwik.flupke.core.Http3Connection;
 import tech.kwik.qpack.Decoder;
 import tech.kwik.qpack.Encoder;
 

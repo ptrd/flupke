@@ -22,7 +22,6 @@ import tech.kwik.core.DatagramSocketFactory;
 import tech.kwik.core.Statistics;
 import tech.kwik.core.concurrent.DaemonThreadFactory;
 import tech.kwik.core.log.Logger;
-import tech.kwik.flupke.core.Http3ClientConnection;
 import tech.kwik.flupke.impl.Http3ConnectionFactory;
 import tech.kwik.flupke.impl.InterfaceBoundDatagramSocketFactory;
 

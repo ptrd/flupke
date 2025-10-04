@@ -22,7 +22,7 @@ import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 import tech.kwik.core.QuicStream;
 import tech.kwik.core.server.ServerConnection;
-import tech.kwik.flupke.core.Http3Connection;
+import tech.kwik.flupke.Http3Connection;
 import tech.kwik.flupke.impl.Http3ConnectionImpl;
 import tech.kwik.flupke.test.FieldSetter;
 import tech.kwik.qpack.Decoder;

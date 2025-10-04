@@ -22,7 +22,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import tech.kwik.flupke.Http3Client;
-import tech.kwik.flupke.core.Http3ClientConnection;
+import tech.kwik.flupke.Http3ClientConnection;
 
 import java.io.IOException;
 import java.net.URI;
