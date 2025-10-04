@@ -1,0 +1,24 @@
+plugins {
+    id 'buildlogic.java-common-conventions'
+}
+
+dependencies {
+    implementation(project(':flupke'))
+    implementation group: 'tech.kwik', name: 'kwik', version: '0.10.4'
+}
+
+publishing {
+    publications {
+        flupke(MavenPublication) {
+            artifactId = 'flupke-samples'
+            from components.java
+            pom pomContent
+            pom.name = 'Flupke Samples'
+            pom.description = 'Samples for Flupke, the HTTP/3 implementation in Java'
+        }
+    }
+}
+
+signing {
+    sign publishing.publications.flupke
+}

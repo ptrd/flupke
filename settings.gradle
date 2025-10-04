@@ -1,1 +1,9 @@
 rootProject.name = 'flupke'
+
+include('core')
+include('samples')
+
+project(":core").name = "flupke"
+project(":samples").name = "flupke-samples"
+
+

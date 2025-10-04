@@ -1,10 +1,10 @@
 .gradle
 gradle.properties
 build/
-flupke.iml
+*.iml
 flupke.ipr
 flupke.iws
-/out/
+out/
 /output/
 /data/
 /libs/

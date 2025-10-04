@@ -1,0 +1,34 @@
+plugins {
+    id 'buildlogic.java-common-conventions'
+}
+
+
+dependencies {
+    implementation group: 'tech.kwik', name: 'kwik', version: '0.10.4'
+    implementation group: 'tech.kwik', name: 'qpack', version: '2.0.1'
+}
+
+task includeVersion {
+    doLast {
+        ext.versionDir = new File("${buildDir}", "generated/tech/kwik/flupke/impl")
+        versionDir.mkdirs()
+
+        new File(versionDir, "version.properties").text = project.version
+    }
+}
+
+compileJava.dependsOn (determineVersion, includeVersion, processResources)
+
+publishing {
+    publications {
+        flupke(MavenPublication) {
+            artifactId = 'flupke'
+            from components.java
+            pom pomContent
+        }
+    }
+}
+
+signing {
+    sign publishing.publications.flupke
+}
