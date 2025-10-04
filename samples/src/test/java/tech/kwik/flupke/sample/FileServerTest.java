@@ -21,8 +21,8 @@ package tech.kwik.flupke.sample;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import tech.kwik.flupke.server.HttpServerRequest;
-import tech.kwik.flupke.server.HttpServerRequestImpl;
 import tech.kwik.flupke.server.HttpServerResponse;
+import tech.kwik.flupke.server.impl.HttpServerRequestImpl;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;

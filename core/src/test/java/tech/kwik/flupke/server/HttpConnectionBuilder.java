@@ -24,6 +24,7 @@ import tech.kwik.core.QuicStream;
 import tech.kwik.core.server.ServerConnection;
 import tech.kwik.flupke.Http3Connection;
 import tech.kwik.flupke.impl.Http3ConnectionImpl;
+import tech.kwik.flupke.server.impl.Http3ServerConnectionImpl;
 import tech.kwik.flupke.test.FieldSetter;
 import tech.kwik.qpack.Decoder;
 import tech.kwik.qpack.Encoder;

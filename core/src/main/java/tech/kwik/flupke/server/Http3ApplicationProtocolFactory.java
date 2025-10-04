@@ -22,6 +22,7 @@ import tech.kwik.core.QuicConnection;
 import tech.kwik.core.concurrent.DaemonThreadFactory;
 import tech.kwik.core.server.ApplicationProtocolConnection;
 import tech.kwik.core.server.ApplicationProtocolConnectionFactory;
+import tech.kwik.flupke.server.impl.Http3ServerConnectionImpl;
 
 import java.util.Map;
 import java.util.Objects;

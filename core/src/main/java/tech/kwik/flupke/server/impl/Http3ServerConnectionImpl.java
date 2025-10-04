@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package tech.kwik.flupke.server;
+package tech.kwik.flupke.server.impl;
 
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.QuicStream;
@@ -27,6 +27,7 @@ import tech.kwik.core.server.ServerConnection;
 import tech.kwik.flupke.HttpError;
 import tech.kwik.flupke.HttpStream;
 import tech.kwik.flupke.impl.*;
+import tech.kwik.flupke.server.*;
 import tech.kwik.qpack.Encoder;
 
 import java.io.IOException;

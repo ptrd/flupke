@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package tech.kwik.flupke.server;
+package tech.kwik.flupke.server.impl;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,6 +32,7 @@ import tech.kwik.flupke.impl.ConnectionError;
 import tech.kwik.flupke.impl.DataFrame;
 import tech.kwik.flupke.impl.HeadersFrame;
 import tech.kwik.flupke.impl.SettingsFrame;
+import tech.kwik.flupke.server.*;
 import tech.kwik.flupke.test.CapturingEncoder;
 import tech.kwik.flupke.test.NoOpEncoderDecoderBuilder;
 import tech.kwik.flupke.test.QuicStreamBuilder;
