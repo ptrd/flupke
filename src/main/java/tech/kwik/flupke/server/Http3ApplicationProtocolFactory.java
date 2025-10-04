@@ -18,14 +18,11 @@
  */
 package tech.kwik.flupke.server;
 
-
-import tech.kwik.flupke.sample.FileServer;
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.concurrent.DaemonThreadFactory;
 import tech.kwik.core.server.ApplicationProtocolConnection;
 import tech.kwik.core.server.ApplicationProtocolConnectionFactory;
 
-import java.io.File;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
@@ -46,19 +43,6 @@ public class Http3ApplicationProtocolFactory implements ApplicationProtocolConne
     public Http3ApplicationProtocolFactory(HttpRequestHandler requestHandler, Map<String, Http3ServerExtensionFactory> extensions) {
         this.httpRequestHandler = Objects.requireNonNull(requestHandler);
         this.extensions = Objects.requireNonNull(extensions);
-        executorService = Executors.newCachedThreadPool(new DaemonThreadFactory("http3-connection"));
-    }
-
-    /**
-     * @deprecated
-     * @param wwwDir
-     */
-    @Deprecated
-    public Http3ApplicationProtocolFactory(File wwwDir) {
-        if (wwwDir == null) {
-            throw new IllegalArgumentException();
-        }
-        httpRequestHandler = new FileServer(wwwDir);
         executorService = Executors.newCachedThreadPool(new DaemonThreadFactory("http3-connection"));
     }
 
