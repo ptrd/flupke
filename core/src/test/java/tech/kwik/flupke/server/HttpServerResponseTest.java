@@ -27,11 +27,11 @@ import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 
 class HttpServerResponseTest {
 
-    private HttpServerResponse response;
+    private HttpServerResponseImpl response;
 
     @BeforeEach
     void setupObjectUnderTest() {
-        response = new HttpServerResponse() {
+        response = new HttpServerResponseImpl() {
             @Override
             public OutputStream getOutputStream() {
                 return null;

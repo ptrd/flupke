@@ -28,7 +28,7 @@ import java.io.OutputStream;
 import java.net.http.HttpHeaders;
 import java.util.Map;
 
-class DefaultHttpResponse extends HttpServerResponse {
+class DefaultHttpResponse extends HttpServerResponseImpl {
 
     private final Encoder qpackEncoder;
     private final OutputStream quicOutputStream;

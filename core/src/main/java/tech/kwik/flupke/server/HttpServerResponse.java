@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021, 2022, 2023, 2024, 2025 Peter Doornbosch
+ * Copyright © 2025 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *
@@ -21,41 +21,17 @@ package tech.kwik.flupke.server;
 import java.io.OutputStream;
 import java.net.http.HttpHeaders;
 
-public abstract class HttpServerResponse {
+public interface HttpServerResponse {
 
-    private int status = -1;
+    OutputStream getOutputStream();
 
-    public abstract OutputStream getOutputStream();
+    void setStatus(int status);
 
-    /**
-     * https://www.rfc-editor.org/rfc/rfc9110.html#name-status-codes
-     * "All valid status codes are within the range of 100 to 599, inclusive."
-     * "Values outside the range 100..599 are invalid. Implementations often use three-digit integer values outside of
-     *  that range (i.e., 600..999) for internal communication of non-HTTP status (e.g., library errors). "
-     * @param status
-     */
-    public void setStatus(int status) {
-        if (status < 100 || status > 1000) {
-            throw new IllegalArgumentException("invalid status code: " + status);
-        }
-        this.status = status;
-    }
+    void setHeaders(HttpHeaders headers);
 
-    public void setHeaders(HttpHeaders headers) {
-    }
+    int status();
 
-    public int status() {
-        if (status == -1) {
-            throw new IllegalStateException("status not set");
-        }
-        return status;
-    }
+    boolean isStatusSet();
 
-    public boolean isStatusSet() {
-        return status != -1;
-    }
-
-    public long size() {
-        return 0;
-    }
+    long size();
 }
