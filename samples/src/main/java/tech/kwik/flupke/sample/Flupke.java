@@ -18,7 +18,7 @@
  */
 package tech.kwik.flupke.sample;
 
-import tech.kwik.flupke.impl.FlupkeVersion;
+import tech.kwik.flupke.FlupkeVersion;
 
 public class Flupke {
 

@@ -18,11 +18,11 @@
  */
 package tech.kwik.flupke.sample;
 
-import tech.kwik.flupke.impl.FlupkeVersion;
+import tech.kwik.core.KwikVersion;
+import tech.kwik.flupke.FlupkeVersion;
 import tech.kwik.flupke.server.HttpRequestHandler;
 import tech.kwik.flupke.server.HttpServerRequest;
 import tech.kwik.flupke.server.HttpServerResponse;
-import tech.kwik.core.KwikVersion;
 
 import java.io.File;
 import java.io.FileInputStream;
