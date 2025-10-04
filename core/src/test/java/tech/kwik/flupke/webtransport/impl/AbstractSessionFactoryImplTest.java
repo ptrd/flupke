@@ -20,7 +20,7 @@ package tech.kwik.flupke.webtransport.impl;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import tech.kwik.flupke.core.HttpStream;
+import tech.kwik.flupke.HttpStream;
 import tech.kwik.flupke.impl.CapsuleProtocolStreamImpl;
 import tech.kwik.flupke.impl.Http3ConnectionImpl;
 import tech.kwik.flupke.test.WriteableByteArrayInputStream;

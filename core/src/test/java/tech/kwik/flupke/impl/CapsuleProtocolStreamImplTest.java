@@ -20,9 +20,9 @@ package tech.kwik.flupke.impl;
 
 
 import org.junit.jupiter.api.Test;
+import tech.kwik.flupke.HttpStream;
 import tech.kwik.flupke.core.CapsuleProtocolStream;
 import tech.kwik.flupke.core.GenericCapsule;
-import tech.kwik.flupke.core.HttpStream;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021, 2022, 2023, 2024, 2025 Peter Doornbosch
+ * Copyright © 2023, 2024, 2025 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *
@@ -16,23 +16,30 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package tech.kwik.flupke.core;
 
+package tech.kwik.flupke;
 
-public class HttpError extends Exception {
+import java.io.InputStream;
+import java.io.OutputStream;
 
-    private Integer statusCode;
+/**
+ * A generic stream that runs over HTTP.
+ */
+public interface HttpStream {
 
-    public HttpError(String message, int statusCode) {
-        super(message + " (" + statusCode + ")");
-        this.statusCode = statusCode;
+    OutputStream getOutputStream();
+
+    InputStream getInputStream();
+
+    long getStreamId();
+
+    default boolean isUnidirectional() {
+        return !isBidirectional();
     }
 
-    public HttpError(String message) {
-        super(message);
-    }
+    boolean isBidirectional();
 
-    public Integer getStatusCode() {
-        return statusCode;
-    }
+    void abortReading(long errorCode);
+
+    void resetStream(long errorCode);
 }

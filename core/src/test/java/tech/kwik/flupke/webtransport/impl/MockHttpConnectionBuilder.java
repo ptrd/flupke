@@ -19,8 +19,8 @@
 package tech.kwik.flupke.webtransport.impl;
 
 import tech.kwik.flupke.Http3Client;
+import tech.kwik.flupke.HttpStream;
 import tech.kwik.flupke.core.Http3ClientConnection;
-import tech.kwik.flupke.core.HttpStream;
 import tech.kwik.flupke.test.WriteableByteArrayInputStream;
 
 import java.io.ByteArrayInputStream;

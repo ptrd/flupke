@@ -22,8 +22,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.QuicStream;
-import tech.kwik.flupke.core.HttpError;
-import tech.kwik.flupke.core.HttpStream;
+import tech.kwik.flupke.HttpError;
+import tech.kwik.flupke.HttpStream;
 import tech.kwik.flupke.test.Http3ClientConnectionBuilder;
 import tech.kwik.flupke.test.Http3ConnectionBuilder;
 

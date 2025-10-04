@@ -18,15 +18,13 @@
  */
 package tech.kwik.flupke;
 
-import tech.kwik.flupke.core.Http3ClientConnection;
-import tech.kwik.flupke.core.HttpError;
-import tech.kwik.flupke.core.HttpStream;
-import tech.kwik.flupke.impl.Http3ConnectionFactory;
-import tech.kwik.flupke.impl.InterfaceBoundDatagramSocketFactory;
 import tech.kwik.core.DatagramSocketFactory;
 import tech.kwik.core.Statistics;
 import tech.kwik.core.concurrent.DaemonThreadFactory;
 import tech.kwik.core.log.Logger;
+import tech.kwik.flupke.core.Http3ClientConnection;
+import tech.kwik.flupke.impl.Http3ConnectionFactory;
+import tech.kwik.flupke.impl.InterfaceBoundDatagramSocketFactory;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;

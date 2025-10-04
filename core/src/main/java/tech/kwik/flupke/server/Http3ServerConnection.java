@@ -18,8 +18,8 @@
  */
 package tech.kwik.flupke.server;
 
+import tech.kwik.flupke.HttpStream;
 import tech.kwik.flupke.core.Http3Connection;
-import tech.kwik.flupke.core.HttpStream;
 
 import java.util.function.Consumer;
 

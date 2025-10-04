@@ -19,6 +19,8 @@
 package tech.kwik.flupke.core;
 
 import tech.kwik.core.Statistics;
+import tech.kwik.flupke.HttpError;
+import tech.kwik.flupke.HttpStream;
 
 import java.io.IOException;
 import java.net.http.HttpRequest;

@@ -19,7 +19,7 @@
 package tech.kwik.flupke.webtransport.impl;
 
 import tech.kwik.core.generic.VariableLengthInteger;
-import tech.kwik.flupke.core.HttpStream;
+import tech.kwik.flupke.HttpStream;
 
 import java.io.IOException;
 import java.io.InputStream;

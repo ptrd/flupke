@@ -18,7 +18,7 @@
  */
 package tech.kwik.flupke.webtransport;
 
-import tech.kwik.flupke.core.HttpError;
+import tech.kwik.flupke.HttpError;
 
 import java.io.IOException;
 import java.net.URI;

@@ -24,8 +24,8 @@ import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.core.server.ApplicationProtocolConnection;
 import tech.kwik.core.server.ServerConnection;
-import tech.kwik.flupke.core.HttpError;
-import tech.kwik.flupke.core.HttpStream;
+import tech.kwik.flupke.HttpError;
+import tech.kwik.flupke.HttpStream;
 import tech.kwik.flupke.impl.*;
 import tech.kwik.qpack.Encoder;
 

@@ -18,7 +18,7 @@
  */
 package tech.kwik.flupke.webtransport.impl;
 
-import tech.kwik.flupke.core.HttpStream;
+import tech.kwik.flupke.HttpStream;
 import tech.kwik.flupke.impl.CapsuleProtocolStreamImpl;
 import tech.kwik.flupke.server.Http3ServerConnection;
 import tech.kwik.flupke.server.Http3ServerExtension;

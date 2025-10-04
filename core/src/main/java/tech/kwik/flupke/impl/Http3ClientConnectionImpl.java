@@ -26,9 +26,9 @@ import tech.kwik.core.Statistics;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.log.NullLogger;
 import tech.kwik.flupke.Http3ConnectionSettings;
+import tech.kwik.flupke.HttpError;
+import tech.kwik.flupke.HttpStream;
 import tech.kwik.flupke.core.Http3ClientConnection;
-import tech.kwik.flupke.core.HttpError;
-import tech.kwik.flupke.core.HttpStream;
 import tech.kwik.qpack.Encoder;
 
 import java.io.EOFException;

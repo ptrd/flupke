@@ -19,9 +19,9 @@
 package tech.kwik.flupke.webtransport.impl;
 
 import tech.kwik.flupke.Http3Client;
+import tech.kwik.flupke.HttpError;
 import tech.kwik.flupke.core.CapsuleProtocolStream;
 import tech.kwik.flupke.core.Http3ClientConnection;
-import tech.kwik.flupke.core.HttpError;
 import tech.kwik.flupke.impl.CapsuleProtocolStreamImpl;
 import tech.kwik.flupke.webtransport.ClientSessionFactory;
 import tech.kwik.flupke.webtransport.Session;

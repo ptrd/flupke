@@ -18,6 +18,8 @@
  */
 package tech.kwik.flupke.core;
 
+import tech.kwik.flupke.HttpStream;
+
 import java.io.IOException;
 import java.util.Optional;
 import java.util.function.Consumer;

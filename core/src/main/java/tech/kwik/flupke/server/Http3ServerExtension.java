@@ -19,7 +19,7 @@
 package tech.kwik.flupke.server;
 
 
-import tech.kwik.flupke.core.HttpStream;
+import tech.kwik.flupke.HttpStream;
 
 import java.net.http.HttpHeaders;
 import java.util.function.IntConsumer;

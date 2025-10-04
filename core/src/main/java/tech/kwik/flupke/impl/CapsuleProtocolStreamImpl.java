@@ -19,10 +19,10 @@
 package tech.kwik.flupke.impl;
 
 import tech.kwik.core.generic.VariableLengthInteger;
+import tech.kwik.flupke.HttpStream;
 import tech.kwik.flupke.core.Capsule;
 import tech.kwik.flupke.core.CapsuleProtocolStream;
 import tech.kwik.flupke.core.GenericCapsule;
-import tech.kwik.flupke.core.HttpStream;
 
 import java.io.IOException;
 import java.io.InputStream;

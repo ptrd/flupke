@@ -22,7 +22,7 @@ import tech.kwik.core.log.Logger;
 import tech.kwik.core.log.SysOutLogger;
 import tech.kwik.flupke.Http3Client;
 import tech.kwik.flupke.Http3ClientBuilder;
-import tech.kwik.flupke.core.HttpError;
+import tech.kwik.flupke.HttpError;
 import tech.kwik.flupke.webtransport.Session;
 import tech.kwik.flupke.webtransport.WebTransportStream;
 import tech.kwik.flupke.webtransport.impl.ClientSessionFactoryImpl;
