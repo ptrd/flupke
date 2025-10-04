@@ -21,6 +21,7 @@ package tech.kwik.flupke.sample;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import tech.kwik.flupke.server.HttpServerRequest;
+import tech.kwik.flupke.server.HttpServerRequestImpl;
 import tech.kwik.flupke.server.HttpServerResponse;
 
 import java.io.ByteArrayOutputStream;
@@ -75,6 +76,6 @@ public class FileServerTest {
     }
 
     private HttpServerRequest createGetRequest(String filename) throws IOException {
-        return new HttpServerRequest("GET", filename, null, Inet4Address.getByAddress(new byte[] { 10, 0, 0, 58 }), mock(InputStream.class));
+        return new HttpServerRequestImpl("GET", filename, null, Inet4Address.getByAddress(new byte[] { 10, 0, 0, 58 }), mock(InputStream.class));
     }
 }

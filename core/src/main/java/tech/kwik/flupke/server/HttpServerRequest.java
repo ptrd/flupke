@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021, 2022, 2023, 2024, 2025 Peter Doornbosch
+ * Copyright © 2025 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *
@@ -23,46 +23,17 @@ import java.net.InetAddress;
 import java.net.http.HttpHeaders;
 import java.time.Instant;
 
+public interface HttpServerRequest {
 
-public class HttpServerRequest {
+    String method();
 
-    private final String method;
-    private final String path;
-    private final HttpHeaders headers;
-    private final InetAddress clientAddress;
-    private final Instant requestTime;
-    private final InputStream bodyInputStream;
+    String path();
 
-    public HttpServerRequest(String method, String path, HttpHeaders headers, InetAddress clientAddress, InputStream bodyInputStream) {
-        this.method = method;
-        this.path = path;
-        this.headers = headers;
-        this.bodyInputStream = bodyInputStream;
-        this.clientAddress = clientAddress;
-        requestTime = Instant.now();
-    }
+    HttpHeaders headers();
 
-    public String method() {
-        return method;
-    }
+    InputStream body();
 
-    public String path() {
-        return path;
-    }
+    InetAddress clientAddress();
 
-    public HttpHeaders headers() {
-        return headers;
-    }
-
-    public InputStream body() {
-        return bodyInputStream;
-    }
-
-    public InetAddress clientAddress() {
-        return clientAddress;
-    }
-
-    public Instant time() {
-        return requestTime;
-    }
+    Instant time();
 }
