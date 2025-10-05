@@ -18,7 +18,9 @@
  */
 package tech.kwik.flupke.webtransport;
 
+import tech.kwik.flupke.Http3Client;
 import tech.kwik.flupke.HttpError;
+import tech.kwik.flupke.webtransport.impl.ClientSessionFactoryImpl;
 
 import java.io.IOException;
 import java.net.URI;
@@ -63,4 +65,16 @@ public interface ClientSessionFactory {
      * @return
      */
     int getMaxConcurrentSessions();
+
+    static Builder newBuilder() {
+        return ClientSessionFactoryImpl.newBuilder();
+    }
+
+    interface Builder {
+        ClientSessionFactory build() throws IOException;
+
+        Builder serverUri(URI serverUri);
+
+        Builder httpClient(Http3Client httpClient);
+    }
 }

@@ -21,8 +21,8 @@ package tech.kwik.flupke.sample.webtransport.baton;
 import tech.kwik.flupke.Http3Client;
 import tech.kwik.flupke.Http3ClientBuilder;
 import tech.kwik.flupke.HttpError;
+import tech.kwik.flupke.webtransport.ClientSessionFactory;
 import tech.kwik.flupke.webtransport.Session;
-import tech.kwik.flupke.webtransport.impl.ClientSessionFactoryImpl;
 
 import java.io.IOException;
 import java.net.URI;
@@ -33,7 +33,7 @@ import java.util.concurrent.CountDownLatch;
 public class BatonClient {
 
     private final Http3Client httpClient;
-    private final ClientSessionFactoryImpl sessionFactory;
+    private final ClientSessionFactory sessionFactory;
     private final URI serverUrl;
 
     public BatonClient(URI serverUrl) throws IOException, URISyntaxException {
@@ -45,7 +45,11 @@ public class BatonClient {
                 .maxAdditionalOpenPeerInitiatedBidirectionalStreams(100)
                 .build();
 
-        sessionFactory = new ClientSessionFactoryImpl(serverUrl, httpClient);
+        sessionFactory = ClientSessionFactory.newBuilder()
+                .serverUri(serverUrl)
+                .httpClient(httpClient)
+                .build();
+
         this.serverUrl = serverUrl;
     }
 

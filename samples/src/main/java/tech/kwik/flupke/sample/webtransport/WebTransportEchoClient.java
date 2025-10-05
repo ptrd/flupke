@@ -23,9 +23,9 @@ import tech.kwik.core.log.SysOutLogger;
 import tech.kwik.flupke.Http3Client;
 import tech.kwik.flupke.Http3ClientBuilder;
 import tech.kwik.flupke.HttpError;
+import tech.kwik.flupke.webtransport.ClientSessionFactory;
 import tech.kwik.flupke.webtransport.Session;
 import tech.kwik.flupke.webtransport.WebTransportStream;
-import tech.kwik.flupke.webtransport.impl.ClientSessionFactoryImpl;
 
 import java.io.IOException;
 import java.net.URI;
@@ -51,7 +51,10 @@ public class WebTransportEchoClient {
                 .build();
 
         try {
-            ClientSessionFactoryImpl clientSessionFactory = new ClientSessionFactoryImpl(serverUrl, client);
+            ClientSessionFactory clientSessionFactory = ClientSessionFactory.newBuilder()
+                    .serverUri(serverUrl)
+                    .httpClient(client)
+                    .build();
 
             int count = clientSessionFactory.getMaxConcurrentSessions();
             for (int i = 0; i < count; i++) {

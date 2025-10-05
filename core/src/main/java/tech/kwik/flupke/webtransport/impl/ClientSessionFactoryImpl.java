@@ -126,4 +126,31 @@ public class ClientSessionFactoryImpl extends AbstractSessionFactoryImpl impleme
     public int getMaxConcurrentSessions() {
         return (int) maxSessions;
     }
+
+    static public Builder newBuilder() {
+        return new ClientSessionFactoryBuilder();
+    }
+
+    private static class ClientSessionFactoryBuilder implements Builder {
+
+        private URI serverUri;
+        private Http3Client httpClient;
+
+        @Override
+        public ClientSessionFactory build() throws IOException {
+            return new ClientSessionFactoryImpl(serverUri, httpClient);
+        }
+
+        @Override
+        public Builder serverUri(URI serverUri) {
+            this.serverUri = serverUri;
+            return this;
+        }
+
+        @Override
+        public Builder httpClient(Http3Client httpClient) {
+            this.httpClient = httpClient;
+            return this;
+        }
+    }
 }
