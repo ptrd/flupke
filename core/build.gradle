@@ -32,3 +32,16 @@ publishing {
 signing {
     sign publishing.publications.flupke
 }
+
+task uberJar(type: Jar) {
+    archiveClassifier.set('uber')
+    from sourceSets.main.output
+    exclude "META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA", "module-info.class"
+    dependsOn configurations.runtimeClasspath
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    manifest {
+        attributes 'Main-Class': 'tech.kwik.flupke.FlupkeVersion'
+    }
+}

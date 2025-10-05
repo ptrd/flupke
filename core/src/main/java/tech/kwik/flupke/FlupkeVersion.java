@@ -50,4 +50,8 @@ public class FlupkeVersion {
         }
         return version;
     }
+
+    public static void main(String[] args) {
+        System.out.println("Flupke version: " + getVersion());
+    }
 }
