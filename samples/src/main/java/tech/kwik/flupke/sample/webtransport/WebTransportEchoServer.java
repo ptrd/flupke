@@ -23,7 +23,7 @@ import tech.kwik.core.server.ServerConnectionConfig;
 import tech.kwik.core.server.ServerConnector;
 import tech.kwik.flupke.server.HttpRequestHandler;
 import tech.kwik.flupke.webtransport.Session;
-import tech.kwik.flupke.webtransport.impl.WebTransportHttp3ApplicationProtocolFactory;
+import tech.kwik.flupke.webtransport.WebTransportHttp3ApplicationProtocolFactory;
 
 import java.io.File;
 import java.io.FileInputStream;

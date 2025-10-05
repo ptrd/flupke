@@ -16,11 +16,11 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package tech.kwik.flupke.webtransport.impl;
+package tech.kwik.flupke.webtransport;
 
 import tech.kwik.flupke.server.Http3ApplicationProtocolFactory;
 import tech.kwik.flupke.server.HttpRequestHandler;
-import tech.kwik.flupke.webtransport.Session;
+import tech.kwik.flupke.webtransport.impl.WebTransportExtensionFactory;
 
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
