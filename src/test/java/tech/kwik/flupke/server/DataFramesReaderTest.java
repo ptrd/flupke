@@ -19,6 +19,7 @@
 package tech.kwik.flupke.server;
 
 import org.junit.jupiter.api.Test;
+import tech.kwik.flupke.impl.DataFramesReader;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;

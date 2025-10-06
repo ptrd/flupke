@@ -30,7 +30,6 @@ import tech.kwik.flupke.Http3ConnectionSettings;
 import tech.kwik.flupke.core.Http3ClientConnection;
 import tech.kwik.flupke.core.HttpError;
 import tech.kwik.flupke.core.HttpStream;
-import tech.kwik.flupke.server.DataFramesReader;
 import tech.kwik.qpack.Encoder;
 
 import javax.net.ssl.X509ExtendedKeyManager;
