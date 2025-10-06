@@ -1,0 +1,47 @@
+plugins {
+    id 'buildlogic.java-common-conventions'
+}
+
+
+dependencies {
+    implementation group: 'tech.kwik', name: 'kwik', version: '0.10.6'
+    implementation group: 'tech.kwik', name: 'qpack', version: '2.0.1'
+}
+
+task includeVersion {
+    doLast {
+        ext.versionDir = new File("${buildDir}", "generated/tech/kwik/flupke/impl")
+        versionDir.mkdirs()
+
+        new File(versionDir, "version.properties").text = project.version
+    }
+}
+
+compileJava.dependsOn (determineVersion, includeVersion, processResources)
+
+publishing {
+    publications {
+        flupke(MavenPublication) {
+            artifactId = 'flupke'
+            from components.java
+            pom pomContent
+        }
+    }
+}
+
+signing {
+    sign publishing.publications.flupke
+}
+
+task uberJar(type: Jar) {
+    archiveClassifier.set('uber')
+    from sourceSets.main.output
+    exclude "META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA", "module-info.class"
+    dependsOn configurations.runtimeClasspath
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    manifest {
+        attributes 'Main-Class': 'tech.kwik.flupke.FlupkeVersion'
+    }
+}

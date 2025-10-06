@@ -25,12 +25,13 @@ dependencies {
 }
 
 task generateAndroidSources(type: Copy) {
-    from ("../src/main/java") {
+    from ("../core/src/main/java") {
         exclude "**/server/**"
         exclude "**/sample/FileServer.java"
         exclude "**/sample/Http3FileServer.java"
         exclude "**/sample/kwik/**"
         exclude "**/webtransport/**"
+        exclude "module-info.java"
     }
     into "${buildDir}/generated/main/java"
     filter { line -> line.replaceAll("import java.net.http.", "import tech.kwik.flupke.httpclient.") }
