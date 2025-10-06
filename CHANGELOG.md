@@ -1,12 +1,24 @@
 # Releases
 
+## 0.9 (2025-10-06)
+
+- define Java modules ([issue 14](https://github.com/ptrd/flupke/issues/14))
+- moved `WebTransportHttp3ApplicationProtocolFactory` to websocket base package (`tech.kwik.flupke.webtransport`)
+- introduced builder for websocket `ClientSessionFactory`
+- moved some internal classes to other packages
+- made `HttpServerRequest` and `HttpServerResponse` an interface
+- moved `FlupkeVersion`, `HttpError` and `HttpStream` to flupke base package (`tech.kwik.flupke`)
+- transformed gradle build to a multi-project build
+- make client support large data frames when running with limited memory
+- added methods to set key manager and custom trustmanager ([issue 5](https://github.com/ptrd/flupke/issues/5))
+
 ## 0.8 (2025-08-29)
 
 - server handler: receive request body (as stream)
 
 ## 0.7 (2025-08-22)
 
-- added support for WebTransport ([draft-13](https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-13.html))
+- added support for WebTransport ([draft-13](https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-13.html)) ([issue 1](https://github.com/ptrd/flupke/issues/1))
 - server handler: receive request headers and set response headers
 - upgraded kwik dependency to latest (0.10.4)
 - upgraded qpack dependency to latest (2.0.1)
