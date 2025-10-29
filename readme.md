@@ -25,7 +25,7 @@ Latest release can be found at maven central:
     <dependency>
         <groupId>tech.kwik</groupId>
         <artifactId>flupke</artifactId>
-        <version>0.9.0</version>
+        <version>0.9</version>
     </dependency> 
 
 Flupke uses the HTTP Client API introduced with Java 11, e.g. 
