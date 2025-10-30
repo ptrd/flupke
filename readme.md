@@ -2,7 +2,7 @@
 
 ## HTTP3 Java
 
-Flupke is a Java HTTP3 implementation that runs on top of [Kwik](http://kwik.tech).
+Flupke is a (100% pure) Java HTTP3 implementation that runs on top of [Kwik](http://kwik.tech).
 
 HTTP3 is a new standard that has been developed by the Internet Engineering Task Force (IETF) and is specified by 
 [RFC 9114](https://www.rfc-editor.org/rfc/rfc9114.html).
@@ -20,22 +20,26 @@ Flupke is created and maintained by Peter Doornbosch. The latest greatest can al
 
 ## Usage
 
-Latest release can be found at maven central:
+Flupke releases are available on [Maven Central](https://central.sonatype.com/artifact/tech.kwik/flupke/versions).
+Flupke's Maven group ID is `tech.kwik`, and its artifact ID is `flupke`. 
+Check [versions](https://central.sonatype.com/artifact/tech.kwik/flupke/versions) to find 
+the version number of the latest release and samples for various build tools of how to add the dependency to your project. 
 
-    <dependency>
-        <groupId>tech.kwik</groupId>
-        <artifactId>flupke</artifactId>
-        <version>0.9.0</version>
-    </dependency> 
+The samples are also published on Maven Central, the artifact ID is `flupke-samples`
+and its version(s) can be found [here](https://central.sonatype.com/artifact/tech.kwik/flupke-samples/versions).
 
-Flupke uses the HTTP Client API introduced with Java 11, e.g. 
+Of course, you can also clone this repository and build Flupke and the samples yourself; see below for more details.
+
+### API
+
+Flupke client uses the HTTP Client API introduced with Java 11, e.g. 
 
     HttpClient.Builder clientBuilder = new Http3ClientBuilder();
     HttpClient client = clientBuilder.build();
     HttpResponse<String> httpResponse = client.send(request, HttpResponse.BodyHandlers.ofString());
 
 See the [Sample](https://github.com/ptrd/flupke/blob/master/samples/src/main/java/tech/kwik/flupke/sample/Sample.java) 
-class for a working example.
+class for a working example and to learn about various Flupke-specific builder options.
 
 Flupke also supports POST requests, or more generally, HTTP methods that require or use a request body. 
 See the [PostExample](https://github.com/ptrd/flupke/blob/master/samples/src/main/java/tech/kwik/flupke/sample/PostExample.java) for details.
@@ -93,7 +97,7 @@ To build the uberjar, run
 
     ./gradlew -p core uberjar
 
-To run the sample client, use the provided `flupke.sh` shell script and pass the targer URL as a parameter.
+To run the sample client, use the provided `flupke.sh` shell script and pass the target URL as a parameter.
 You can also run the java command directly:
 
     java -cp core/build/libs/flupke-*uber.jar:samples/build/libs/flupke-samples*.jar tech.kwik.flupke.sample.Sample <URL>
