@@ -18,11 +18,12 @@
  */
 package tech.kwik.flupke.sample;
 
-import tech.kwik.flupke.server.Http3ApplicationProtocolFactory;
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.log.SysOutLogger;
 import tech.kwik.core.server.ServerConnectionConfig;
 import tech.kwik.core.server.ServerConnector;
+import tech.kwik.flupke.server.Http3ApplicationProtocolFactory;
+import tech.kwik.flupke.server.HttpRequestHandler;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -104,7 +105,7 @@ public class Http3FileServer {
                 .withLogger(log)
                 .build();
 
-        FileServer httpFileRequestHandler = new FileServer(wwwDir);
+        HttpRequestHandler httpFileRequestHandler = new FileServer(wwwDir);
         Http3ApplicationProtocolFactory http3ApplicationProtocolFactory = new Http3ApplicationProtocolFactory(httpFileRequestHandler);
         serverConnector.registerApplicationProtocol("h3", http3ApplicationProtocolFactory);
         serverConnector.start();
