@@ -26,6 +26,7 @@ import tech.kwik.flupke.server.impl.Http3ServerConnectionImpl;
 
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -49,6 +50,11 @@ public class Http3ApplicationProtocolFactory implements ApplicationProtocolConne
         this.executorService = Objects.requireNonNull(executorService);
     }
 
+	@Override
+	public Optional<String> protocol() {
+		return Optional.of("h3");
+	}
+		
     @Override
     public final ApplicationProtocolConnection createConnection(String protocol, QuicConnection quicConnection) {
         return new Http3ServerConnectionImpl(quicConnection, httpRequestHandler, executorService, extensions);
