@@ -97,7 +97,7 @@ public class WebTransportEchoServer {
 
         WebTransportHttp3ApplicationProtocolFactory webTransportProtocolFactory = new WebTransportHttp3ApplicationProtocolFactory(httpRequestHandler);
         webTransportProtocolFactory.registerWebTransportServer("/echo", this::startEchoHandler);
-        serverConnector.registerApplicationProtocol("h3", webTransportProtocolFactory);
+        serverConnector.registerApplicationProtocol(webTransportProtocolFactory);
         serverConnector.start();
     }
 

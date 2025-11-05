@@ -93,7 +93,7 @@ public class BatonServer {
         HttpRequestHandler httpNoOpRequestHandler = (request, response) -> {};
         WebTransportHttp3ApplicationProtocolFactory webTransportProtocolFactory = new WebTransportHttp3ApplicationProtocolFactory(httpNoOpRequestHandler);
         webTransportProtocolFactory.registerWebTransportServer("/baton", this::startBatonSession);
-        serverConnector.registerApplicationProtocol("h3", webTransportProtocolFactory);
+        serverConnector.registerApplicationProtocol(webTransportProtocolFactory);
         serverConnector.start();
     }
 

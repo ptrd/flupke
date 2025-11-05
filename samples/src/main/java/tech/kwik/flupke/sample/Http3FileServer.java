@@ -107,7 +107,7 @@ public class Http3FileServer {
 
         HttpRequestHandler httpFileRequestHandler = new FileServer(wwwDir);
         Http3ApplicationProtocolFactory http3ApplicationProtocolFactory = new Http3ApplicationProtocolFactory(httpFileRequestHandler);
-        serverConnector.registerApplicationProtocol("h3", http3ApplicationProtocolFactory);
+        serverConnector.registerApplicationProtocol(http3ApplicationProtocolFactory);
         serverConnector.start();
     }
 }
