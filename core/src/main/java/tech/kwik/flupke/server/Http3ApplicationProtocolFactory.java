@@ -31,6 +31,8 @@ import java.util.concurrent.Executors;
 
 public class Http3ApplicationProtocolFactory implements ApplicationProtocolConnectionFactory {
 
+    public static final String HTTP3_PROTOCOL_ID = "h3";
+
     private final HttpRequestHandler httpRequestHandler;
     private final ExecutorService executorService;
     private Map<String, Http3ServerExtensionFactory> extensions;

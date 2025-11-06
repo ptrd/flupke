@@ -30,6 +30,8 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.List;
 
+import static tech.kwik.flupke.server.Http3ApplicationProtocolFactory.HTTP3_PROTOCOL_ID;
+
 /**
  * A simple echo server for WebTransport.
  */
@@ -97,7 +99,7 @@ public class WebTransportEchoServer {
 
         WebTransportHttp3ApplicationProtocolFactory webTransportProtocolFactory = new WebTransportHttp3ApplicationProtocolFactory(httpRequestHandler);
         webTransportProtocolFactory.registerWebTransportServer("/echo", this::startEchoHandler);
-        serverConnector.registerApplicationProtocol("h3", webTransportProtocolFactory);
+        serverConnector.registerApplicationProtocol(HTTP3_PROTOCOL_ID, webTransportProtocolFactory);
         serverConnector.start();
     }
 

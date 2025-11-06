@@ -30,6 +30,8 @@ import java.io.FileInputStream;
 import java.util.List;
 import java.util.Objects;
 
+import static tech.kwik.flupke.server.Http3ApplicationProtocolFactory.HTTP3_PROTOCOL_ID;
+
 /**
  * A simple HTTP3 file server. The server serves files from a given 'www' directory.
  * The server is started with the following command line arguments:
@@ -107,7 +109,7 @@ public class Http3FileServer {
 
         HttpRequestHandler httpFileRequestHandler = new FileServer(wwwDir);
         Http3ApplicationProtocolFactory http3ApplicationProtocolFactory = new Http3ApplicationProtocolFactory(httpFileRequestHandler);
-        serverConnector.registerApplicationProtocol("h3", http3ApplicationProtocolFactory);
+        serverConnector.registerApplicationProtocol(HTTP3_PROTOCOL_ID, http3ApplicationProtocolFactory);
         serverConnector.start();
     }
 }

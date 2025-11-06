@@ -34,6 +34,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
+import static tech.kwik.flupke.server.Http3ApplicationProtocolFactory.HTTP3_PROTOCOL_ID;
+
 public class BatonServer {
 
     private final File certificate;
@@ -93,7 +95,7 @@ public class BatonServer {
         HttpRequestHandler httpNoOpRequestHandler = (request, response) -> {};
         WebTransportHttp3ApplicationProtocolFactory webTransportProtocolFactory = new WebTransportHttp3ApplicationProtocolFactory(httpNoOpRequestHandler);
         webTransportProtocolFactory.registerWebTransportServer("/baton", this::startBatonSession);
-        serverConnector.registerApplicationProtocol("h3", webTransportProtocolFactory);
+        serverConnector.registerApplicationProtocol(HTTP3_PROTOCOL_ID, webTransportProtocolFactory);
         serverConnector.start();
     }
 
