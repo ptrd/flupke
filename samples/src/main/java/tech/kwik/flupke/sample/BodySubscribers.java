@@ -37,6 +37,7 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Flow;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
@@ -119,6 +120,8 @@ public class BodySubscribers {
 
             System.out.println("\n\n************ Executing request with Publisher body subscriber ************");
             executeRequestWith(client, request, HttpResponse.BodyHandlers.ofPublisher(), publisherBodyProcessor);
+
+            System.out.println("\n\nDone. All requests completed.");
         }
         catch (IOException e) {
             System.err.println("Request failed: " + e.getMessage());
@@ -194,10 +197,12 @@ public class BodySubscribers {
         System.out.println("-   HTTP body (lines): #" + body.count() + " lines received.");
     };
 
-    Consumer<Flow.Publisher<List<ByteBuffer>>> publisherBodyProcessor = body -> {
+    Consumer<Flow.Publisher<List<ByteBuffer>>> publisherBodyProcessor = bodyPublisher -> {
         try {
             FileOutputStream output = new FileOutputStream("http3-response-publisher.txt");
-            body.subscribe(getSubscriber(output));
+            WriteToFileSubscriber subscriber = new WriteToFileSubscriber(output);
+            bodyPublisher.subscribe(subscriber);
+            subscriber.getResult().join();
         }
         catch (IOException e) {
             System.out.println("Error creating output file: " + e.getMessage() + ". Cannot subscribe to publisher.");
@@ -205,53 +210,69 @@ public class BodySubscribers {
         }
     };
 
-    private static Flow.Subscriber<List<ByteBuffer>> getSubscriber(FileOutputStream output) {
-        return new Flow.Subscriber<>() {
-            private Flow.Subscription subscription;
+    static class WriteToFileSubscriber implements Flow.Subscriber<List<ByteBuffer>> {
 
-            @Override
-            public void onSubscribe(Flow.Subscription subscription) {
-                this.subscription = subscription;
+        private final FileOutputStream output;
+        private Flow.Subscription subscription;
+        private CompletableFuture<Void> result = new CompletableFuture<>();
+
+        WriteToFileSubscriber(FileOutputStream output) {
+            this.output = output;
+        }
+
+        @Override
+        public void onSubscribe(Flow.Subscription subscription) {
+            this.subscription = subscription;
+            subscription.request(1);
+        }
+
+        @Override
+        public void onNext(List<ByteBuffer> item) {
+            try {
+                for (ByteBuffer buffer : item) {
+                    byte[] bytes = new byte[buffer.remaining()];
+                    buffer.get(bytes);
+                    output.write(bytes);
+                }
                 subscription.request(1);
             }
-
-            @Override
-            public void onNext(List<ByteBuffer> item) {
-                try {
-                    for (ByteBuffer buffer : item) {
-                        byte[] bytes = new byte[buffer.remaining()];
-                        buffer.get(bytes);
-                        output.write(bytes);
-                    }
-                    subscription.request(1);
-                }
-                catch (IOException e) {
-                    subscription.cancel();
-                    System.out.println("Error writing to file: " + e.getMessage() + ". Subscription cancelled.");
-                }
+            catch (IOException e) {
+                subscription.cancel();
+                System.out.println("Error writing to file: " + e.getMessage() + ". Subscription cancelled.");
             }
+        }
 
-            @Override
-            public void onError(Throwable throwable) {
-                try {
-                    output.close();
-                }
-                catch (IOException e) {
-                    subscription.cancel();
-                    System.out.println("Error writing to file: " + e.getMessage() + ". Subscription cancelled.");
-                }
+        @Override
+        public void onError(Throwable throwable) {
+            try {
+                output.close();
             }
+            catch (IOException e) {
+                subscription.cancel();
+                System.out.println("Error writing to file: " + e.getMessage() + ". Subscription cancelled.");
+            }
+            finally {
+                System.out.println("Error received from publisher: " + throwable.getMessage());
+                result.completeExceptionally(throwable);
+            }
+        }
 
-            @Override
-            public void onComplete() {
-                try {
-                    output.close();
-                    System.out.println("Response body written to file: http3-response-publisher.txt");
-                }
-                catch (IOException e) {
-                }
+        @Override
+        public void onComplete() {
+            try {
+                output.close();
+                System.out.println("Response body written to file: http3-response-publisher.txt");
             }
-        };
+            catch (IOException e) {
+            }
+            finally {
+                result.complete(null);
+            }
+        }
+
+        public CompletableFuture<Void> getResult() {
+            return result;
+        }
     }
 
     private static URI getServerUrl(String[] args) {
