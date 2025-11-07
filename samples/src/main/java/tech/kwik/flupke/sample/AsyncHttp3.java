@@ -42,7 +42,7 @@ public class AsyncHttp3 {
         if (args.length >= 1 && args[0].equals(DISABLE_CERT_CHECK_OPTION)) {
             argStartIndex++;
         }
-        if (argStartIndex + args.length < 2) {
+        if (args.length- argStartIndex < 2) {
             System.out.println("Excpected arguments: [" + DISABLE_CERT_CHECK_OPTION + "] <download-dir> <url1> [<url2>, ....]");
             return;
         }
