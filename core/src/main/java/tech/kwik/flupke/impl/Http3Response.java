@@ -25,7 +25,6 @@ import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.Optional;
-import java.util.concurrent.CompletionStage;
 
 public class Http3Response<T> implements HttpResponse<T> {
 
@@ -34,11 +33,11 @@ public class Http3Response<T> implements HttpResponse<T> {
     private final int statusCode;
     private T body;
 
-    public Http3Response(HttpRequest request, int statusCode, HttpHeaders headers, CompletionStage<T> bodyCompletionStage) {
+    public Http3Response(HttpRequest request, int statusCode, HttpHeaders headers, T body) {
         this.request = request;
         this.headers = headers;
         this.statusCode = statusCode;
-        bodyCompletionStage.thenApply(t -> body = t);
+        this.body = body;
     }
 
     @Override

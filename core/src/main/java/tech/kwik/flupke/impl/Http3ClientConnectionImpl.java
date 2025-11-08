@@ -49,8 +49,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Flow;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.function.Consumer;
 
 import static tech.kwik.flupke.impl.SettingsFrame.SETTINGS_ENABLE_CONNECT_PROTOCOL;
@@ -102,15 +101,48 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         QuicStream httpStream = quicConnection.createStream(true);
         sendRequest(request, httpStream);
         try {
-            Http3Response<T> http3Response = receiveResponse(request, responseBodyHandler, httpStream);
-            return http3Response;
+            CompletableFuture<HttpResponse<T>> response = new CompletableFuture<>();
+            receiveResponse(request, responseBodyHandler, httpStream, response);
+            return response.get();
+        }
+        catch (InterruptedException e) {
+            throw new IOException("Interrupted while waiting for response", e);
+        }
+        catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof IOException) {
+                throw (IOException) cause;
+            }
+            else {
+                throw new IOException("Error while getting response", cause);
+            }
         }
         catch (MalformedResponseException e) {
             // https://www.rfc-editor.org/rfc/rfc9114.html#name-malformed-requests-and-resp
             // "Malformed requests or responses that are detected MUST be treated as a stream error of type H3_MESSAGE_ERROR."
             throw new ProtocolException(e.getMessage());  // TODO: generate stream error
-        } catch (HttpError e) {
+        }
+        catch (HttpError e) {
             throw new ProtocolException(e.getMessage());
+        }
+    }
+
+    public <T> void sendAsync(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler, CompletableFuture<HttpResponse<T>> result) {
+        try {
+            QuicStream httpStream = quicConnection.createStream(true);
+            sendRequest(request, httpStream);
+            receiveResponse(request, responseBodyHandler, httpStream, result);
+        }
+        catch (IOException e) {
+            result.completeExceptionally(e);
+        }
+        catch (MalformedResponseException e) {
+            // https://www.rfc-editor.org/rfc/rfc9114.html#name-malformed-requests-and-resp
+            // "Malformed requests or responses that are detected MUST be treated as a stream error of type H3_MESSAGE_ERROR."
+            result.completeExceptionally(new ProtocolException(e.getMessage()));  // TODO: generate stream error
+        }
+        catch (HttpError e) {
+            result.completeExceptionally(new ProtocolException(e.getMessage()));
         }
     }
 
@@ -211,7 +243,8 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         requestStream.close();
     }
 
-    private <T> Http3Response<T> receiveResponse(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler, QuicStream httpStream) throws IOException, MalformedResponseException, HttpError {
+    private <T> void receiveResponse(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler, QuicStream httpStream,
+                                     CompletableFuture<HttpResponse<T>> response) throws IOException, MalformedResponseException, HttpError {
         InputStream responseStream = httpStream.getInputStream();
         ResponseFramesSequenceChecker frameSequenceChecker = new ResponseFramesSequenceChecker(httpStream);
 
@@ -226,15 +259,19 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         BodySubscriptionHandler bodySubscriptionHandler = new BodySubscriptionHandler(httpStream, frameSequenceChecker, bodySubscriber, responseInfo);
         bodySubscriber.onSubscribe(bodySubscriptionHandler);
 
-        // Check if a fatal exception has occurred while reading body. If so, throw it.
-        // This is necessary because some body handlers (e.g. ofString) do not throw an exception when they receive an error from the publisher.
-        bodySubscriptionHandler.checkError();
-
-        return new Http3Response<>(
-                request,
-                responseInfo.statusCode(),
-                responseInfo.headers(),
-                bodySubscriber.getBody());
+        CompletionStage<T> bodyCompletion = bodySubscriber.getBody();
+        bodyCompletion.whenComplete((body, error) -> {
+            if (error == null) {
+                response.complete(new Http3Response<>(
+                        request,
+                        responseInfo.statusCode(),
+                        responseInfo.headers(),
+                        body));
+            }
+            else {
+                response.completeExceptionally(error);
+            }
+        });
     }
 
     private HeadersFrame readHeadersFrame(InputStream responseStream, ResponseFramesSequenceChecker frameSequenceChecker) throws IOException, HttpError {
@@ -309,7 +346,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
 
     @Override
     public Statistics getConnectionStats() {
-        return connectionStats;
+        return quicConnection.getStats();
     }
 
     @Override
@@ -567,6 +604,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         private final HttpResponse.BodySubscriber<T> bodySubscriber;
         private final HttpResponseInfo responseInfo;
         private final DataFramesReader dataFramesReader;
+        private final ExecutorService executor;
         private volatile IOException bodyReadException;
 
         public BodySubscriptionHandler(QuicStream httpStream, ResponseFramesSequenceChecker frameSequenceChecker,
@@ -577,10 +615,15 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
             this.responseInfo = responseInfo;
             dataFramesReader = new DataFramesReader(httpStream.getInputStream(), Long.MAX_VALUE, this::handleNonDataFrame,
                     this::gotDataFrame);
+            executor = Executors.newSingleThreadExecutor();  // Intentionally using a single thread executor to have thread confinement for reading body data
         }
 
         @Override
         public void request(long n) {
+            executor.submit(() -> sendData(n));
+        }
+
+        private void sendData(long n) {
             try {
                 int bytesRead;
                 do {
@@ -598,19 +641,19 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
                     // End of stream
                     frameSequenceChecker.done();
                     bodySubscriber.onComplete();
-                    close();
+                    dispose();
                 }
             }
             catch (IOException e) {
                 bodyReadException = e;
                 bodySubscriber.onError(e);
-                close();
+                dispose();
             }
             catch (ConnectionError e) {
                 connectionError(e.getHttp3ErrorCode());
                 bodyReadException = new EOFException();
                 bodySubscriber.onError(bodyReadException);
-                close();
+                dispose();
             }
         }
 
@@ -618,13 +661,11 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         public void cancel() {
             httpStream.abortReading(H3_REQUEST_CANCELLED);
             bodySubscriber.onComplete();
-            close();
+            dispose();
         }
 
-        public void checkError() throws IOException {
-            if (bodyReadException != null) {
-                throw bodyReadException;
-            }
+        private void dispose() {
+            executor.shutdown();
         }
 
         private void handleNonDataFrame(Long frameType, PushbackInputStream inputStream) {
@@ -641,7 +682,6 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
                     // Cannot happen, because readHeadersFrame only throws HttpError when the headers exceeds max size, but client does not impose a max size
                     bodyReadException = new IOException(e);
                     bodySubscriber.onError(bodyReadException);
-                    close();
                 }
             }
             else {
@@ -664,10 +704,6 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
             catch (ProtocolException e) {
                 throw new UncheckedIOException(e);
             }
-        }
-
-        private void close() {
-            connectionStats = quicConnection.getStats();
         }
 
         private void addTrailingHeaders(HeadersFrame headersFrame) {

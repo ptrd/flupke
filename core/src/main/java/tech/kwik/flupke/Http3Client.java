@@ -181,19 +181,18 @@ public class Http3Client extends HttpClient implements Http3ConnectionSettings {
 
     @Override
     public <T> CompletableFuture<HttpResponse<T>> sendAsync(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler) {
-        CompletableFuture<HttpResponse<T>> future = new CompletableFuture<>();
+        CompletableFuture<HttpResponse<T>> response = new CompletableFuture<>();
         executorService.submit(() -> {
             try {
-                future.complete(send(request, responseBodyHandler));
+                http3Connection = http3ConnectionFactory.getConnection(request);
+                http3Connection.connect();
+                http3Connection.sendAsync(request, responseBodyHandler, response);
             }
-            catch (IOException ex) {
-                future.completeExceptionally(ex);
-            }
-            catch (RuntimeException ex) {
-                future.completeExceptionally(ex);
+            catch (Exception e) {
+                response.completeExceptionally(e);
             }
         });
-        return future;
+        return response;
     }
 
     @Override

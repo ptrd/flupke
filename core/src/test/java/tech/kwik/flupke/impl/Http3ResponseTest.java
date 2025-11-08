@@ -23,8 +23,6 @@ import org.junit.jupiter.api.Test;
 import java.net.URI;
 import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -38,9 +36,9 @@ public class Http3ResponseTest {
                 .uri(new URI("https://www.google.com"))
                 .build();
         HttpHeaders headers = null;
-        CompletionStage<String> bodyCompletionStage = new CompletableFuture();
+        String body = "response body";
 
-        Http3Response<String> response = new Http3Response<>(request, 200, headers, bodyCompletionStage);
+        Http3Response<String> response = new Http3Response<>(request, 200, headers, body);
 
         assertThat(response.toString()).contains("(GET https://www.google.com) 200");
     }
