@@ -37,6 +37,7 @@ import tech.kwik.qpack.Encoder;
 import java.io.*;
 import java.net.ProtocolException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
@@ -216,9 +217,7 @@ public class Http3ClientConnectionImplTest {
         };
         mockQuicConnectionWithStreams(http3Connection, responseBytes);
 
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://localhost"))
-                .build();
+        HttpRequest request = dummyRequest();
 
         HttpResponse<String> httpResponse = http3Connection.send(request, HttpResponse.BodyHandlers.ofString());
         assertThat(httpResponse.statusCode()).isEqualTo(200);
@@ -288,9 +287,7 @@ public class Http3ClientConnectionImplTest {
         };
         mockQuicConnectionWithStreams(http3Connection, responseBytes, Map.of(":status", "200", "Content-Type", "crap"), Map.of("x-whatever", "true"), Map.of("header-number", "3"));
 
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://localhost"))
-                .build();
+        HttpRequest request = dummyRequest();
 
         HttpResponse<String> httpResponse = http3Connection.send(request, HttpResponse.BodyHandlers.ofString());
         assertThat(httpResponse.statusCode()).isEqualTo(200);
@@ -309,9 +306,7 @@ public class Http3ClientConnectionImplTest {
         };
         mockQuicConnectionWithStreams(http3Connection, responseBytes);
 
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://localhost"))
-                .build();
+        HttpRequest request = dummyRequest();
 
         HttpResponse<String> response = http3Connection.send(request, HttpResponse.BodyHandlers.ofString());
         assertThat(response.body()).isEmpty();
@@ -346,9 +341,7 @@ public class Http3ClientConnectionImplTest {
         };
         mockQuicConnectionWithStreams(http3Connection, responseBytes);
 
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://localhost"))
-                .build();
+        HttpRequest request = dummyRequest();
 
         HttpResponse<String> httpResponse = http3Connection.send(request, HttpResponse.BodyHandlers.ofString());
         assertThat(httpResponse.statusCode()).isEqualTo(200);
@@ -395,12 +388,10 @@ public class Http3ClientConnectionImplTest {
 
         mockQuicConnectionWithStreams(http3Connection, responseBytes);
 
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://localhost"))
-                .build();
-
-        assertThatThrownBy(
-                () -> http3Connection.send(request, HttpResponse.BodyHandlers.ofString()))
+        assertThatThrownBy(() ->
+                // When
+                http3Connection.send(dummyRequest(), HttpResponse.BodyHandlers.ofString()))
+                // Then
                 .isInstanceOf(EOFException.class);
     }
 
@@ -420,9 +411,7 @@ public class Http3ClientConnectionImplTest {
         };
         mockQuicConnectionWithStreams(http3Connection, responseBytes);
 
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://localhost"))
-                .build();
+        HttpRequest request = dummyRequest();
 
         assertThatThrownBy(
                 () -> http3Connection.send(request, HttpResponse.BodyHandlers.ofString()))
@@ -838,6 +827,12 @@ public class Http3ClientConnectionImplTest {
     //endregion
 
     //region helpers
+    private HttpRequest dummyRequest() throws URISyntaxException {
+        return HttpRequest.newBuilder()
+                .uri(new URI("http://localhost"))
+                .build();
+    }
+
     private QuicStream createControlStream(Integer... additionalBytes) {
         QuicStream quicStream = mock(QuicStream.class);
         when(quicStream.isBidirectional()).thenReturn(false);
