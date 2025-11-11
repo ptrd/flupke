@@ -106,10 +106,7 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
     protected void handleBidirectionalStream(QuicStream quicStream) {
         try {
             PushbackInputStream requestStream = new PushbackInputStream(quicStream.getInputStream(), 8);
-            ByteBuffer buffer = ByteBuffer.allocate(8);
-            int bytesRead = requestStream.read(buffer.array());
-            long frameType = VariableLengthInteger.parseLong(buffer);
-            requestStream.unread(buffer.array(), 0, bytesRead);
+            long frameType = VariableLengthIntegerUtil.peekLong(requestStream);
             if (bidirectionalStreamHandler.containsKey(frameType)) {
                 bidirectionalStreamHandler.get(frameType).accept(wrapWith(quicStream, requestStream));
             }
@@ -117,7 +114,7 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
                 handleStandardRequestResponseStream(replaceInputBy(quicStream, requestStream));
             }
         }
-        catch (IOException | InvalidIntegerEncodingException e) {
+        catch (IOException e) {
             quicStream.abortReading(H3_INTERNAL_ERROR);
             sendHttpErrorResponse(500, "", quicStream);
         }
