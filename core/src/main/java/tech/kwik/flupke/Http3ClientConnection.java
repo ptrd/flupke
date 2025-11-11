@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 public interface Http3ClientConnection extends Http3Connection {
@@ -45,6 +46,8 @@ public interface Http3ClientConnection extends Http3Connection {
     void connect() throws IOException;
 
     <T> HttpResponse<T> send(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler) throws IOException;
+
+    <T> void sendAsync(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler, CompletableFuture<HttpResponse<T>> result) throws IOException;
 
     /**
      * Sends a CONNECT method request.

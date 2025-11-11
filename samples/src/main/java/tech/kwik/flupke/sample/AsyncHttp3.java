@@ -38,11 +38,13 @@ public class AsyncHttp3 {
     public static final String DISABLE_CERT_CHECK_OPTION = "--disableCertificateCheck";
 
     public static void main(String[] args) throws Exception {
+        boolean disableCertCheck = false;
         int argStartIndex = 0;
         if (args.length >= 1 && args[0].equals(DISABLE_CERT_CHECK_OPTION)) {
+            disableCertCheck = true;
             argStartIndex++;
         }
-        if (argStartIndex + args.length < 2) {
+        if (args.length- argStartIndex < 2) {
             System.out.println("Excpected arguments: [" + DISABLE_CERT_CHECK_OPTION + "] <download-dir> <url1> [<url2>, ....]");
             return;
         }
@@ -62,9 +64,11 @@ public class AsyncHttp3 {
             downloadUrls[i] = new URI(args[argStartIndex + 1 + i]);
         }
 
-        HttpClient client = new Http3ClientBuilder()
-                .disableCertificateCheck()
-                .build();
+        Http3ClientBuilder builder = new Http3ClientBuilder();
+        if (disableCertCheck) {
+            builder.disableCertificateCheck();
+        }
+        HttpClient client = builder.build();
         CompletableFuture<HttpResponse<Path>>[] results = new CompletableFuture[downloadUrls.length];
         for (int i = 0; i < downloadUrls.length; i++) {
             HttpRequest request = HttpRequest.newBuilder().uri(downloadUrls[i]).build();

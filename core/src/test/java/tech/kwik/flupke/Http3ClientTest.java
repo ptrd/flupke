@@ -38,6 +38,7 @@ import java.util.concurrent.ExecutionException;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -97,7 +98,8 @@ public class Http3ClientTest {
     public void sendAsyncShouldThrowWhenGettingFutureResultIfSendFails() throws Exception {
         Http3Client httpClient = (Http3Client) new Http3ClientBuilder().build();
         Http3ClientConnectionImpl http3Connection = createMockHttp3Connection(httpClient);
-        when(http3Connection.send(any(), any())).thenThrow(new IOException("something went wrong during request/response"));
+        doThrow(new IOException("something went wrong during request/response"))
+                .when(http3Connection).sendAsync(any(), any(), any());
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(new URI("http://localhost:4433"))
@@ -115,7 +117,8 @@ public class Http3ClientTest {
     public void sendAsyncShouldThrowWhenGettingFutureResultIfRuntimeExceptionOccurs() throws Exception {
         Http3Client httpClient = (Http3Client) new Http3ClientBuilder().build();
         Http3ClientConnectionImpl http3Connection = createMockHttp3Connection(httpClient);
-        when(http3Connection.send(any(), any())).thenThrow(new RuntimeException("something went wrong during request/response"));
+        doThrow(new RuntimeException("something went wrong during request/response"))
+                .when(http3Connection).sendAsync(any(), any(), any());
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(new URI("http://localhost:4433"))
