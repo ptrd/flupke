@@ -1,5 +1,11 @@
 # Releases
 
+## 0.9.1 (2025-11-11)
+
+- fix for WebTransport server: incorrect frameType was read when stream did not yet provide enough data
+- fix for HTTP/3 client: flow subscription should asynchronously publish its items
+- support custom executors in Http3ApplicationProtocolFactory
+
 ## 0.9 (2025-10-06)
 
 - define Java modules ([issue 14](https://github.com/ptrd/flupke/issues/14))
