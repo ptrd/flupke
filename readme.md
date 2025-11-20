@@ -1,6 +1,7 @@
 ![Flupke](https://bitbucket.org/pjtr/flupke/raw/master/docs/Logo%20Flupke%20rectangle.png)
-
 ## HTTP3 Java
+[![Maven Central](https://img.shields.io/maven-central/v/tech.kwik/flupke.svg?label=Maven%20Central)](https://mvnrepository.com/artifact/tech.kwik/flupke)
+[![javadoc](https://javadoc.io/badge2/tech.kwik/flupke/javadoc.svg?color=purple)](https://javadoc.io/doc/tech.kwik/flupke)
 
 Flupke is a (100% pure) Java HTTP3 implementation that runs on top of [Kwik](http://kwik.tech).
 
