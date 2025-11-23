@@ -33,6 +33,11 @@ public class ConnectionError extends Exception {
         this.http3ErrorCode = http3ErrorCode;
     }
 
+    public ConnectionError(long http3ErrorCode, long streamId, String message) {
+        super("HTTP/3 connection error: " + http3ErrorCode);
+        this.http3ErrorCode = http3ErrorCode;
+    }
+
     public long getHttp3ErrorCode() {
         return http3ErrorCode;
     }
