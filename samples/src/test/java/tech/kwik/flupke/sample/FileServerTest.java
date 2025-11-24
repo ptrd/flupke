@@ -29,6 +29,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.Inet4Address;
+import java.net.InetSocketAddress;
 import java.nio.file.Files;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -76,6 +77,6 @@ public class FileServerTest {
     }
 
     private HttpServerRequest createGetRequest(String filename) throws IOException {
-        return new HttpServerRequestImpl("GET", filename, null, Inet4Address.getByAddress(new byte[] { 10, 0, 0, 58 }), mock(InputStream.class));
+        return new HttpServerRequestImpl("GET", filename, null, new InetSocketAddress(Inet4Address.getByAddress(new byte[] { 10, 0, 0, 58 }), 443), mock(InputStream.class));
     }
 }

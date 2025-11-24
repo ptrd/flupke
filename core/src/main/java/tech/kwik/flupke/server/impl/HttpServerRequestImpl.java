@@ -22,6 +22,7 @@ import tech.kwik.flupke.server.HttpServerRequest;
 
 import java.io.InputStream;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.http.HttpHeaders;
 import java.time.Instant;
 
@@ -31,11 +32,11 @@ public class HttpServerRequestImpl implements HttpServerRequest {
     private final String method;
     private final String path;
     private final HttpHeaders headers;
-    private final InetAddress clientAddress;
+    private final InetSocketAddress clientAddress;
     private final Instant requestTime;
     private final InputStream bodyInputStream;
 
-    public HttpServerRequestImpl(String method, String path, HttpHeaders headers, InetAddress clientAddress, InputStream bodyInputStream) {
+    public HttpServerRequestImpl(String method, String path, HttpHeaders headers, InetSocketAddress clientAddress, InputStream bodyInputStream) {
         this.method = method;
         this.path = path;
         this.headers = headers;
@@ -66,6 +67,11 @@ public class HttpServerRequestImpl implements HttpServerRequest {
 
     @Override
     public InetAddress clientAddress() {
+        return clientAddress.getAddress();
+    }
+
+    @Override
+    public InetSocketAddress remoteAddress() {
         return clientAddress;
     }
 

@@ -4,7 +4,7 @@ plugins {
 
 
 dependencies {
-    implementation group: 'tech.kwik', name: 'kwik', version: '0.10.6'
+    implementation group: 'tech.kwik', name: 'kwik', version: '0.10.8'
     implementation group: 'tech.kwik', name: 'qpack', version: '2.0.1'
 }
 
