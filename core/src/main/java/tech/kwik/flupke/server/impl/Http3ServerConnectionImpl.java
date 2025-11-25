@@ -35,6 +35,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PushbackInputStream;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
@@ -58,7 +59,7 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
     public static int DEFAULT_MAX_DATA_SIZE = 10 * 1024 * 1024;
 
     private final HttpRequestHandler requestHandler;
-    private final InetAddress clientAddress;
+    private final InetSocketAddress clientAddress;
     private final long maxHeaderSize;
     private final long maxDataSize;
     private final ExecutorService executor;
@@ -81,7 +82,7 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
         this.extensionFactories = extensions;
         this.instantiatedExtensions = new ConcurrentHashMap<>();
         encoder = Encoder.newBuilder().build();
-        clientAddress = ((ServerConnection) quicConnection).getInitialClientAddress();
+        clientAddress = ((ServerConnection) quicConnection).getInitialRemoteAddress();
         settingsParameters.put((long) SETTINGS_ENABLE_CONNECT_PROTOCOL, 1L);
         extensionFactories.values().forEach(factory -> {
             factory.getExtensionSettings().forEach((key, value) -> {

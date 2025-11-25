@@ -20,6 +20,7 @@ package tech.kwik.flupke.server;
 
 import java.io.InputStream;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.http.HttpHeaders;
 import java.time.Instant;
 
@@ -34,6 +35,8 @@ public interface HttpServerRequest {
     InputStream body();
 
     InetAddress clientAddress();
+
+    InetSocketAddress remoteAddress();
 
     Instant time();
 }
