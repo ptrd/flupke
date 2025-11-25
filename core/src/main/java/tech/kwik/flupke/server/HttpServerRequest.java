@@ -32,6 +32,8 @@ public interface HttpServerRequest {
 
     HttpHeaders headers();
 
+    String host();
+
     InputStream body();
 
     InetAddress clientAddress();
