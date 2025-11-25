@@ -1,5 +1,9 @@
 # Releases
 
+## 0.9.2 (2025-11-25)
+
+- added method to let server http request object provide the client address (IP and port number)
+
 ## 0.9.1 (2025-11-11)
 
 - fix for WebTransport server: incorrect frameType was read when stream did not yet provide enough data
