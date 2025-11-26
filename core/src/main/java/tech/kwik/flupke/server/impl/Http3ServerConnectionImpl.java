@@ -319,9 +319,9 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
     void handleHttpRequest(HeadersFrame headersFrame, QuicStream quicStream, Encoder qpackEncoder) throws ConnectionError {
         String method = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_METHOD);
         String path = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PATH);
-        String host = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_AUTHORITY);
+        String auth = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_AUTHORITY);
         DataFramesReader dataFramesReader = new DataFramesReader(quicStream.getInputStream(), maxDataSize);
-        HttpServerRequest request = new HttpServerRequestImpl(method, path, host, headersFrame.headers(), clientAddress, dataFramesReader.getDataFramesStream());
+        HttpServerRequest request = new HttpServerRequestImpl(method, path, auth, headersFrame.headers(), clientAddress, dataFramesReader.getDataFramesStream());
         HttpServerResponse response = new DefaultHttpResponse(quicStream, qpackEncoder);
 
         try {

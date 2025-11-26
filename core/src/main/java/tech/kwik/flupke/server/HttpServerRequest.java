@@ -32,7 +32,7 @@ public interface HttpServerRequest {
 
     HttpHeaders headers();
 
-    String host();
+    String authority();
 
     InputStream body();
 

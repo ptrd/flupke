@@ -31,16 +31,16 @@ public class HttpServerRequestImpl implements HttpServerRequest {
 
     private final String method;
     private final String path;
-    private final String host;
+    private final String auth;
     private final HttpHeaders headers;
     private final InetSocketAddress clientAddress;
     private final Instant requestTime;
     private final InputStream bodyInputStream;
 
-    public HttpServerRequestImpl(String method, String path, String host, HttpHeaders headers, InetSocketAddress clientAddress, InputStream bodyInputStream) {
+    public HttpServerRequestImpl(String method, String path, String auth, HttpHeaders headers, InetSocketAddress clientAddress, InputStream bodyInputStream) {
         this.method = method;
         this.path = path;
-        this.host = host;
+        this.auth = auth;
         this.headers = headers;
         this.bodyInputStream = bodyInputStream;
         this.clientAddress = clientAddress;
@@ -63,8 +63,8 @@ public class HttpServerRequestImpl implements HttpServerRequest {
     }
 
     @Override
-    public String host() {
-        return host;
+    public String authority() {
+        return auth;
     }
 
     @Override
