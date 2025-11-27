@@ -1,5 +1,9 @@
 # Releases
 
+## 0.9.3 (2025-11-27)
+
+- added method to let server http request object provide the authority (equivalent to HTTP/1 "Host" header)
+
 ## 0.9.2 (2025-11-25)
 
 - added method to let server http request object provide the client address (IP and port number)
