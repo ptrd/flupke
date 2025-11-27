@@ -580,6 +580,32 @@ public class Http3ClientConnectionImplTest {
 
         verifyClosedWith(quicConnection, H3_FRAME_UNEXPECTED);
     }
+
+    @Test
+    void missingStatusCodeInResponseShouldLeadToStreamError() throws Exception {
+        Http3ClientConnection http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
+
+        byte[] responseBytes = new byte[] {
+                // Partial response for Headers frame, the rest is covered by the mock decoder
+                0x01, // type Headers Frame
+                0x00, // payload length
+                // Complete response for Data frame
+                0x00, // type Data Frame
+                0x01, // payload length
+                0x23, // '#'
+        };
+        QuicStream quicStream = mockQuicConnectionWithStreams(http3Connection, responseBytes, Map.of("content-type", "whatever"));// No :status header
+
+        HttpRequest request = dummyRequest();
+
+        assertThatThrownBy(
+                // When
+                () -> http3Connection.send(request, HttpResponse.BodyHandlers.ofString()))
+                // Then
+                .isInstanceOf(IOException.class);
+
+        verifyStreamError(quicStream, H3_MESSAGE_ERROR);
+    }
     //endregion
 
     //region test private/protected methods
@@ -1116,6 +1142,12 @@ public class Http3ClientConnectionImplTest {
 
     private void verifyNotClosed(QuicClientConnection quicConnection) {
         verify(quicConnection, never()).close(anyLong(), any());
+    }
+
+    private void verifyStreamError(QuicStream quicStream, long errorCode) throws IOException {
+        ArgumentCaptor<Long> errorCodeCaptor = ArgumentCaptor.forClass(Long.class);
+        verify(quicStream, atLeastOnce()).resetStream(errorCodeCaptor.capture());
+        assertThat(errorCodeCaptor.getValue()).isEqualTo(errorCode);
     }
 
     private class NoOpEncoder implements Encoder {

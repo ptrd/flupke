@@ -24,7 +24,6 @@ import tech.kwik.qpack.Encoder;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.net.ProtocolException;
 import java.net.http.HttpHeaders;
 import java.nio.ByteBuffer;
 import java.util.*;
@@ -117,7 +116,7 @@ public class HeadersFrame extends Http3Frame {
         return this;
     }
 
-    private void extractPseudoHeaders(Map<String, List<String>> headersMap) throws ProtocolException {
+    private void extractPseudoHeaders(Map<String, List<String>> headersMap) {
         headersMap.entrySet().stream()
                 .filter(entry -> entry.getKey().startsWith(":"))
                 .forEach(entry -> pseudoHeaders.put(entry.getKey(), entry.getValue().get(0)));

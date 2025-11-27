@@ -124,7 +124,8 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         catch (MalformedResponseException e) {
             // https://www.rfc-editor.org/rfc/rfc9114.html#name-malformed-requests-and-resp
             // "Malformed requests or responses that are detected MUST be treated as a stream error of type H3_MESSAGE_ERROR."
-            throw new ProtocolException(e.getMessage());  // TODO: generate stream error
+            streamError(H3_MESSAGE_ERROR, httpStream);
+            throw new ProtocolException("H3 stream error: H3_MESSAGE_ERROR");
         }
         catch (HttpError e) {
             throw new ProtocolException(e.getMessage());
@@ -132,8 +133,9 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     }
 
     public <T> void sendAsync(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler, CompletableFuture<HttpResponse<T>> result) {
+        QuicStream httpStream = null;
         try {
-            QuicStream httpStream = quicConnection.createStream(true);
+            httpStream = quicConnection.createStream(true);
             sendRequest(request, httpStream);
             receiveResponse(request, responseBodyHandler, httpStream, result);
         }
@@ -147,7 +149,8 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         catch (MalformedResponseException e) {
             // https://www.rfc-editor.org/rfc/rfc9114.html#name-malformed-requests-and-resp
             // "Malformed requests or responses that are detected MUST be treated as a stream error of type H3_MESSAGE_ERROR."
-            result.completeExceptionally(new ProtocolException(e.getMessage()));  // TODO: generate stream error
+            streamError(H3_MESSAGE_ERROR, httpStream);
+            result.completeExceptionally(new ProtocolException("H3 stream error: " + H3_MESSAGE_ERROR));
         }
         catch (HttpError e) {
             result.completeExceptionally(new ProtocolException(e.getMessage()));
@@ -508,6 +511,8 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
                 statusCode = Integer.parseInt(statusCodeHeader);
             }
             else {
+                // https://www.rfc-editor.org/rfc/rfc9114.html#section-4.3.2
+                // "This pseudo-header field MUST be included in all responses; otherwise, the response is malformed (see Section 4.1.2)."
                 throw new MalformedResponseException("missing or invalid status code");
             }
         }
