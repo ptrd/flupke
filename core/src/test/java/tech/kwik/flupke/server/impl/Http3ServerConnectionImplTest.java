@@ -361,7 +361,9 @@ public class Http3ServerConnectionImplTest {
                 .buildServerConnection();
 
         QuicStream requestResponseStream = mock(QuicStream.class);
-        when(requestResponseStream.getInputStream()).thenReturn(mock(InputStream.class));
+        InputStream emptyInputStream = mock(InputStream.class);
+        when(emptyInputStream.read()).thenReturn(-1);
+        when(requestResponseStream.getInputStream()).thenReturn(emptyInputStream);
         when(requestResponseStream.getOutputStream()).thenReturn(mock(OutputStream.class));
 
         // When

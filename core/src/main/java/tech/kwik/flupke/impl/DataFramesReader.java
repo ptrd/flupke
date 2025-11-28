@@ -61,6 +61,7 @@ public class DataFramesReader extends InputStream {
         if (remainingDataFrameContent == 0) {
             try {
                 long frameType;
+                long frameLength = 0;
                 do {
                     int read = dataFramesStream.read();
                     if (read == -1) {
@@ -73,9 +74,12 @@ public class DataFramesReader extends InputStream {
                     if (frameType != FRAME_TYPE_DATA) {
                         nonDataFrameHandler.accept(frameType, dataFramesStream);
                     }
+                    else {
+                        frameLength = VariableLengthInteger.parseLong(dataFramesStream);
+                    }
                 }
-                while (frameType != FRAME_TYPE_DATA);
-                long frameLength = VariableLengthInteger.parseLong(dataFramesStream);
+                while (frameType != FRAME_TYPE_DATA || frameLength == 0);
+                assert frameType == FRAME_TYPE_DATA && frameLength > 0;
                 gotDataFrameCallback.accept(frameLength);
                 remainingDataFrameContent = frameLength;
             }

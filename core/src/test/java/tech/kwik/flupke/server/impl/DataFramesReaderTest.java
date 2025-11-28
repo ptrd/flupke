@@ -65,6 +65,35 @@ class DataFramesReaderTest {
     }
 
     @Test
+    void readDataFromMultipleDataFramesWithSomeZeroDataFrames() throws Exception {
+        byte[] inputData = new byte[] {
+                FRAME_TYPE_DATA, 0x01, (byte) 0xca,
+                FRAME_TYPE_DATA, 0x00,
+                FRAME_TYPE_DATA, 0x02, (byte) 0xfe, (byte) 0xba,
+                FRAME_TYPE_DATA, 0x00,
+                FRAME_TYPE_DATA, 0x00,
+                FRAME_TYPE_DATA, 0x00,
+                FRAME_TYPE_DATA, 0x01, (byte) 0xbe
+        };
+        DataFramesReader reader = new DataFramesReader(new ByteArrayInputStream(inputData), 100);
+
+        byte[] buffer = new byte[10];
+        int offset = 0;
+        int read;
+        do {
+            read = reader.read(buffer, offset, buffer.length - offset);
+            if (read > 0) {
+                offset += read;
+            }
+        }
+        while (read >= 0);
+        byte[] data = Arrays.copyOf(buffer, offset);
+
+        assertThat(data).isEqualTo(new byte[] { (byte) 0xca, (byte) 0xfe, (byte) 0xba, (byte) 0xbe });
+    }
+
+
+    @Test
     void readDataFromMultipleDataFramesOneByOne() throws Exception {
         byte[] inputData = new byte[] {
                 FRAME_TYPE_DATA, 0x01, (byte) 0xca,
