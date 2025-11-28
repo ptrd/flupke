@@ -800,7 +800,7 @@ public class Http3ClientConnectionImplTest {
         assertThatThrownBy(() ->
                 // When
                 http3Connection.sendExtendedConnect(connectRequest, "websocket", "https", Duration.ofMillis(10))
-        ).isInstanceOf(HttpError.class);
+        ).isInstanceOf(ProtocolException.class);
     }
 
     @Test
@@ -817,7 +817,7 @@ public class Http3ClientConnectionImplTest {
         assertThatThrownBy(() ->
                 // When
                 http3Connection.sendExtendedConnect(connectRequest, "websocket", "https", Duration.ofMillis(100))
-        ).isInstanceOf(HttpError.class);
+        ).isInstanceOf(ProtocolException.class);
     }
 
     @Test

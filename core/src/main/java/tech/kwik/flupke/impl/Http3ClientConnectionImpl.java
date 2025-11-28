@@ -382,10 +382,10 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     @Override
     public HttpStream sendExtendedConnect(HttpRequest request, String protocol, String scheme, Duration settingsFrameTimeout) throws InterruptedException, HttpError, IOException {
         if (! settingsFrameReceived.await(settingsFrameTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
-            throw new HttpError("No SETTINGS frame received in time.");
+            throw new ProtocolException("No SETTINGS frame received in time.");
         }
         if (! isEnableConnectProtocol()) {
-            throw new HttpError("Server does not support Extended Connect (RFC 9220).");
+            throw new ProtocolException("Server does not support Extended Connect (RFC 9220).");
         }
 
         // https://www.rfc-editor.org/rfc/rfc8441#section-4
