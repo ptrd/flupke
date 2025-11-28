@@ -58,11 +58,15 @@ import static tech.kwik.flupke.impl.SettingsFrame.SETTINGS_ENABLE_CONNECT_PROTOC
 public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Http3ClientConnection {
 
     public static final int MAX_DATA_FRAME_READ_CHUNK_SIZE = 8192;
+    public static long MAX_RECEIVED_HEADER_SIZE = Long.MAX_VALUE;
+    public static long MAX_RECEIVED_DATA_SIZE = Long.MAX_VALUE;
 
     private InputStream serverPushStream;
     private Statistics connectionStats;
     private boolean initialized;
     private Consumer<HttpStream> bidirectionalStreamHandler;
+    private long maxReceivedHeaderSize = MAX_RECEIVED_HEADER_SIZE;
+    private long maxReceivedDataSize = MAX_RECEIVED_DATA_SIZE;
 
     public Http3ClientConnectionImpl(String host, int port) throws IOException {
         this(host, port, DEFAULT_CONNECT_TIMEOUT, defaultConnectionSettings(), null, null);
@@ -128,7 +132,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
             throw new ProtocolException("H3 stream error: H3_MESSAGE_ERROR");
         }
         catch (HttpError e) {
-            throw new ProtocolException(e.getMessage());
+            return new Http3Response<>(request, e.getStatusCode(), HttpHeaders.of(Map.of(), (a,b) -> true), null);
         }
     }
 
@@ -153,7 +157,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
             result.completeExceptionally(new ProtocolException("H3 stream error: " + H3_MESSAGE_ERROR));
         }
         catch (HttpError e) {
-            result.completeExceptionally(new ProtocolException(e.getMessage()));
+            result.complete(new Http3Response<>(request, e.getStatusCode(), HttpHeaders.of(Map.of(), (a,b) -> true), null));
         }
     }
 
@@ -287,7 +291,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
 
     private HeadersFrame readHeadersFrame(InputStream responseStream, ResponseFramesSequenceChecker frameSequenceChecker) throws IOException, HttpError, ConnectionError {
         try {
-            Http3Frame frame = readFrame(responseStream);
+            Http3Frame frame = readFrame(responseStream, maxReceivedHeaderSize, maxReceivedDataSize);
             if (frame == null) {
                 throw new EOFException("end of stream");
             }

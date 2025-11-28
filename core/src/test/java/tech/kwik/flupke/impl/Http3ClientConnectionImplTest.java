@@ -606,6 +606,47 @@ public class Http3ClientConnectionImplTest {
 
         verifyStreamError(quicStream, H3_MESSAGE_ERROR);
     }
+
+    @Test
+    void whenReceivedHeaderIsLargerThanMaxSendReturnsErrorResponse() throws Exception {
+        Http3ClientConnectionImpl http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
+        FieldSetter.setField(http3Connection, Http3ClientConnectionImpl.class, "maxReceivedHeaderSize", 250);
+
+        byte[] responseBytes = new byte[] {
+                // Partial response for Headers frame, the rest is covered by the mock decoder
+                0x01, // type Headers Frame
+                0x40, (byte) 0xff, // payload length (255 bytes, larger than max of 250)
+                // Complete response for Data frame
+                0x00, // type Data Frame
+                0x01, // payload length
+                0x23, // '#'
+        };
+        mockQuicConnectionWithStreams(http3Connection, responseBytes);
+
+        HttpResponse<String> httpResponse = http3Connection.send(dummyRequest(), HttpResponse.BodyHandlers.ofString());
+        assertThat(httpResponse.statusCode()).isEqualTo(414);
+    }
+
+    @Test
+    void whenReceivedHeaderIsLargerThanMaxSendAsyncReturnsErrorResponse() throws Exception {
+        Http3ClientConnectionImpl http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
+        FieldSetter.setField(http3Connection, Http3ClientConnectionImpl.class, "maxReceivedHeaderSize", 250);
+
+        byte[] responseBytes = new byte[] {
+                // Partial response for Headers frame, the rest is covered by the mock decoder
+                0x01, // type Headers Frame
+                0x40, (byte) 0xff, // payload length (255 bytes, larger than max of 250)
+                // Complete response for Data frame
+                0x00, // type Data Frame
+                0x01, // payload length
+                0x23, // '#'
+        };
+        mockQuicConnectionWithStreams(http3Connection, responseBytes);
+
+        CompletableFuture<HttpResponse<String>> result = new CompletableFuture<>();
+        http3Connection.sendAsync(dummyRequest(), HttpResponse.BodyHandlers.ofString(), result);
+        assertThat(result.get().statusCode()).isEqualTo(414);
+    }
     //endregion
 
     //region test private/protected methods
