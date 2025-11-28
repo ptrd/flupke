@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021, 2022, 2023, 2024, 2025 Peter Doornbosch
+ * Copyright © 2025 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *
@@ -16,19 +16,19 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package tech.kwik.flupke;
+package tech.kwik.flupke.impl;
 
+public class UncheckedConnectionError extends RuntimeException {
 
-public class HttpError extends Exception {
+    private final long http3ErrorCode;
+    private final ConnectionError checkedException;
 
-    private Integer statusCode;
-
-    public HttpError(String message, int statusCode) {
-        super(message + " (" + statusCode + ")");
-        this.statusCode = statusCode;
+    public UncheckedConnectionError(ConnectionError cause) {
+        this.checkedException = cause;
+        http3ErrorCode = cause.getHttp3ErrorCode();
     }
 
-    public Integer getStatusCode() {
-        return statusCode;
+    public ConnectionError toChecked() {
+        return checkedException;
     }
 }

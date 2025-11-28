@@ -36,7 +36,9 @@ import tech.kwik.qpack.Encoder;
 
 import java.io.*;
 import java.net.ProtocolException;
+import java.net.SocketException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
@@ -46,6 +48,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -57,15 +61,14 @@ import static org.assertj.core.api.Assertions.entry;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.*;
-import static tech.kwik.flupke.impl.Http3ConnectionImpl.FRAME_TYPE_DATA;
-import static tech.kwik.flupke.impl.Http3ConnectionImpl.FRAME_TYPE_HEADERS;
-import static tech.kwik.flupke.impl.Http3ConnectionImpl.H3_STREAM_CREATION_ERROR;
+import static tech.kwik.flupke.impl.Http3ConnectionImpl.*;
 import static tech.kwik.flupke.impl.SettingsFrame.SETTINGS_ENABLE_CONNECT_PROTOCOL;
 
 
 public class Http3ClientConnectionImplTest {
 
     private List<Map.Entry<String, String>> mockEncoderCompressedHeaders = new ArrayList<>();
+    private QuicClientConnection quicConnection;
 
     // An empty headers that is used in combination with the mockQuicConnectionWithStreams method.
     private byte[] MOCK_HEADER = new byte[] {
@@ -74,6 +77,7 @@ public class Http3ClientConnectionImplTest {
             0x00, // payload length
     };
 
+    //region request correctness
     @Test
     public void requestShouldContainCompulsaryPseudoHeaders() throws Exception {
         // Given
@@ -106,7 +110,7 @@ public class Http3ClientConnectionImplTest {
     }
 
     @Test
-    public void headersFrameAuthorityHeaderShouldExludeUserInfo() throws Exception {
+    public void headersFrameAuthorityHeaderShouldExcludeUserInfo() throws Exception {
         // Given
         Http3ClientConnectionImpl http3Connection = new Http3ClientConnectionImpl("localhost",4433, new NoOpEncoder());
         mockQuicConnectionWithStreams(http3Connection, MOCK_HEADER);
@@ -119,6 +123,32 @@ public class Http3ClientConnectionImplTest {
         assertThat(mockEncoderCompressedHeaders).contains(entry(":authority", "example.com:4433"));
     }
 
+    @Test
+    public void postRequestEncodesRequestBodyInDataFrame() throws Exception {
+        Http3ClientConnection http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
+
+        byte[] responseBytes = new byte[]{
+                // Partial response for Headers frame, the rest is covered by the mock decoder
+                0x01, // type Headers Frame
+                0x00, // payload length
+        };
+        QuicStream http3Stream = mockQuicConnectionWithStreams(http3Connection, responseBytes);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI("http://localhost"))
+                .POST(HttpRequest.BodyPublishers.ofString("This is the request body."))
+                .build();
+
+        http3Connection.send(request, HttpResponse.BodyHandlers.ofString());
+
+        ArgumentCaptor<byte[]> captor = ArgumentCaptor.forClass(byte[].class);
+        verify(http3Stream.getOutputStream(), times(2)).write(captor.capture());
+        byte[] dataFrameBytes = captor.getAllValues().get(1);
+        assertThat(dataFrameBytes).endsWith("This is the request body.".getBytes());
+    }
+    //endregion
+
+    //region settings frame
     @Test
     public void testServerSettingsFrameIsProcessed() throws IOException {
         Http3ClientConnectionImpl http3Connection = new Http3ClientConnectionImpl("localhost",4433);
@@ -167,7 +197,9 @@ public class Http3ClientConnectionImplTest {
                 0      // value
         });
     }
+    //endregion
 
+    //region response handling
     @Test
     public void testReceiveHttpResponse() throws Exception {
         Http3ClientConnection http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
@@ -187,9 +219,7 @@ public class Http3ClientConnectionImplTest {
         };
         mockQuicConnectionWithStreams(http3Connection, responseBytes);
 
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://localhost"))
-                .build();
+        HttpRequest request = dummyRequest();
 
         HttpResponse<String> httpResponse = http3Connection.send(request, HttpResponse.BodyHandlers.ofString());
         assertThat(httpResponse.statusCode()).isEqualTo(200);
@@ -238,32 +268,6 @@ public class Http3ClientConnectionImplTest {
     }
 
     @Test
-    public void testMissingHeaderFrame() throws Exception {
-        Http3ClientConnection http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
-
-        byte[] responseBytes = new byte[] {
-                // Complete response for Data frame
-                0x00, // type Data Frame
-                0x05, // payload length
-                0x4e, // 'N'
-                0x69, // 'i'
-                0x63, // 'c'
-                0x65, // 'e'
-                0x21, // '!'
-        };
-        mockQuicConnectionWithStreams(http3Connection, responseBytes);
-
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://localhost"))
-                .build();
-
-        assertThatThrownBy(
-                () -> http3Connection.send(request, HttpResponse.BodyHandlers.ofString()))
-                .isInstanceOf(IOException.class)
-                .hasMessageContaining("(quic stream");
-    }
-
-    @Test
     public void testResponseCanHaveTrailingHeadersFrame() throws Exception {
         Http3ClientConnection http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
 
@@ -285,61 +289,12 @@ public class Http3ClientConnectionImplTest {
         };
         mockQuicConnectionWithStreams(http3Connection, responseBytes, Map.of(":status", "200", "Content-Type", "crap"), Map.of("x-whatever", "true"), Map.of("header-number", "3"));
 
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://localhost"))
-                .build();
+        HttpRequest request = dummyRequest();
 
         HttpResponse<String> httpResponse = http3Connection.send(request, HttpResponse.BodyHandlers.ofString());
         assertThat(httpResponse.statusCode()).isEqualTo(200);
         assertThat(httpResponse.body()).isEqualTo("Nice!");
         assertThat(httpResponse.headers().map()).containsKeys("Content-Type", "x-whatever");
-    }
-
-    @Test
-    public void testStreamAbortedInHeadersFrame() throws Exception {
-        Http3ClientConnection http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
-
-        byte[] responseBytes = new byte[]{
-                // Partial response for Headers frame, to model aborted stream
-                0x01, // type Headers Frame
-                0x0f, // payload length
-        };
-
-        mockQuicConnectionWithStreams(http3Connection, responseBytes);
-
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://localhost"))
-                .build();
-
-        assertThatThrownBy(
-                () -> http3Connection.send(request, HttpResponse.BodyHandlers.ofString()))
-                .isInstanceOf(EOFException.class);
-    }
-
-    @Test
-    public void testStreamAbortedInDataFrame() throws Exception {
-        Http3ClientConnection http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
-
-        byte[] responseBytes = new byte[] {
-                // Partial response for Headers frame, the rest is covered by the mock decoder
-                0x01, // type Headers Frame
-                0x00, // payload length
-                // Partial response for Data frame, to model aborted stream
-                0x00, // type Data Frame
-                0x05, // payload length
-                0x4e, // 'N'
-                0x69, // 'i'
-        };
-        mockQuicConnectionWithStreams(http3Connection, responseBytes);
-
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://localhost"))
-                .build();
-
-        assertThatThrownBy(
-                () -> http3Connection.send(request, HttpResponse.BodyHandlers.ofString()))
-                .isInstanceOf(IOException.class)
-                .isInstanceOf(EOFException.class);
     }
 
     @Test
@@ -353,9 +308,7 @@ public class Http3ClientConnectionImplTest {
         };
         mockQuicConnectionWithStreams(http3Connection, responseBytes);
 
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://localhost"))
-                .build();
+        HttpRequest request = dummyRequest();
 
         HttpResponse<String> response = http3Connection.send(request, HttpResponse.BodyHandlers.ofString());
         assertThat(response.body()).isEmpty();
@@ -390,15 +343,313 @@ public class Http3ClientConnectionImplTest {
         };
         mockQuicConnectionWithStreams(http3Connection, responseBytes);
 
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://localhost"))
-                .build();
+        HttpRequest request = dummyRequest();
 
         HttpResponse<String> httpResponse = http3Connection.send(request, HttpResponse.BodyHandlers.ofString());
         assertThat(httpResponse.statusCode()).isEqualTo(200);
         assertThat(httpResponse.body()).isEqualTo("Nice!");
     }
+    //endregion
 
+    //region response error handling
+    @Test
+    public void testMissingHeaderFrame() throws Exception {
+        // Given
+        Http3ClientConnection http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
+
+        byte[] responseBytes = new byte[] {
+                // Complete response for Data frame
+                0x00, // type Data Frame
+                0x05, // payload length
+                0x4e, // 'N'
+                0x69, // 'i'
+                0x63, // 'c'
+                0x65, // 'e'
+                0x21, // '!'
+        };
+        mockQuicConnectionWithStreams(http3Connection, responseBytes);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI("http://localhost"))
+                .build();
+
+        assertThatThrownBy(
+                () -> http3Connection.send(request, HttpResponse.BodyHandlers.ofString()))
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("onnection error");
+
+        // Then
+        verifyClosedWith(quicConnection, H3_FRAME_UNEXPECTED);
+    }
+
+    @Test
+    public void testStreamAbortedInHeadersFrame() throws Exception {
+        // Given
+        Http3ClientConnection http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
+
+        byte[] responseBytes = new byte[]{
+                // Partial response for Headers frame, to model aborted stream
+                0x01, // type Headers Frame
+                0x0f, // payload length
+        };
+
+        mockQuicConnectionWithStreams(http3Connection, responseBytes);
+
+        // When
+        assertThatThrownBy(() ->
+                http3Connection.send(dummyRequest(), HttpResponse.BodyHandlers.ofString()))
+                .isInstanceOf(IOException.class);
+
+        // Then
+        verifyClosedWith(quicConnection, H3_FRAME_ERROR);
+    }
+
+    @Test
+    void receivingEmptyResponseShouldLeadToConnectionError() throws Exception {
+        // Given
+        Http3ClientConnection http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
+        byte[] responseBytes = new byte[0];
+        mockQuicConnectionWithStreams(http3Connection, responseBytes);
+
+        // When
+        assertThatThrownBy(() ->
+                http3Connection.send(dummyRequest(), HttpResponse.BodyHandlers.ofString()))
+                .isInstanceOf(IOException.class);
+
+        // Then
+        verifyClosedWith(quicConnection, H3_FRAME_ERROR);
+    }
+
+    @Test
+    public void sendAsyncStreamAbortedInHeadersFrame() throws Exception {
+        // Given
+        Http3ClientConnection http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
+
+        byte[] responseBytes = new byte[]{
+                // Partial response for Headers frame, to model aborted stream
+                0x01, // type Headers Frame
+                0x0f, // payload length
+        };
+
+        mockQuicConnectionWithStreams(http3Connection, responseBytes);
+
+        // When
+        CompletableFuture<HttpResponse<String>> result = new CompletableFuture<>();
+        http3Connection.sendAsync(dummyRequest(), HttpResponse.BodyHandlers.ofString(), result);
+        assertThatThrownBy(() ->
+                result.get())
+                .isInstanceOf(ExecutionException.class)
+                .hasCauseInstanceOf(IOException.class);
+
+        // Then
+        verifyClosedWith(quicConnection, H3_FRAME_ERROR);
+    }
+
+    @Test
+    public void testStreamAbortedInDataFrame() throws Exception {
+        Http3ClientConnection http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
+
+        byte[] responseBytes = new byte[] {
+                // Partial response for Headers frame, the rest is covered by the mock decoder
+                0x01, // type Headers Frame
+                0x00, // payload length
+                // Partial response for Data frame, to model aborted stream
+                0x00, // type Data Frame
+                0x15, // payload length, obviously longer than actual payload
+                0x4e, // 'N'
+                0x69, // 'i'
+        };
+        mockQuicConnectionWithStreams(http3Connection, responseBytes);
+
+        HttpRequest request = dummyRequest();
+
+        assertThatThrownBy(
+                () -> http3Connection.send(request, HttpResponse.BodyHandlers.ofString()))
+                .isInstanceOf(IOException.class)
+                .isInstanceOf(EOFException.class);
+
+        verifyClosedWith(quicConnection, H3_FRAME_ERROR);
+    }
+
+    @Test
+    public void sendAsyncResponseStreamAbortedInDataFrame() throws Exception {
+        // Given
+        Http3ClientConnection http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
+
+        byte[] responseBytes = new byte[] {
+                // Partial response for Headers frame, the rest is covered by the mock decoder
+                0x01, // type Headers Frame
+                0x00, // payload length
+                // Partial response for Data frame, to model aborted stream
+                0x00, // type Data Frame
+                0x15, // payload length, obviously longer than actual payload
+                0x4e, // 'N'
+                0x69, // 'i'
+        };
+        mockQuicConnectionWithStreams(http3Connection, responseBytes);
+
+        HttpRequest request = dummyRequest();
+
+        // When
+        CompletableFuture<HttpResponse<String>> response = new CompletableFuture<>();
+        http3Connection.sendAsync(request, HttpResponse.BodyHandlers.ofString(), response);
+
+        // Then
+        assertThatThrownBy(() -> response.get())
+                .isInstanceOf(ExecutionException.class)
+                .hasCauseInstanceOf(EOFException.class);
+        assertThat(response.isCompletedExceptionally()).isTrue();
+        verifyClosedWith(quicConnection, H3_FRAME_ERROR);
+    }
+
+    @Test
+    public void otherIOExceptionWhileReadingResponseDoesNotSendConnectionError() throws Exception {
+        // Given
+        Http3ClientConnection http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
+
+        InputStream brokenStream = mock(InputStream.class);
+        when(brokenStream.read()).thenThrow(new SocketException("Simulated IO error"));
+        when(brokenStream.read(any(byte[].class))).thenThrow(new SocketException("Simulated IO error"));
+        when(brokenStream.read(any(byte[].class), anyInt(), anyInt())).thenThrow(new SocketException("Simulated IO error"));
+        mockQuicConnectionWithStream(http3Connection, brokenStream);
+
+        assertThatThrownBy(() ->
+                // When
+                http3Connection.send(dummyRequest(), HttpResponse.BodyHandlers.ofString()))
+                // Then
+                .isInstanceOf(IOException.class);
+
+        verifyNotClosed(quicConnection);
+    }
+
+    @Test
+    void incompleteTrailingHeaderFrame() throws Exception {
+        Http3ClientConnection http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
+
+        byte[] responseBytes = new byte[] {
+                // Partial response for Headers frame, the rest is covered by the mock decoder
+                0x01, // type Headers Frame
+                0x00, // payload length
+                // Minimal Data frame
+                0x00, // type Data Frame
+                0x01, // payload length
+                0x23, // '#'
+                // Trailing header frame, but incomplete
+                0x01, // type Headers Frame
+                0x0f, // payload length
+        };
+        mockQuicConnectionWithStreams(http3Connection, responseBytes);
+
+        HttpRequest request = dummyRequest();
+
+        assertThatThrownBy(
+                () -> http3Connection.send(request, HttpResponse.BodyHandlers.ofString()))
+                .isInstanceOf(IOException.class)
+                .isInstanceOf(EOFException.class);
+
+        verifyClosedWith(quicConnection, H3_FRAME_ERROR);
+    }
+    @Test
+    void dataFrameAfterTrailingHeaderFrame() throws Exception {
+        Http3ClientConnection http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
+
+        byte[] responseBytes = new byte[] {
+                // Partial response for Headers frame, the rest is covered by the mock decoder
+                0x01, // type Headers Frame
+                0x00, // payload length
+                // Minimal Data frame
+                0x00, // type Data Frame
+                0x01, // payload length
+                0x21, // '!'
+                // Trailing header frame (ok)
+                0x01, // type Headers Frame
+                0x00, // payload length
+                // Additional Data frame (not allowed after trailing headers)
+                0x00, // type Data Frame
+                0x01, // payload length
+                0x3f, // '?'
+        };
+        mockQuicConnectionWithStreams(http3Connection, responseBytes);
+
+        HttpRequest request = dummyRequest();
+
+        assertThatThrownBy(
+                () -> http3Connection.send(request, HttpResponse.BodyHandlers.ofString()))
+                .isInstanceOf(IOException.class)
+                .isInstanceOf(EOFException.class);
+
+        verifyClosedWith(quicConnection, H3_FRAME_UNEXPECTED);
+    }
+
+    @Test
+    void missingStatusCodeInResponseShouldLeadToStreamError() throws Exception {
+        Http3ClientConnection http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
+
+        byte[] responseBytes = new byte[] {
+                // Partial response for Headers frame, the rest is covered by the mock decoder
+                0x01, // type Headers Frame
+                0x00, // payload length
+                // Complete response for Data frame
+                0x00, // type Data Frame
+                0x01, // payload length
+                0x23, // '#'
+        };
+        QuicStream quicStream = mockQuicConnectionWithStreams(http3Connection, responseBytes, Map.of("content-type", "whatever"));// No :status header
+
+        HttpRequest request = dummyRequest();
+
+        assertThatThrownBy(
+                // When
+                () -> http3Connection.send(request, HttpResponse.BodyHandlers.ofString()))
+                // Then
+                .isInstanceOf(IOException.class);
+
+        verifyStreamError(quicStream, H3_MESSAGE_ERROR);
+    }
+
+    @Test
+    void whenReceivedHeaderIsLargerThanMaxSendReturnsErrorResponse() throws Exception {
+        Http3ClientConnectionImpl http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
+        FieldSetter.setField(http3Connection, Http3ClientConnectionImpl.class, "maxReceivedHeaderSize", 250);
+
+        byte[] responseBytes = new byte[] {
+                // Partial response for Headers frame, the rest is covered by the mock decoder
+                0x01, // type Headers Frame
+                0x40, (byte) 0xff, // payload length (255 bytes, larger than max of 250)
+                // Complete response for Data frame
+                0x00, // type Data Frame
+                0x01, // payload length
+                0x23, // '#'
+        };
+        mockQuicConnectionWithStreams(http3Connection, responseBytes);
+
+        HttpResponse<String> httpResponse = http3Connection.send(dummyRequest(), HttpResponse.BodyHandlers.ofString());
+        assertThat(httpResponse.statusCode()).isEqualTo(414);
+    }
+
+    @Test
+    void whenReceivedHeaderIsLargerThanMaxSendAsyncReturnsErrorResponse() throws Exception {
+        Http3ClientConnectionImpl http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
+        FieldSetter.setField(http3Connection, Http3ClientConnectionImpl.class, "maxReceivedHeaderSize", 250);
+
+        byte[] responseBytes = new byte[] {
+                // Partial response for Headers frame, the rest is covered by the mock decoder
+                0x01, // type Headers Frame
+                0x40, (byte) 0xff, // payload length (255 bytes, larger than max of 250)
+                // Complete response for Data frame
+                0x00, // type Data Frame
+                0x01, // payload length
+                0x23, // '#'
+        };
+        mockQuicConnectionWithStreams(http3Connection, responseBytes);
+
+        CompletableFuture<HttpResponse<String>> result = new CompletableFuture<>();
+        http3Connection.sendAsync(dummyRequest(), HttpResponse.BodyHandlers.ofString(), result);
+        assertThat(result.get().statusCode()).isEqualTo(414);
+    }
+    //endregion
+
+    //region test private/protected methods
     @Test
     public void readFrameFromClosedStreamShouldReturnNull() throws Exception {
         Http3ClientConnectionImpl http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
@@ -406,30 +657,6 @@ public class Http3ClientConnectionImplTest {
         inputStream.read(new byte[3]);
         Http3Frame frame = http3Connection.readFrame(inputStream);
         assertThat(frame).isNull();
-    }
-
-    @Test
-    public void postRequestEncodesRequestBodyInDataFrame() throws Exception {
-        Http3ClientConnection http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
-
-        byte[] responseBytes = new byte[]{
-                // Partial response for Headers frame, the rest is covered by the mock decoder
-                0x01, // type Headers Frame
-                0x00, // payload length
-        };
-        QuicStream http3Stream = mockQuicConnectionWithStreams(http3Connection, responseBytes);
-
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://localhost"))
-                .POST(HttpRequest.BodyPublishers.ofString("This is the request body."))
-                .build();
-
-        http3Connection.send(request, HttpResponse.BodyHandlers.ofString());
-
-        ArgumentCaptor<byte[]> captor = ArgumentCaptor.forClass(byte[].class);
-        verify(http3Stream.getOutputStream(), times(2)).write(captor.capture());
-        byte[] dataFrameBytes = captor.getAllValues().get(1);
-        assertThat(dataFrameBytes).endsWith("This is the request body.".getBytes());
     }
 
     @Test
@@ -444,7 +671,9 @@ public class Http3ClientConnectionImplTest {
 
         verify(quicConnection, times(1)).connect();
     }
+    //endregion
 
+    //region CONNECT method
     @Test
     public void sendConnectShouldSendConnect() throws Exception {
         // Given
@@ -597,7 +826,9 @@ public class Http3ClientConnectionImplTest {
         assertThat(data.position()).isEqualTo(11);
         assertThat(new String(Arrays.copyOfRange(data.array(), 0, 11))).isEqualTo("hello world");
     }
+    //endregion
 
+    //region extended CONNECT method
     @Test
     public void sendExtendedConnectShouldFailWhenServerDoesNotSendSettingsFrame() throws Exception {
         // Given
@@ -610,7 +841,7 @@ public class Http3ClientConnectionImplTest {
         assertThatThrownBy(() ->
                 // When
                 http3Connection.sendExtendedConnect(connectRequest, "websocket", "https", Duration.ofMillis(10))
-        ).isInstanceOf(HttpError.class);
+        ).isInstanceOf(ProtocolException.class);
     }
 
     @Test
@@ -627,7 +858,7 @@ public class Http3ClientConnectionImplTest {
         assertThatThrownBy(() ->
                 // When
                 http3Connection.sendExtendedConnect(connectRequest, "websocket", "https", Duration.ofMillis(100))
-        ).isInstanceOf(HttpError.class);
+        ).isInstanceOf(ProtocolException.class);
     }
 
     @Test
@@ -712,7 +943,9 @@ public class Http3ClientConnectionImplTest {
         assertThat(headersSent).containsKeys("x-test");
         assertThat(headersSent.get("x-test")).isEqualTo("testValue");
     }
+    //endregion
 
+    //region stream handlers
     @Test
     public void registeredBidirectionalStreamHandlerShouldBeCalled() throws Exception {
         // Given
@@ -771,7 +1004,9 @@ public class Http3ClientConnectionImplTest {
         // Then
         assertThat(dataReadFromHttpStream).isEqualTo(data);
     }
+    //endregion
 
+    //region data on extended CONNECT stream
     @Test
     public void testSendDataOnConnectStream() throws Exception {
         // Given
@@ -818,6 +1053,14 @@ public class Http3ClientConnectionImplTest {
         // Then
         assertThat(received).isEqualTo(new byte[] { 0x00, 0x01, 0x02, 0x03 });
     }
+    //endregion
+
+    //region helpers
+    private HttpRequest dummyRequest() throws URISyntaxException {
+        return HttpRequest.newBuilder()
+                .uri(new URI("http://localhost"))
+                .build();
+    }
 
     private QuicStream createControlStream(Integer... additionalBytes) {
         QuicStream quicStream = mock(QuicStream.class);
@@ -855,7 +1098,7 @@ public class Http3ClientConnectionImplTest {
      * @return
      */
     private QuicStream mockQuicConnectionWithStreams(Http3ClientConnection http3Connection, byte[] response, Map<String, String>... headerFramesContents) throws NoSuchFieldException, IOException {
-        QuicClientConnection quicConnection = mock(QuicClientConnection.class);
+        quicConnection = mock(QuicClientConnection.class);
         FieldSetter.setField(http3Connection, Http3ConnectionImpl.class.getDeclaredField("quicConnection"), quicConnection);
 
         QuicStream http3StreamMock = mock(QuicStream.class);
@@ -894,6 +1137,21 @@ public class Http3ClientConnectionImplTest {
         return http3StreamMock;
     }
 
+    private QuicStream mockQuicConnectionWithStream(Http3ClientConnection http3Connection, InputStream inputStream) throws NoSuchFieldException, IOException {
+        quicConnection = mock(QuicClientConnection.class);
+        FieldSetter.setField(http3Connection, Http3ConnectionImpl.class.getDeclaredField("quicConnection"), quicConnection);
+
+        QuicStream http3StreamMock = mock(QuicStream.class);
+        when(quicConnection.createStream(anyBoolean())).thenReturn(http3StreamMock);
+        // Create sink to send the http3 request bytes to.
+        when(http3StreamMock.getOutputStream()).thenReturn(mock(OutputStream.class));
+
+        // Return given response on QuicStream's input stream
+        when(http3StreamMock.getInputStream()).thenReturn(inputStream);
+
+        return http3StreamMock;
+    }
+
     private QuicClientConnection mockQuicConnection(Http3ClientConnection http3Connection) throws NoSuchFieldException, IOException {
         QuicClientConnection quicConnection = mock(QuicClientConnection.class);
         FieldSetter.setField(http3Connection, Http3ConnectionImpl.class.getDeclaredField("quicConnection"), quicConnection);
@@ -917,6 +1175,22 @@ public class Http3ClientConnectionImplTest {
         return quicStream;
     }
 
+    private void verifyClosedWith(QuicClientConnection quicConnection, long errorCode) {
+        ArgumentCaptor<Long> errorCodeCaptor = ArgumentCaptor.forClass(Long.class);
+        verify(quicConnection, atLeastOnce()).close(errorCodeCaptor.capture(), any());
+        assertThat(errorCodeCaptor.getValue()).isEqualTo(errorCode);
+    }
+
+    private void verifyNotClosed(QuicClientConnection quicConnection) {
+        verify(quicConnection, never()).close(anyLong(), any());
+    }
+
+    private void verifyStreamError(QuicStream quicStream, long errorCode) throws IOException {
+        ArgumentCaptor<Long> errorCodeCaptor = ArgumentCaptor.forClass(Long.class);
+        verify(quicStream, atLeastOnce()).resetStream(errorCodeCaptor.capture());
+        assertThat(errorCodeCaptor.getValue()).isEqualTo(errorCode);
+    }
+
     private class NoOpEncoder implements Encoder {
         @Override
         public ByteBuffer compressHeaders(List<Map.Entry<String, String>> headers) {
@@ -924,11 +1198,5 @@ public class Http3ClientConnectionImplTest {
             return ByteBuffer.wrap(new byte[0]);
         }
     }
-
-    private class NoOpDecoder implements Decoder {
-        @Override
-        public List<Map.Entry<String, String>> decodeStream(InputStream inputStream) throws IOException {
-            return mockEncoderCompressedHeaders;
-        }
-    }
+    //endregion
 }

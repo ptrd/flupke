@@ -566,7 +566,8 @@ public class Http3ConnectionImpl implements Http3Connection {
                     Http3Frame frame = null;
                     try {
                         frame = readFrame(quicStream.getInputStream());
-                    } catch (HttpError e) {
+                    }
+                    catch (HttpError e) {
                         throw new IOException(e);
                     }
                     if (frame instanceof DataFrame) {

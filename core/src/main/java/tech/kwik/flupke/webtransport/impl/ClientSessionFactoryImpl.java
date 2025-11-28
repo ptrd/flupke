@@ -28,6 +28,7 @@ import tech.kwik.flupke.webtransport.Session;
 import tech.kwik.flupke.webtransport.WebTransportStream;
 
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.http.HttpRequest;
@@ -113,7 +114,8 @@ public class ClientSessionFactoryImpl extends AbstractSessionFactoryImpl impleme
             return session;
         }
         catch (InterruptedException e) {
-            throw new HttpError("HTTP CONNECT request was interrupted");
+            // Thrown by sendExtendedConnect
+            throw new InterruptedIOException("HTTP CONNECT request was interrupted");
         }
     }
 

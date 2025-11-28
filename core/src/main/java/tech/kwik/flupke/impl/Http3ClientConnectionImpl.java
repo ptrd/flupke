@@ -58,11 +58,15 @@ import static tech.kwik.flupke.impl.SettingsFrame.SETTINGS_ENABLE_CONNECT_PROTOC
 public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Http3ClientConnection {
 
     public static final int MAX_DATA_FRAME_READ_CHUNK_SIZE = 8192;
+    public static long MAX_RECEIVED_HEADER_SIZE = Long.MAX_VALUE;
+    public static long MAX_RECEIVED_DATA_SIZE = Long.MAX_VALUE;
 
     private InputStream serverPushStream;
     private Statistics connectionStats;
     private boolean initialized;
     private Consumer<HttpStream> bidirectionalStreamHandler;
+    private long maxReceivedHeaderSize = MAX_RECEIVED_HEADER_SIZE;
+    private long maxReceivedDataSize = MAX_RECEIVED_DATA_SIZE;
 
     public Http3ClientConnectionImpl(String host, int port) throws IOException {
         this(host, port, DEFAULT_CONNECT_TIMEOUT, defaultConnectionSettings(), null, null);
@@ -117,32 +121,43 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
                 throw new IOException("Error while getting response", cause);
             }
         }
+        catch (ConnectionError e) {
+            connectionError(e.getHttp3ErrorCode());
+            throw new ProtocolException("H3 connection error: " + e.getHttp3ErrorCode());
+        }
         catch (MalformedResponseException e) {
             // https://www.rfc-editor.org/rfc/rfc9114.html#name-malformed-requests-and-resp
             // "Malformed requests or responses that are detected MUST be treated as a stream error of type H3_MESSAGE_ERROR."
-            throw new ProtocolException(e.getMessage());  // TODO: generate stream error
+            streamError(H3_MESSAGE_ERROR, httpStream);
+            throw new ProtocolException("H3 stream error: H3_MESSAGE_ERROR");
         }
         catch (HttpError e) {
-            throw new ProtocolException(e.getMessage());
+            return new Http3Response<>(request, e.getStatusCode(), HttpHeaders.of(Map.of(), (a,b) -> true), null);
         }
     }
 
     public <T> void sendAsync(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler, CompletableFuture<HttpResponse<T>> result) {
+        QuicStream httpStream = null;
         try {
-            QuicStream httpStream = quicConnection.createStream(true);
+            httpStream = quicConnection.createStream(true);
             sendRequest(request, httpStream);
             receiveResponse(request, responseBodyHandler, httpStream, result);
         }
         catch (IOException e) {
             result.completeExceptionally(e);
         }
+        catch (ConnectionError e) {
+            connectionError(e.getHttp3ErrorCode());
+            result.completeExceptionally(new ProtocolException("H3 connection error: " + e.getHttp3ErrorCode()));
+        }
         catch (MalformedResponseException e) {
             // https://www.rfc-editor.org/rfc/rfc9114.html#name-malformed-requests-and-resp
             // "Malformed requests or responses that are detected MUST be treated as a stream error of type H3_MESSAGE_ERROR."
-            result.completeExceptionally(new ProtocolException(e.getMessage()));  // TODO: generate stream error
+            streamError(H3_MESSAGE_ERROR, httpStream);
+            result.completeExceptionally(new ProtocolException("H3 stream error: " + H3_MESSAGE_ERROR));
         }
         catch (HttpError e) {
-            result.completeExceptionally(new ProtocolException(e.getMessage()));
+            result.complete(new Http3Response<>(request, e.getStatusCode(), HttpHeaders.of(Map.of(), (a,b) -> true), null));
         }
     }
 
@@ -244,7 +259,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     }
 
     private <T> void receiveResponse(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler, QuicStream httpStream,
-                                     CompletableFuture<HttpResponse<T>> response) throws IOException, MalformedResponseException, HttpError {
+                                     CompletableFuture<HttpResponse<T>> response) throws IOException, MalformedResponseException, HttpError, ConnectionError {
         InputStream responseStream = httpStream.getInputStream();
         ResponseFramesSequenceChecker frameSequenceChecker = new ResponseFramesSequenceChecker(httpStream);
 
@@ -274,23 +289,28 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         });
     }
 
-    private HeadersFrame readHeadersFrame(InputStream responseStream, ResponseFramesSequenceChecker frameSequenceChecker) throws IOException, HttpError {
-        Http3Frame frame = readFrame(responseStream);
-        if (frame == null) {
-            throw new EOFException("end of stream");
+    private HeadersFrame readHeadersFrame(InputStream responseStream, ResponseFramesSequenceChecker frameSequenceChecker) throws IOException, HttpError, ConnectionError {
+        try {
+            Http3Frame frame = readFrame(responseStream, maxReceivedHeaderSize, maxReceivedDataSize);
+            if (frame == null) {
+                throw new EOFException("end of stream");
+            }
+            else if (frame instanceof HeadersFrame) {
+                frameSequenceChecker.gotHeader();
+                return (HeadersFrame) frame;
+            }
+            else if (frame instanceof DataFrame) {
+                frameSequenceChecker.gotData();
+                return null;  // Will not happen, checker will throw exception
+            }
+            else {
+                frameSequenceChecker.gotOther(frame);
+                // If it gets here, the unknown frame is ignored, continue to (try to) read a headers frame
+                return readHeadersFrame(responseStream, frameSequenceChecker);
+            }
         }
-        else if (frame instanceof HeadersFrame) {
-            frameSequenceChecker.gotHeader();
-            return (HeadersFrame) frame;
-        }
-        else if (frame instanceof DataFrame) {
-            frameSequenceChecker.gotData();
-            return null;  // Will not happen, checker will throw exception
-        }
-        else {
-            frameSequenceChecker.gotOther(frame);
-            // If it gets here, the unknown frame is ignored, continue to (try to) read a headers frame
-            return readHeadersFrame(responseStream, frameSequenceChecker);
+        catch (EOFException e) {
+            throw new ConnectionError(H3_FRAME_ERROR);
         }
     }
 
@@ -366,10 +386,10 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     @Override
     public HttpStream sendExtendedConnect(HttpRequest request, String protocol, String scheme, Duration settingsFrameTimeout) throws InterruptedException, HttpError, IOException {
         if (! settingsFrameReceived.await(settingsFrameTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
-            throw new HttpError("No SETTINGS frame received in time.");
+            throw new ProtocolException("No SETTINGS frame received in time.");
         }
         if (! isEnableConnectProtocol()) {
-            throw new HttpError("Server does not support Extended Connect (RFC 9220).");
+            throw new ProtocolException("Server does not support Extended Connect (RFC 9220).");
         }
 
         // https://www.rfc-editor.org/rfc/rfc8441#section-4
@@ -495,6 +515,8 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
                 statusCode = Integer.parseInt(statusCodeHeader);
             }
             else {
+                // https://www.rfc-editor.org/rfc/rfc9114.html#section-4.3.2
+                // "This pseudo-header field MUST be included in all responses; otherwise, the response is malformed (see Section 4.1.2)."
                 throw new MalformedResponseException("missing or invalid status code");
             }
         }
@@ -531,41 +553,39 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         }
     }
 
-
     private static class ResponseFramesSequenceChecker {
-
-        private final QuicStream httpStream;
-
-        public ResponseFramesSequenceChecker(QuicStream httpStream) {
-            this.httpStream = httpStream;
-        }
-
         enum ResponseStatus {
             INITIAL,
             GOT_HEADER,
             GOT_HEADER_AND_DATA,
             GOT_HEADER_AND_DATA_AND_TRAILING_HEADER,
         };
-        ResponseStatus status = ResponseStatus.INITIAL;
 
-        void gotHeader() throws ProtocolException {
+        private ResponseStatus status = ResponseStatus.INITIAL;
+        private final long streamId;
+
+        public ResponseFramesSequenceChecker(QuicStream httpStream) {
+            streamId = httpStream.getStreamId();
+        }
+
+        void gotHeader() throws ConnectionError {
             if (status == ResponseStatus.INITIAL) {
                 status = ResponseStatus.GOT_HEADER;
             }
             else if (status == ResponseStatus.GOT_HEADER) {
-                throw new ProtocolException("Header frame is not allowed after initial header frame (quic stream " + httpStream.getStreamId() + ")");
+                invalidFrameSequence("Header frame is not allowed after initial header frame.");
             }
             else if (status == ResponseStatus.GOT_HEADER_AND_DATA) {
                 status = ResponseStatus.GOT_HEADER_AND_DATA_AND_TRAILING_HEADER;
             }
             else if (status == ResponseStatus.GOT_HEADER_AND_DATA_AND_TRAILING_HEADER) {
-                throw new ProtocolException("Header frame is not allowed after trailing header frame (quic stream " + httpStream.getStreamId() + ")");
+                invalidFrameSequence("Header frame is not allowed after trailing header frame.");
             }
         }
 
-        public void gotData() throws ProtocolException {
+        public void gotData() throws ConnectionError {
             if (status == ResponseStatus.INITIAL) {
-                throw new ProtocolException("Missing header frame (quic stream " + httpStream.getStreamId() + ")");
+                invalidFrameSequence("Missing header frame.");
             }
             else if (status == ResponseStatus.GOT_HEADER) {
                 status = ResponseStatus.GOT_HEADER_AND_DATA;
@@ -574,27 +594,32 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
                 // No status change
             }
             else if (status == ResponseStatus.GOT_HEADER_AND_DATA_AND_TRAILING_HEADER) {
-                throw new ProtocolException("Data frame not allowed after trailing header frame (quic stream " + httpStream.getStreamId() + ")");
+                invalidFrameSequence("Data frame not allowed after trailing header frame.");
             }
         }
 
-
-        public void gotOther(Http3Frame frame) throws ProtocolException {
+        public void gotOther(Http3Frame frame) throws ConnectionError {
             if (! (frame instanceof UnknownFrame)) {
-                throw new ProtocolException("only header and body frames are allowed on response stream");
+                invalidFrameSequence("Only header and body frames are allowed on response stream.");
             }
         }
 
-        public void gotOther(Long frameType) throws ProtocolException {
+        public void gotOther(Long frameType) throws ConnectionError {
             if (! unknownFrameType(frameType)) {
-                throw new ProtocolException("only header and body frames are allowed on response stream");
+                invalidFrameSequence("Only header and body frames are allowed on response stream.");
             }
         }
 
-        public void done() throws ProtocolException {
+        public void done() throws ConnectionError {
             if (status == ResponseStatus.INITIAL) {
-                throw new ProtocolException("Missing header frame (quic stream " + httpStream.getStreamId() + ")");
+                invalidFrameSequence("Missing header frame.");
             }
+        }
+
+        private void invalidFrameSequence(String error) throws ConnectionError {
+            // https://www.rfc-editor.org/rfc/rfc9114.html#section-4.1
+            // "Receipt of an invalid sequence of frames MUST be treated as a connection error of type H3_FRAME_UNEXPECTED."
+            throw new ConnectionError(H3_FRAME_UNEXPECTED, streamId, error);
         }
     }
 
@@ -678,6 +703,9 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
                 catch (IOException e) {
                     throw new UncheckedIOException(e);
                 }
+                catch (ConnectionError e) {
+                    throw new UncheckedConnectionError(e);
+                }
                 catch (HttpError e) {
                     // Cannot happen, because readHeadersFrame only throws HttpError when the headers exceeds max size, but client does not impose a max size
                     bodyReadException = new IOException(e);
@@ -694,6 +722,9 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
                 catch (IOException e) {
                     throw new UncheckedIOException(e);
                 }
+                catch (ConnectionError e) {
+                    throw new UncheckedConnectionError(e);
+                }
             }
         }
 
@@ -701,8 +732,8 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
             try {
                 frameSequenceChecker.gotData();
             }
-            catch (ProtocolException e) {
-                throw new UncheckedIOException(e);
+            catch (ConnectionError e) {
+                throw new UncheckedConnectionError(e);
             }
         }
 

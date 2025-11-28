@@ -87,6 +87,10 @@ public class DataFramesReader extends InputStream {
                 dataFramesStreamException = new ConnectionError(H3_FRAME_ERROR);
                 return false;
             }
+            catch (UncheckedConnectionError e) {
+                dataFramesStreamException = e.toChecked();
+                return false;
+            }
         }
         return remainingDataFrameContent > 0;
     }
