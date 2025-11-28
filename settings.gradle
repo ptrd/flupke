@@ -2,8 +2,10 @@ rootProject.name = 'flupke'
 
 include('core')
 include('samples')
+include('httpbin')
 
 project(":core").name = "flupke"
 project(":samples").name = "flupke-samples"
+project(":httpbin").name = "flupke-httpbin"
 
 
