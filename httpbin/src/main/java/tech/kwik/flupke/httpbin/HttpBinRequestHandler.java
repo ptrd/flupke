@@ -27,6 +27,7 @@ import tech.kwik.flupke.server.HttpServerResponse;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.net.http.HttpHeaders;
+import java.security.MessageDigest;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +41,7 @@ public class HttpBinRequestHandler implements HttpRequestHandler {
     public HttpBinRequestHandler() {
         handlers.put(new RequestKey("GET", "/headers"), this::getHeadersRequest);
         handlers.put(new RequestKey("POST", "/headers"), this::postHeadersRequest);
+        handlers.put(new RequestKey("POST", "/md5"), this::postForMd5);
     }
 
     @Override
@@ -89,6 +91,35 @@ public class HttpBinRequestHandler implements HttpRequestHandler {
                 }
             });
             response.setHeaders(HttpHeaders.of(headersMap, (s, s2) -> true));
+        }
+    }
+
+    private void postForMd5(HttpServerRequest httpServerRequest, HttpServerResponse httpServerResponse) {
+        httpServerResponse.setStatus(200);
+        // TODO: httpServerResponse.setHeader("Content-Type", "application/json");
+
+        try {
+            MessageDigest md5 = MessageDigest.getInstance("MD5");
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+            while ((bytesRead = httpServerRequest.body().read(buffer)) != -1) {
+                md5.update(buffer, 0, bytesRead);
+            }
+            byte[] md5Hash = md5.digest();
+
+            StringBuilder sb = new StringBuilder();
+            for (byte b : md5Hash) {
+                sb.append(String.format("%02x", b));
+            }
+            String md5HashString = sb.toString();
+            JSONObject jsonOutput = new JSONObject().put("md5", md5HashString);
+
+            OutputStreamWriter writer = new OutputStreamWriter(httpServerResponse.getOutputStream());
+            jsonOutput.write(writer, 2, 0);
+            writer.flush();
+        }
+        catch (Exception e) {
+            httpServerResponse.setStatus(500);
         }
     }
 

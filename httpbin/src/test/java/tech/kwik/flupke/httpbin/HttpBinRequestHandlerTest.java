@@ -104,6 +104,30 @@ class HttpBinRequestHandlerTest {
         assertThat(setCookieHeaders).containsExactly("sessionId=abc123", "theme=light", "lang=en-US");
     }
 
+    @Test
+    void postingBodyShouldReturnMd5Hash() throws Exception {
+        String bodyContent = "hello world";
+        String expectedMd5 = "5eb63bbbe01eeed093cb22bb8f5acdc3"; // MD5 of "hello world"
+
+        HttpServerRequest request = new HttpServerRequestImpl(
+                "POST",
+                "/md5",
+                "www.example.com",
+                HttpHeaders.of(Map.of(), (s1, s2) -> true),
+                null,
+                new ByteArrayInputStream(bodyContent.getBytes())
+        );
+
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        HttpServerResponse response = mock(HttpServerResponse.class);
+        when(response.getOutputStream()).thenReturn(output);
+
+        httpBinRequestHandler.handleRequest(request, response);
+
+        assertThatJson(output.toString()).isEqualTo("{md5:'" + expectedMd5 + "'}");
+        verify(response).setStatus(200);
+    }
+
     private static class HttpServerResponseWithHeaders extends HttpServerResponseImpl {
 
         private HttpHeaders headers;
