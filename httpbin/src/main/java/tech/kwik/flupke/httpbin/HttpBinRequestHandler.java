@@ -30,17 +30,24 @@ import java.net.http.HttpHeaders;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
 
 
 public class HttpBinRequestHandler implements HttpRequestHandler {
 
+    private final Map<RequestKey, BiConsumer<HttpServerRequest, HttpServerResponse>> handlers = new HashMap<>();
+
+    public HttpBinRequestHandler() {
+        handlers.put(new RequestKey("GET", "/headers"), this::getHeadersRequest);
+        handlers.put(new RequestKey("POST", "/headers"), this::postHeadersRequest);
+    }
+
     @Override
     public void handleRequest(HttpServerRequest request, HttpServerResponse response) {
-        if (request.method().equals("GET") && request.path().equals("/headers")) {
-            getHeadersRequest(request, response);
-        }
-        else if (request.method().equals("POST") && request.path().equals("/headers")) {
-            postHeadersRequest(request, response);
+        BiConsumer<HttpServerRequest, HttpServerResponse> handler =
+                handlers.get(new RequestKey(request.method(), request.path()));
+        if (handler != null) {
+            handler.accept(request, response);
         }
     }
 
@@ -79,6 +86,29 @@ public class HttpBinRequestHandler implements HttpRequestHandler {
                 }
             });
             response.setHeaders(HttpHeaders.of(headersMap, (s, s2) -> true));
+        }
+    }
+
+    static private class RequestKey {
+        String method;
+        String path;
+
+        RequestKey(String method, String path) {
+            this.method = method;
+            this.path = path;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            RequestKey that = (RequestKey) o;
+            return method.equals(that.method) && path.equals(that.path);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * method.hashCode() + path.hashCode();
         }
     }
 }
