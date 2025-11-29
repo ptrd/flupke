@@ -49,6 +49,9 @@ public class HttpBinRequestHandler implements HttpRequestHandler {
         if (handler != null) {
             handler.accept(request, response);
         }
+        else {
+            response.setStatus(404);
+        }
     }
 
     private void getHeadersRequest(HttpServerRequest request, HttpServerResponse response) {

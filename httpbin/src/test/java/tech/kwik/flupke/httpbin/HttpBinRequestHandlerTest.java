@@ -36,6 +36,7 @@ import java.util.Map;
 import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class HttpBinRequestHandlerTest {
@@ -45,6 +46,21 @@ class HttpBinRequestHandlerTest {
     @BeforeEach
     void setUp() {
         httpBinRequestHandler = new HttpBinRequestHandler();
+    }
+
+    @Test
+    void whenNoHandlerExistsThen404IsReturned() throws Exception {
+        HttpServerRequest request = new HttpServerRequestImpl("GET",
+                "/non-existing-endpoint",
+                "www.example.com",
+                HttpHeaders.of(Map.of(), (s1, s2) -> true),
+                null,
+                mock(java.io.InputStream.class));
+        HttpServerResponse response = mock(HttpServerResponse.class);
+
+        httpBinRequestHandler.handleRequest(request, response);
+
+        verify(response).setStatus(404);
     }
 
     @Test
