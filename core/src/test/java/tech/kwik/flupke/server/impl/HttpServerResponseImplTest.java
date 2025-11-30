@@ -23,6 +23,7 @@ import tech.kwik.core.QuicStream;
 import tech.kwik.flupke.test.CapturingEncoder;
 import tech.kwik.flupke.test.NoOpEncoderDecoderBuilder;
 import tech.kwik.flupke.test.QuicStreamBuilder;
+import tech.kwik.qpack.Encoder;
 
 import java.io.OutputStream;
 import java.net.http.HttpHeaders;
@@ -34,14 +35,48 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-class DefaultHttpResponseTest {
+class HttpServerResponseImplTest {
+
+    @Test
+    void statusCodeOfZeroShouldNotBeAccepted() {
+        HttpServerResponseImpl response = new HttpServerResponseImpl(mock(QuicStream.class), mock(Encoder.class));
+
+        assertThatThrownBy(
+                // When
+                () -> response.setStatus(0))
+                // Then
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("invalid");
+    }
+
+    @Test
+    void statusCodeOfFourDigitsShouldNotBeAccepted() {
+        HttpServerResponseImpl response = new HttpServerResponseImpl(mock(QuicStream.class), mock(Encoder.class));
+        assertThatThrownBy(
+                // When
+                () -> response.setStatus(1000))
+                // Then
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("invalid");
+    }
+
+    @Test
+    void whenStatusNotSetGetStatusShouldThrow() {
+        HttpServerResponseImpl response = new HttpServerResponseImpl(mock(QuicStream.class), mock(Encoder.class));
+        assertThatThrownBy(
+                // When
+                () -> response.status())
+                // Then
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("not set");
+    }
 
     @Test
     void whenStatusNotSetGetOutputStreamShouldThrow() {
         // Given
         NoOpEncoderDecoderBuilder encoderBuilder = new NoOpEncoderDecoderBuilder();
         QuicStream quicStream = mock(QuicStream.class);
-        DefaultHttpResponse response = new DefaultHttpResponse(quicStream, encoderBuilder.encoder());
+        HttpServerResponseImpl response = new HttpServerResponseImpl(quicStream, encoderBuilder.encoder());
 
         // When / Then
         assertThatThrownBy(response::getOutputStream)
@@ -55,7 +90,7 @@ class DefaultHttpResponseTest {
         NoOpEncoderDecoderBuilder encoderBuilder = new NoOpEncoderDecoderBuilder();
         QuicStream quicStream = mock(QuicStream.class);
         when(quicStream.getOutputStream()).thenReturn(mock(OutputStream.class));
-        DefaultHttpResponse response = new DefaultHttpResponse(quicStream, encoderBuilder.encoder());
+        HttpServerResponseImpl response = new HttpServerResponseImpl(quicStream, encoderBuilder.encoder());
         response.setStatus(200);
 
         // When
@@ -73,7 +108,7 @@ class DefaultHttpResponseTest {
         QuicStream quicStream = new QuicStreamBuilder().build();
 
         CapturingEncoder encoder = new CapturingEncoder();
-        DefaultHttpResponse response = new DefaultHttpResponse(quicStream, encoder);
+        HttpServerResponseImpl response = new HttpServerResponseImpl(quicStream, encoder);
         response.setStatus(200);
 
         // When
@@ -94,7 +129,7 @@ class DefaultHttpResponseTest {
         QuicStream quicStream = new QuicStreamBuilder().build();
 
         CapturingEncoder encoder = new CapturingEncoder();
-        DefaultHttpResponse response = new DefaultHttpResponse(quicStream, encoder);
+        HttpServerResponseImpl response = new HttpServerResponseImpl(quicStream, encoder);
         response.setStatus(200);
 
         // When

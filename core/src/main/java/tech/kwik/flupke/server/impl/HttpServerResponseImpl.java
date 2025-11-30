@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021, 2022, 2023, 2024, 2025 Peter Doornbosch
+ * Copyright © 2025 Peter Doornbosch
  *
  * This file is part of Flupke, a HTTP3 client Java library
  *
@@ -18,13 +18,30 @@
  */
 package tech.kwik.flupke.server.impl;
 
+import tech.kwik.core.QuicStream;
+import tech.kwik.flupke.impl.HeadersFrame;
 import tech.kwik.flupke.server.HttpServerResponse;
+import tech.kwik.qpack.Encoder;
 
+import java.io.IOException;
+import java.io.OutputStream;
 import java.net.http.HttpHeaders;
+import java.util.Map;
 
-public abstract class HttpServerResponseImpl implements HttpServerResponse {
+class HttpServerResponseImpl implements HttpServerResponse {
 
+    private final Encoder qpackEncoder;
+    private final OutputStream quicOutputStream;
     private int status = -1;
+    private boolean outputStarted;
+    private DataFrameWriter dataFrameWriter;
+    private HttpHeaders httpHeaders;
+
+    public HttpServerResponseImpl(QuicStream quicStream, Encoder qpackEncoder) {
+        this.qpackEncoder = qpackEncoder;
+        this.quicOutputStream = quicStream.getOutputStream();
+        this.httpHeaders = HttpHeaders.of(Map.of(), (a, b) -> true);
+    }
 
     /**
      * https://www.rfc-editor.org/rfc/rfc9110.html#name-status-codes
@@ -35,7 +52,7 @@ public abstract class HttpServerResponseImpl implements HttpServerResponse {
      */
     @Override
     public void setStatus(int status) {
-        if (status < 100 || status > 1000) {
+        if (status < 100 || status > 999) {
             throw new IllegalArgumentException("invalid status code: " + status);
         }
         this.status = status;
@@ -43,6 +60,28 @@ public abstract class HttpServerResponseImpl implements HttpServerResponse {
 
     @Override
     public void setHeaders(HttpHeaders headers) {
+        if (outputStarted) {
+            throw new IllegalStateException("Cannot set headers after getOutputStream has been called");
+        }
+
+        httpHeaders = headers;
+    }
+
+    @Override
+    public OutputStream getOutputStream() {
+        if (!outputStarted) {
+            HeadersFrame headersFrame = new HeadersFrame(httpHeaders, Map.of(HeadersFrame.PSEUDO_HEADER_STATUS, Integer.toString(status())));
+            OutputStream outputStream = quicOutputStream;
+            try {
+                outputStream.write(headersFrame.toBytes(qpackEncoder));
+            }
+            catch (IOException e) {
+                // Ignore, there is nothing we can do. Note Kwik will not throw exception when writing to stream.
+            }
+            outputStarted = true;
+            dataFrameWriter = new DataFrameWriter(quicOutputStream);
+        }
+        return dataFrameWriter;
     }
 
     @Override
@@ -60,6 +99,11 @@ public abstract class HttpServerResponseImpl implements HttpServerResponse {
 
     @Override
     public long size() {
-        return 0;
+        if (dataFrameWriter != null) {
+            return dataFrameWriter.getBytesWritten();
+        }
+        else {
+            return 0;
+        }
     }
 }
