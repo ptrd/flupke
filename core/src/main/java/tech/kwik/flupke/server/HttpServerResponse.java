@@ -20,14 +20,19 @@ package tech.kwik.flupke.server;
 
 import java.io.OutputStream;
 import java.net.http.HttpHeaders;
+import java.util.List;
 
 public interface HttpServerResponse {
 
-    OutputStream getOutputStream();
-
     void setStatus(int status);
 
+    void addHeader(String name, String value);
+
+    void addHeader(String name, List<String> values);
+
     void setHeaders(HttpHeaders headers);
+
+    OutputStream getOutputStream();
 
     int status();
 

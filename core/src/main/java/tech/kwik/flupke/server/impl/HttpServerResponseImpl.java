@@ -26,6 +26,9 @@ import tech.kwik.qpack.Encoder;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.http.HttpHeaders;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 class HttpServerResponseImpl implements HttpServerResponse {
@@ -36,11 +39,13 @@ class HttpServerResponseImpl implements HttpServerResponse {
     private boolean outputStarted;
     private DataFrameWriter dataFrameWriter;
     private HttpHeaders httpHeaders;
+    private Map<String, List<String>> headers;
 
     public HttpServerResponseImpl(QuicStream quicStream, Encoder qpackEncoder) {
         this.qpackEncoder = qpackEncoder;
         this.quicOutputStream = quicStream.getOutputStream();
         this.httpHeaders = HttpHeaders.of(Map.of(), (a, b) -> true);
+        this.headers = new java.util.HashMap<>();
     }
 
     /**
@@ -68,9 +73,33 @@ class HttpServerResponseImpl implements HttpServerResponse {
     }
 
     @Override
+    public void addHeader(String name, String value) {
+        if (outputStarted) {
+            throw new IllegalStateException("Cannot set headers after getOutputStream has been called");
+        }
+
+        addHeader(name, List.of(value));
+    }
+
+    @Override
+    public void addHeader(String name, List<String> values) {
+        headers.putIfAbsent(name, new java.util.ArrayList<>());
+        headers.get(name).addAll(values);
+    }
+
+    private HttpHeaders createHttpHeaders() {
+        Map<String, List<String>> allHeaders = new HashMap<>(headers);
+        httpHeaders.map().forEach((key, values) -> {
+            allHeaders.putIfAbsent(key, new ArrayList<>());
+            allHeaders.get(key).addAll(values);
+        });
+        return HttpHeaders.of(allHeaders, (a, b) -> true);
+    }
+
+    @Override
     public OutputStream getOutputStream() {
         if (!outputStarted) {
-            HeadersFrame headersFrame = new HeadersFrame(httpHeaders, Map.of(HeadersFrame.PSEUDO_HEADER_STATUS, Integer.toString(status())));
+            HeadersFrame headersFrame = new HeadersFrame(createHttpHeaders(), Map.of(HeadersFrame.PSEUDO_HEADER_STATUS, Integer.toString(status())));
             OutputStream outputStream = quicOutputStream;
             try {
                 outputStream.write(headersFrame.toBytes(qpackEncoder));

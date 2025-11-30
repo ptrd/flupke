@@ -37,6 +37,7 @@ import static org.mockito.Mockito.when;
 
 class HttpServerResponseImplTest {
 
+    // region status
     @Test
     void statusCodeOfZeroShouldNotBeAccepted() {
         HttpServerResponseImpl response = new HttpServerResponseImpl(mock(QuicStream.class), mock(Encoder.class));
@@ -83,7 +84,9 @@ class HttpServerResponseImplTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("status not set");
     }
+    // endregion
 
+    // region headers
     @Test
     void callingSetHeadersAfterGetOutputStreamShouldThrow() {
         // Given
@@ -138,4 +141,81 @@ class HttpServerResponseImplTest {
         // Then
         assertThat(encoder.getCapturedHeaders().keySet()).allMatch(key -> key.startsWith(":"));
     }
+
+    @Test
+    void setHeaderShouldAddHeader() {
+        // Given
+        QuicStream quicStream = new QuicStreamBuilder().build();
+        CapturingEncoder encoder = new CapturingEncoder();
+        HttpServerResponseImpl response = new HttpServerResponseImpl(quicStream, encoder);
+        response.setStatus(200);
+
+        // When
+        response.addHeader("user-agent", "flupke-client/1.0");
+        response.getOutputStream();
+
+        // Then
+        assertThat(encoder.getCapturedHeaders())
+                .hasSize(2) // :status and user-agent
+                .containsEntry("user-agent", "flupke-client/1.0");
+    }
+
+    @Test
+    void setHeaderMultipleTimeExtendsValueList() {
+        // Given
+        QuicStream quicStream = new QuicStreamBuilder().build();
+        CapturingEncoder encoder = new CapturingEncoder();
+        HttpServerResponseImpl response = new HttpServerResponseImpl(quicStream, encoder);
+        response.setStatus(200);
+
+        // When
+        response.addHeader("Set-Cookie", "cookie1=value1");
+        response.addHeader("Set-Cookie", "cookie2=value2");
+        response.getOutputStream();
+
+        // Then
+        assertThat(encoder.getCapturedHeaders()).containsEntry("set-cookie", "cookie1=value1,cookie2=value2");
+    }
+
+    @Test
+    void setHeaderAndSetHeadersAreCombined() {
+        // Given
+        QuicStream quicStream = new QuicStreamBuilder().build();
+        CapturingEncoder encoder = new CapturingEncoder();
+        HttpServerResponseImpl response = new HttpServerResponseImpl(quicStream, encoder);
+        response.setStatus(200);
+
+        // When
+        response.setHeaders(HttpHeaders.of(
+                Map.of("Set-Cookie", List.of("cookie1=value1")),
+                (s, s2) -> true));
+        response.addHeader("user-agent", "flupke-client/1.0");
+        response.getOutputStream();
+
+        // Then
+        assertThat(encoder.getCapturedHeaders())
+                .containsEntry("set-cookie", "cookie1=value1")
+                .containsEntry("user-agent", "flupke-client/1.0");
+    }
+
+    @Test
+    void setHeaderValuesAndSetHeadersAreCombined() {
+        // Given
+        QuicStream quicStream = new QuicStreamBuilder().build();
+        CapturingEncoder encoder = new CapturingEncoder();
+        HttpServerResponseImpl response = new HttpServerResponseImpl(quicStream, encoder);
+        response.setStatus(200);
+
+        // When
+        response.setHeaders(HttpHeaders.of(
+                Map.of("Set-Cookie", List.of("cookie1=value1")),
+                (s, s2) -> true));
+        response.addHeader("Set-Cookie", "cookie2=value2");
+        response.getOutputStream();
+
+        // Then
+        assertThat(encoder.getCapturedHeaders().values())
+                .containsAnyOf("cookie1=value1,cookie2=value2", "cookie2=value2,cookie1=value1");
+    }
+    // endregion
 }
