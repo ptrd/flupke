@@ -21,6 +21,8 @@ package tech.kwik.flupke.impl;
 import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
 
+import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
 
@@ -53,6 +55,13 @@ public class DataFrame extends Http3Frame {
         payload.get(data, 1 + varIntLength, payloadLength);
         payload.rewind();
         return data;
+    }
+
+    public void writeTo(OutputStream stream) throws IOException {
+        stream.write(0x00);
+        int payloadLength = payload.limit() - payload.position();
+        VariableLengthIntegerUtil.write(payloadLength, stream);
+        stream.write(payload.array(), payload.position(), payloadLength);
     }
 
     public DataFrame parsePayload(byte[] payload) {

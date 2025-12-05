@@ -229,8 +229,9 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
                 public void onNext(ByteBuffer item) {
                     try {
                         DataFrame dataFrame = new DataFrame(item);
-                        requestStream.write(dataFrame.toBytes());
-                    } catch (IOException e) {
+                        dataFrame.writeTo(requestStream);
+                    }
+                    catch (IOException e) {
                         // Stop receiving data from publisher.
                         subscription.cancel();
                     }

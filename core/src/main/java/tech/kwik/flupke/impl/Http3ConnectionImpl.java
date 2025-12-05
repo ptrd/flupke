@@ -477,20 +477,18 @@ public class Http3ConnectionImpl implements Http3Connection {
             outputStream = new OutputStream() {
                 @Override
                 public void write(int b) throws IOException {
-                    quicStream.getOutputStream().write(new DataFrame(new byte[] { (byte) b }).toBytes());
+                    new DataFrame(new byte[] { (byte) b }).writeTo(quicStream.getOutputStream());
                 }
 
                 @Override
                 public void write(byte[] b) throws IOException {
-                    quicStream.getOutputStream().write(new DataFrame(b).toBytes());
+                    new DataFrame(b).writeTo(quicStream.getOutputStream());
                 }
 
                 @Override
                 public void write(byte[] b, int off, int len) throws IOException {
-                    ByteBuffer data = ByteBuffer.wrap(b);
-                    data.position(off);
-                    data.limit(len + off);
-                    quicStream.getOutputStream().write(new DataFrame(data).toBytes());
+                    ByteBuffer data = ByteBuffer.wrap(b, off, len);
+                    new DataFrame(data).writeTo(quicStream.getOutputStream());
                 }
 
                 @Override

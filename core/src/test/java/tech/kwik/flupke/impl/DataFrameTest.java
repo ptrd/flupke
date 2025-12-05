@@ -21,6 +21,8 @@ package tech.kwik.flupke.impl;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -70,6 +72,19 @@ public class DataFrameTest {
         byte[] frameBytes = dataFrame.toBytes();
         assertThat(frameBytes).startsWith(0x00, 14);
         assertThat(frameBytes).endsWith("dog jumps over".getBytes());
+    }
+
+    @Test
+    void dataFrameWriteShouldBeEqualToToBytes() throws IOException {
+        String content = "01234567890123456789012345678901234567890123456789012345678901234567890123456789";
+        DataFrame dataFrame = new DataFrame(content.getBytes());
+
+        // When
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        dataFrame.writeTo(outputStream);
+        byte[] writtenBytes = outputStream.toByteArray();
+
+        assertThat(writtenBytes).isEqualTo(dataFrame.toBytes());
     }
 
     @Test

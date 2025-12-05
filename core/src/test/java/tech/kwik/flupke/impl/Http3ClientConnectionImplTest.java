@@ -775,6 +775,30 @@ public class Http3ClientConnectionImplTest {
     }
 
     @Test
+    public void httpStreamShouldCopySingleByteDataFrame() throws Exception {
+        // Given
+        Http3ClientConnection http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
+        ByteArrayOutputStream requestOutputStream = new ByteArrayOutputStream();
+        mockQuicConnectionWithStreams(http3Connection, requestOutputStream, new byte[]{ 0x01, 0x00 });
+
+        HttpRequest connectRequest = HttpRequest.newBuilder()
+                .uri(new URI("http://proxy.net:443"))
+                .build();
+        HttpStream httpStream = http3Connection.sendConnect(connectRequest);
+        requestOutputStream.reset();  // Clear any data written during CONNECT request
+
+        // When
+        httpStream.getOutputStream().write(66);
+
+        // Then
+        byte[] sentData = requestOutputStream.toByteArray();
+        assertThat(sentData.length).isEqualTo(3);
+        assertThat(sentData[0]).isEqualTo((byte) 0x00); // DataFrame Type
+        assertThat(sentData[1]).isEqualTo((byte) 1);   // Length
+        assertThat(sentData[2]).isEqualTo((byte) 66);  // 'B'
+    }
+
+    @Test
     public void httpStreamShouldCopyBytesFromDataFrame() throws Exception {
         // Given
         Http3ClientConnection http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
