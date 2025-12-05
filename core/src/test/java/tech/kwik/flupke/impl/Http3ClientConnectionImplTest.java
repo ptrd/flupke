@@ -132,7 +132,8 @@ public class Http3ClientConnectionImplTest {
                 0x01, // type Headers Frame
                 0x00, // payload length
         };
-        QuicStream http3Stream = mockQuicConnectionWithStreams(http3Connection, responseBytes);
+        ByteArrayOutputStream requestOutputStream = new ByteArrayOutputStream();
+        mockQuicConnectionWithStreams(http3Connection, requestOutputStream, responseBytes);
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(new URI("http://localhost"))
@@ -141,10 +142,7 @@ public class Http3ClientConnectionImplTest {
 
         http3Connection.send(request, HttpResponse.BodyHandlers.ofString());
 
-        ArgumentCaptor<byte[]> captor = ArgumentCaptor.forClass(byte[].class);
-        verify(http3Stream.getOutputStream(), times(2)).write(captor.capture());
-        byte[] dataFrameBytes = captor.getAllValues().get(1);
-        assertThat(dataFrameBytes).endsWith("This is the request body.".getBytes());
+        assertThat(requestOutputStream.toByteArray()).endsWith("This is the request body.".getBytes());
     }
     //endregion
 
@@ -733,21 +731,20 @@ public class Http3ClientConnectionImplTest {
     public void httpStreamShouldCopyAllBytesIntoDataFrame() throws Exception {
         // Given
         Http3ClientConnection http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
-        QuicStream quicStream = mockQuicConnectionWithStreams(http3Connection, new byte[]{ 0x01, 0x00 });
+        ByteArrayOutputStream requestOutputStream = new ByteArrayOutputStream();
+        mockQuicConnectionWithStreams(http3Connection, requestOutputStream, new byte[]{ 0x01, 0x00 });
 
         HttpRequest connectRequest = HttpRequest.newBuilder()
                 .uri(new URI("http://proxy.net:443"))
                 .build();
         HttpStream httpStream = http3Connection.sendConnect(connectRequest);
-        clearInvocations(quicStream.getOutputStream());
+        requestOutputStream.reset();  // Clear any data written during CONNECT request
 
         // When
         httpStream.getOutputStream().write("hello world".getBytes(StandardCharsets.UTF_8));
 
         // Then
-        ArgumentCaptor<byte[]> bytesCaptor = ArgumentCaptor.forClass(byte[].class);
-        verify(quicStream.getOutputStream()).write(bytesCaptor.capture());
-        byte[] sentData = bytesCaptor.getValue();
+        byte[] sentData = requestOutputStream.toByteArray();
         assertThat(sentData[0]).isEqualTo((byte) 0x00); // DataFrame Type
         assertThat(sentData[1]).isEqualTo((byte) 11);   // Length
         assertThat(new String(Arrays.copyOfRange(sentData, 2, 13))).isEqualTo("hello world");
@@ -1098,13 +1095,17 @@ public class Http3ClientConnectionImplTest {
      * @return
      */
     private QuicStream mockQuicConnectionWithStreams(Http3ClientConnection http3Connection, byte[] response, Map<String, String>... headerFramesContents) throws NoSuchFieldException, IOException {
+        return mockQuicConnectionWithStreams(http3Connection, mock(OutputStream.class), response, headerFramesContents);
+    }
+
+    private QuicStream mockQuicConnectionWithStreams(Http3ClientConnection http3Connection, OutputStream requestOutputStream, byte[] response, Map<String, String>... headerFramesContents) throws NoSuchFieldException, IOException {
         quicConnection = mock(QuicClientConnection.class);
         FieldSetter.setField(http3Connection, Http3ConnectionImpl.class.getDeclaredField("quicConnection"), quicConnection);
 
         QuicStream http3StreamMock = mock(QuicStream.class);
         when(quicConnection.createStream(anyBoolean())).thenReturn(http3StreamMock);
         // Create sink to send the http3 request bytes to.
-        when(http3StreamMock.getOutputStream()).thenReturn(mock(OutputStream.class));
+        when(http3StreamMock.getOutputStream()).thenReturn(requestOutputStream);
 
         // Return given response on QuicStream's input stream
         when(http3StreamMock.getInputStream()).thenReturn(new ByteArrayInputStream(response));
