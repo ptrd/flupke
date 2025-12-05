@@ -42,7 +42,7 @@ public class DataFrame extends Http3Frame {
     }
 
     public byte[] toBytes() {
-        int payloadLength = payload.limit();
+        int payloadLength = payload.limit() - payload.position();
         ByteBuffer lengthBuffer = ByteBuffer.allocate(8);
         int varIntLength = VariableLengthInteger.encode(payloadLength, lengthBuffer);
         int dataLength = 1 + varIntLength + payloadLength;

@@ -62,6 +62,17 @@ public class DataFrameTest {
     }
 
     @Test
+    void dataFrameFromByteArrayPartShouldWork() {
+        String content = "the lazy dog jumps over the quick brown fox";
+        ByteBuffer buffer = ByteBuffer.wrap(content.getBytes(), 9, 14); // "dog jumps over"
+        DataFrame dataFrame = new DataFrame(buffer);
+
+        byte[] frameBytes = dataFrame.toBytes();
+        assertThat(frameBytes).startsWith(0x00, 14);
+        assertThat(frameBytes).endsWith("dog jumps over".getBytes());
+    }
+
+    @Test
     public void testCreatePayloadFromSlicedBuffer() {
         // Given
         byte[] rawPayload = new byte[] { 0x00, 0x00, 0x00, (byte) 0xca, (byte) 0xfe, (byte) 0xba, (byte) 0xbe, 0x00, 0x00, 0x00 };
