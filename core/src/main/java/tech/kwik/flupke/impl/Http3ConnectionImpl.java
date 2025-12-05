@@ -489,7 +489,7 @@ public class Http3ConnectionImpl implements Http3Connection {
                 public void write(byte[] b, int off, int len) throws IOException {
                     ByteBuffer data = ByteBuffer.wrap(b);
                     data.position(off);
-                    data.limit(len);
+                    data.limit(len + off);
                     quicStream.getOutputStream().write(new DataFrame(data).toBytes());
                 }
 
