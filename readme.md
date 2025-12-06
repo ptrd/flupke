@@ -2,7 +2,7 @@
 ## HTTP3 Java
 [![Maven Central](https://img.shields.io/maven-central/v/tech.kwik/flupke.svg?label=Maven%20Central)](https://mvnrepository.com/artifact/tech.kwik/flupke)
 
-Flupke is a (100% pure) Java HTTP3 implementation that runs on top of [Kwik](http://kwik.tech).
+Flupke is a (100% pure) Java HTTP3 implementation that runs on top of [Kwik](https://github.com/ptrd/kwik).
 
 HTTP3 is a new standard that has been developed by the Internet Engineering Task Force (IETF) and is specified by 
 [RFC 9114](https://www.rfc-editor.org/rfc/rfc9114.html).
