@@ -90,6 +90,7 @@ public class HttpBinServer {
 
         HttpRequestHandler httpbinRequestHandler = new HttpBinRequestHandler();
         Http3ApplicationProtocolFactory http3ApplicationProtocolFactory = new Http3ApplicationProtocolFactory(httpbinRequestHandler);
+        http3ApplicationProtocolFactory.setMaxDataSize(10 * 1024 * 1024 * 1024L);
         serverConnector.registerApplicationProtocol("h3", http3ApplicationProtocolFactory);
         serverConnector.start();
     }
