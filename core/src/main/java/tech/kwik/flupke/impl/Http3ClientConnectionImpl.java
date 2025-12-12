@@ -70,10 +70,6 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     private long maxReceivedHeaderSize = MAX_RECEIVED_HEADER_SIZE;
     private long maxReceivedDataSize = MAX_RECEIVED_DATA_SIZE;
 
-    public Http3ClientConnectionImpl(String host, int port) throws IOException {
-        this(host, port, DEFAULT_CONNECT_TIMEOUT, defaultConnectionSettings(), null, Executors.newCachedThreadPool(), null);
-    }
-
     public Http3ClientConnectionImpl(String host, int port, Duration connectTimeout, Http3ConnectionSettings connectionSettings, DatagramSocketFactory datagramSocketFactory, ExecutorService executorService, Logger logger) throws IOException {
         this(createQuicConnection(host, port, connectTimeout, connectionSettings, datagramSocketFactory, logger), executorService);
     }
@@ -85,9 +81,13 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         quicConnection.setPeerInitiatedStreamCallback(stream -> doAsync(() -> handleIncomingStream(stream)));
     }
 
-    public Http3ClientConnectionImpl(String host, int port, Encoder encoder) throws IOException {
+    Http3ClientConnectionImpl(String host, int port, Encoder encoder) throws IOException {
         this(host, port);
         qpackEncoder = encoder;
+    }
+
+    Http3ClientConnectionImpl(String host, int port) throws IOException {
+        this(host, port, DEFAULT_CONNECT_TIMEOUT, defaultConnectionSettings(), null, Executors.newCachedThreadPool(), null);
     }
 
     @Override
