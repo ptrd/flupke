@@ -33,6 +33,7 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.AbstractMap;
 import java.util.List;
+import java.util.concurrent.Executors;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -136,7 +137,7 @@ public class Http3ClientConnectionBuilder {
     static private class Http3ClientConnectionImplExt extends Http3ClientConnectionImpl {
 
         public Http3ClientConnectionImplExt(QuicConnection quicConnection) {
-            super(quicConnection);
+            super(quicConnection, Executors.newCachedThreadPool());
         }
 
         /**

@@ -49,6 +49,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.*;
 import java.util.function.Consumer;
 
@@ -65,19 +66,21 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     private Statistics connectionStats;
     private boolean initialized;
     private Consumer<HttpStream> bidirectionalStreamHandler;
+    private ExecutorService executorService;
     private long maxReceivedHeaderSize = MAX_RECEIVED_HEADER_SIZE;
     private long maxReceivedDataSize = MAX_RECEIVED_DATA_SIZE;
 
     public Http3ClientConnectionImpl(String host, int port) throws IOException {
-        this(host, port, DEFAULT_CONNECT_TIMEOUT, defaultConnectionSettings(), null, null);
+        this(host, port, DEFAULT_CONNECT_TIMEOUT, defaultConnectionSettings(), null, Executors.newCachedThreadPool(), null);
     }
 
-    public Http3ClientConnectionImpl(String host, int port, Duration connectTimeout, Http3ConnectionSettings connectionSettings, DatagramSocketFactory datagramSocketFactory, Logger logger) throws IOException {
-        this(createQuicConnection(host, port, connectTimeout, connectionSettings, datagramSocketFactory, logger));
+    public Http3ClientConnectionImpl(String host, int port, Duration connectTimeout, Http3ConnectionSettings connectionSettings, DatagramSocketFactory datagramSocketFactory, ExecutorService executorService, Logger logger) throws IOException {
+        this(createQuicConnection(host, port, connectTimeout, connectionSettings, datagramSocketFactory, logger), executorService);
     }
 
-    public Http3ClientConnectionImpl(QuicConnection quicConnection) {
+    public Http3ClientConnectionImpl(QuicConnection quicConnection, ExecutorService executorService) {
         super(quicConnection);
+        this.executorService = Objects.requireNonNull(executorService);
 
         quicConnection.setPeerInitiatedStreamCallback(stream -> doAsync(() -> handleIncomingStream(stream)));
     }
@@ -335,7 +338,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     }
 
     private void doAsync(Runnable task) {
-        new Thread(task).start();
+        executorService.submit(task);
     }
 
     private static QuicConnection.QuicVersion determinePreferredQuicVersion() {

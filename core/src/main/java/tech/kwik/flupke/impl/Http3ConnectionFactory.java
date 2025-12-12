@@ -27,6 +27,7 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
 
 import static tech.kwik.flupke.Http3ClientConnection.DEFAULT_CONNECT_TIMEOUT;
 import static tech.kwik.flupke.Http3ClientConnection.DEFAULT_HTTP3_PORT;
@@ -36,10 +37,12 @@ public class Http3ConnectionFactory {
 
     private final Http3Client http3Client;
     private final Map<UdpAddress, Http3ClientConnection> connections;
+    protected ExecutorService executorService;
 
-    public Http3ConnectionFactory(Http3Client http3Client) {
+    public Http3ConnectionFactory(Http3Client http3Client, ExecutorService executorService) {
         this.http3Client = http3Client;
         connections = new ConcurrentHashMap<>();
+        this.executorService = Objects.requireNonNull(executorService);
     }
 
     public Http3ClientConnection getConnection(HttpRequest request) throws IOException {
@@ -100,7 +103,7 @@ public class Http3ConnectionFactory {
         Http3ClientConnection http3Connection;
         try {
             Duration connectTimeout = http3Client.connectTimeout().orElse(DEFAULT_CONNECT_TIMEOUT);
-            http3Connection = new Http3ClientConnectionImpl(address.host, address.port, connectTimeout, http3Client, http3Client.getDatagramSocketFactory(), http3Client.getLogger());
+            http3Connection = new Http3ClientConnectionImpl(address.host, address.port, connectTimeout, http3Client, http3Client.getDatagramSocketFactory(), executorService, http3Client.getLogger());
         }
         catch (IOException e) {
             throw new RuntimeException(e);

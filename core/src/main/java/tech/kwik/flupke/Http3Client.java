@@ -71,10 +71,10 @@ public class Http3Client extends HttpClient implements Http3ConnectionSettings {
         this.trustManager = trustManager;
         this.keyManager = keyManager;
         this.logger = logger;
-        this.http3ConnectionFactory = new Http3ConnectionFactory(this);
-        this.datagramSocketFactory = new InterfaceBoundDatagramSocketFactory(inetAddress);
 
         executorService = Executors.newCachedThreadPool(new DaemonThreadFactory("http3"));
+        this.http3ConnectionFactory = new Http3ConnectionFactory(this, executorService);
+        this.datagramSocketFactory = new InterfaceBoundDatagramSocketFactory(inetAddress);
     }
 
     public static HttpClient newHttpClient() {

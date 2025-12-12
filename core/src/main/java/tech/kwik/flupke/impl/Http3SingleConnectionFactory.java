@@ -19,10 +19,12 @@
 package tech.kwik.flupke.impl;
 
 import tech.kwik.core.QuicConnection;
+import tech.kwik.core.concurrent.DaemonThreadFactory;
 import tech.kwik.flupke.Http3ClientConnection;
 
 import java.io.IOException;
 import java.net.http.HttpRequest;
+import java.util.concurrent.Executors;
 
 /**
  * Connection factory that produces a HTTP3 connection that uses a single (pre-established) QUIC connection.
@@ -33,7 +35,7 @@ public class Http3SingleConnectionFactory extends Http3ConnectionFactory {
     private Http3ClientConnection http3Connection;
 
     public Http3SingleConnectionFactory(QuicConnection quicConnection) {
-        super(null);
+        super(null, Executors.newCachedThreadPool(new DaemonThreadFactory("http3")));
         this.quicConnection = quicConnection;
     }
 
@@ -57,7 +59,7 @@ public class Http3SingleConnectionFactory extends Http3ConnectionFactory {
     }
 
     private Http3ClientConnection createConnection() {
-        return new Http3ClientConnectionImpl(quicConnection);
+        return new Http3ClientConnectionImpl(quicConnection, executorService);
     }
 
 }
