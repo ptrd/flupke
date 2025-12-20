@@ -20,7 +20,6 @@ package tech.kwik.flupke.server.impl;
 
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.QuicStream;
-import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.core.server.ApplicationProtocolConnection;
 import tech.kwik.core.server.ServerConnection;
@@ -34,9 +33,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PushbackInputStream;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -126,13 +123,7 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
         // "All client-initiated bidirectional streams are used for HTTP requests and responses."
         try {
             HeadersFrame headersFrame = readRequestHeadersFrame(quicStream.getInputStream(), maxHeaderSize);
-            String httpMethod = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_METHOD);
-            if (httpMethod.equals("CONNECT")) {
-                handleConnectMethod(quicStream, headersFrame);
-            }
-            else {
-                handleHttpRequest(headersFrame, quicStream, encoder);
-            }
+            handleHttpRequest(headersFrame, quicStream);
         }
         catch (IOException ioError) {
             quicStream.abortReading(H3_INTERNAL_ERROR);
@@ -147,18 +138,6 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
         }
         catch (ConnectionError e) {
             connectionError(e.getHttp3ErrorCode());
-        }
-    }
-
-    private void handleConnectMethod(QuicStream quicStream, HeadersFrame headersFrame) {
-        if (headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PROTOCOL) != null) {
-            handleExtendedConnectMethod(quicStream, headersFrame);
-        }
-        else {
-            // https://www.rfc-editor.org/rfc/rfc9110#section-9
-            // "An origin server that receives a request method that is unrecognized or not implemented SHOULD respond
-            // with the 501 (Not Implemented) status code. "
-            sendHttpErrorResponse(501, "", quicStream);
         }
     }
 
@@ -316,22 +295,28 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
         return receivedFrames;
     }
 
-    void handleHttpRequest(HeadersFrame headersFrame, QuicStream quicStream, Encoder qpackEncoder) throws ConnectionError {
+    void handleHttpRequest(HeadersFrame headersFrame, QuicStream quicStream) throws ConnectionError {
         String method = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_METHOD);
         String path = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PATH);
         String auth = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_AUTHORITY);
         DataFramesReader dataFramesReader = new DataFramesReader(quicStream.getInputStream(), maxDataSize);
         HttpServerRequest request = new HttpServerRequestImpl(method, path, auth, headersFrame.headers(), clientAddress, dataFramesReader.getDataFramesStream());
-        HttpServerResponse response = new HttpServerResponseImpl(quicStream, qpackEncoder);
-
+        HttpServerResponse response = new HttpServerResponseImpl(quicStream, encoder);
+        var extendedConnect = method.equals("CONNECT") && headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PROTOCOL) != null;
         try {
             requestHandler.handleRequest(request, response);
             dataFramesReader.checkForConnectionError();
-            dataFramesReader.close();
-            if (!response.isStatusSet()) {
-                response.setStatus(500);
+            boolean noStatus = !response.isStatusSet();
+            if (!extendedConnect && noStatus) {
+                response.setStatus(method.equals("CONNECT") ? 501 : 500);
             }
-            response.getOutputStream().close();
+
+            if (extendedConnect && (noStatus || response.status() >= 200 && response.status() < 300)) {
+                handleExtendedConnectMethod(quicStream, headersFrame);
+            } else {
+                dataFramesReader.close();
+                response.getOutputStream().close();
+            }
         }
         catch (IOException e) {
             // Ignore, there is nothing we can do. Note Kwik will not throw exception when writing to stream
