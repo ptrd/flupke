@@ -299,11 +299,11 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
         String method = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_METHOD);
         String path = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PATH);
         String auth = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_AUTHORITY);
+        boolean isConnect = "CONNECT".equals(method);
+        boolean extendedConnect = isConnect && headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PROTOCOL) != null;
         DataFramesReader dataFramesReader = new DataFramesReader(quicStream.getInputStream(), maxDataSize);
         HttpServerRequest request = new HttpServerRequestImpl(method, path, auth, headersFrame.headers(), clientAddress, dataFramesReader.getDataFramesStream());
-        HttpServerResponse response = new HttpServerResponseImpl(quicStream, qpackEncoder);
-        boolean isConnect = "CONNECT".equals(method);
-        var extendedConnect = isConnect && headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PROTOCOL) != null;
+        HttpServerResponseImpl response = new HttpServerResponseImpl(quicStream, qpackEncoder, isConnect);
         try {
             requestHandler.handleRequest(request, response);
             dataFramesReader.checkForConnectionError();
@@ -320,7 +320,7 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
                 handleExtendedConnectMethod(quicStream, headersFrame);
             } else {
                 dataFramesReader.close();
-                response.getOutputStream().close();
+                response.outputStream().close();
             }
         }
         catch (IOException e) {
