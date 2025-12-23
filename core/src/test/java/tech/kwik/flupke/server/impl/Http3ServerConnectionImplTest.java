@@ -561,6 +561,7 @@ public class Http3ServerConnectionImplTest {
         Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
                 .withHeaders(Map.of(":method", "CONNECT", ":protocol", "websockets", ":authority", "example.com", ":path", "/"))
                 .withExtensionHandler("websockets", extensionFactory)
+                .withHandler(((req, resp) -> resp.setStatus(200)))
                 .withEncoder(encoder)
                 .buildServerConnection();
         OutputStream outputStream = mock(OutputStream.class);
@@ -618,6 +619,7 @@ public class Http3ServerConnectionImplTest {
                 .withHeaders(Map.of(":method", "CONNECT", ":protocol", "webtransport", ":authority", "example.com", ":path", "/"))
                 .withEncoder(encoder)
                 .withExtensionHandler("webtransport", extensionFactory)
+                .withHandler(((req, resp) -> resp.setStatus(200)))
                 .buildServerConnection();
         QuicStream requestResponseStream = new QuicStreamBuilder().withInputData(fakeHeadersFrameData()).build();
 
@@ -683,6 +685,7 @@ public class Http3ServerConnectionImplTest {
                 .withHeaders(Map.of(":method", "CONNECT", ":protocol", "webtransport", ":authority", "example.com", ":path", "/"))
                 .withEncoder(noOpEncoderDecoderBuilder.encoder())
                 .withExtensionHandler("webtransport", http3ServerConnection -> extensionHandler)
+                .withHandler(((req, resp) -> resp.setStatus(200)))
                 .buildServerConnection();
         QuicStream requestResponseStream = new QuicStreamBuilder().withInputData(fakeHeadersFrameData()).build();
 

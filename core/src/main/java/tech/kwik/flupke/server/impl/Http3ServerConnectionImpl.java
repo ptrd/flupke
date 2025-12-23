@@ -123,7 +123,7 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
         // "All client-initiated bidirectional streams are used for HTTP requests and responses."
         try {
             HeadersFrame headersFrame = readRequestHeadersFrame(quicStream.getInputStream(), maxHeaderSize);
-            handleHttpRequest(headersFrame, quicStream);
+            handleHttpRequest(headersFrame, quicStream, encoder);
         }
         catch (IOException ioError) {
             quicStream.abortReading(H3_INTERNAL_ERROR);
@@ -295,23 +295,28 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
         return receivedFrames;
     }
 
-    void handleHttpRequest(HeadersFrame headersFrame, QuicStream quicStream) throws ConnectionError {
+    void handleHttpRequest(HeadersFrame headersFrame, QuicStream quicStream, Encoder qpackEncoder) throws ConnectionError {
         String method = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_METHOD);
         String path = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PATH);
         String auth = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_AUTHORITY);
         DataFramesReader dataFramesReader = new DataFramesReader(quicStream.getInputStream(), maxDataSize);
         HttpServerRequest request = new HttpServerRequestImpl(method, path, auth, headersFrame.headers(), clientAddress, dataFramesReader.getDataFramesStream());
-        HttpServerResponse response = new HttpServerResponseImpl(quicStream, encoder);
-        var extendedConnect = method.equals("CONNECT") && headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PROTOCOL) != null;
+        HttpServerResponse response = new HttpServerResponseImpl(quicStream, qpackEncoder);
+        boolean isConnect = "CONNECT".equals(method);
+        var extendedConnect = isConnect && headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PROTOCOL) != null;
         try {
             requestHandler.handleRequest(request, response);
             dataFramesReader.checkForConnectionError();
             boolean noStatus = !response.isStatusSet();
-            if (!extendedConnect && noStatus) {
-                response.setStatus(method.equals("CONNECT") ? 501 : 500);
+            if (noStatus) {
+                // https://www.rfc-editor.org/rfc/rfc9110#section-9
+                // "An origin server that receives a request method that is unrecognized or not implemented SHOULD respond
+                // with the 501 (Not Implemented) status code. "
+                int statusCode = isConnect ? 501 : 500;
+                response.setStatus(statusCode);
             }
 
-            if (extendedConnect && (noStatus || response.status() >= 200 && response.status() < 300)) {
+            if (extendedConnect && (response.status() >= 200 && response.status() < 300)) {
                 handleExtendedConnectMethod(quicStream, headersFrame);
             } else {
                 dataFramesReader.close();
