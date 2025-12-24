@@ -26,7 +26,6 @@ import org.mockito.stubbing.Answer;
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.QuicStream;
 import tech.kwik.core.server.ServerConnection;
-import tech.kwik.flupke.HttpError;
 import tech.kwik.flupke.HttpStream;
 import tech.kwik.flupke.impl.ConnectionError;
 import tech.kwik.flupke.impl.DataFrame;
@@ -34,12 +33,12 @@ import tech.kwik.flupke.impl.HeadersFrame;
 import tech.kwik.flupke.impl.SettingsFrame;
 import tech.kwik.flupke.server.*;
 import tech.kwik.flupke.test.CapturingEncoder;
+import tech.kwik.flupke.test.FieldSetter;
 import tech.kwik.flupke.test.NoOpEncoderDecoderBuilder;
 import tech.kwik.flupke.test.QuicStreamBuilder;
 import tech.kwik.flupke.webtransport.impl.WebTransportExtensionFactory;
 import tech.kwik.qpack.Encoder;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -418,8 +417,11 @@ public class Http3ServerConnectionImplTest {
         http3Connection.handleHttpRequest(requestHeadersFrame, stream, noOpEncoderDecoderBuilder.encoder());
 
         // Then
+        ByteBuffer response = ByteBuffer.wrap(output.toByteArray());
+        response.get(); // Skip headers frame type
+        int headerFrameLength = response.get(); // Skip headers frame length (dummy value because of no-op encoder)
         // Strip of header frame (two bytes: header type and header length (== 0), because of dummy encoder)
-        byte[] dataBytes = Arrays.copyOfRange(output.toByteArray(), 2, output.toByteArray().length);
+        byte[] dataBytes = Arrays.copyOfRange(output.toByteArray(), headerFrameLength + 2, output.toByteArray().length);
         DataFrame dataFrame = new DataFrame().parse(dataBytes);
         assertThat(dataFrame.getPayload()).isEqualTo("Hello World!".getBytes());
     }
@@ -448,7 +450,10 @@ public class Http3ServerConnectionImplTest {
         // Given
         long maxHeaderSize = Long.MAX_VALUE;
         long maxDataSize = 2500;
-        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize, executor, emptyMap());
+        HttpRequestHandler httpRequestHandler = (req, resp) -> {
+            req.body().readAllBytes();
+        };
+        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), httpRequestHandler, maxHeaderSize, maxDataSize, executor, emptyMap());
         byte[] rawData = new byte[10000];
         rawData[0] = FRAME_TYPE_DATA;
         rawData[1] = 0x44; // 0x44ff == 1279
@@ -457,12 +462,18 @@ public class Http3ServerConnectionImplTest {
         rawData[3 + 1279 + 1] = 0x44; // 0x44ff == 1279
         rawData[3 + 1279 + 2] = (byte) 0xff;
 
-        assertThatThrownBy(() ->
-                // When
-                http3Connection.parseHttp3Frames(new ByteArrayInputStream(rawData)))
-                // Then
-                .isInstanceOf(HttpError.class)
-                .hasMessageContaining("max data");
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        QuicStream requestResponseStream = new QuicStreamBuilder()
+                .withInputData(rawData)
+                .withOutputStream(output)
+                .build();
+
+        // When
+        http3Connection.handleHttpRequest(createHeadersFrame("GET", "/"), requestResponseStream, noOpEncoderDecoderBuilder.encoder());
+
+        // Then
+        HeadersFrame responseHeadersFrame = new HeadersFrame().parsePayload(output.toByteArray(), noOpEncoderDecoderBuilder.decoder());
+        assertThat(responseHeadersFrame.getPseudoHeader(":status")).isEqualTo("413");
     }
 
     @Test
@@ -471,16 +482,21 @@ public class Http3ServerConnectionImplTest {
         long maxHeaderSize = 1000;
         long maxDataSize = Long.MAX_VALUE;
         Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize, executor, emptyMap());
-
+        setEncoder(http3Connection, noOpEncoderDecoderBuilder.encoder());
         HeadersFrame largeHeaders = new HeadersFrame("superlarge", "*".repeat(1000));
-        byte[] data = largeHeaders.toBytes(Encoder.newBuilder().build());
 
-        assertThatThrownBy(() ->
-                // When
-                http3Connection.parseHttp3Frames(new ByteArrayInputStream(data)))
-                // Then
-                .isInstanceOf(HttpError.class)
-                .hasMessageContaining("max header");
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        QuicStream requestResponseStream = new QuicStreamBuilder()
+                .withInputData(largeHeaders.toBytes(noOpEncoderDecoderBuilder.encoder()))
+                .withOutputStream(output)
+                .build();
+
+        // When
+        http3Connection.handleStandardRequestResponseStream(requestResponseStream);
+
+        // Then
+        HeadersFrame responseHeadersFrame = new HeadersFrame().parsePayload(output.toByteArray(), noOpEncoderDecoderBuilder.decoder());
+        assertThat(responseHeadersFrame.getPseudoHeader(":status")).isEqualTo("431");
     }
 
     @Test
@@ -750,12 +766,25 @@ public class Http3ServerConnectionImplTest {
         return headersFrame;
     }
 
+    private HeadersFrame createHeadersFrame(String method, String path) {
+        HeadersFrame headersFrame = new HeadersFrame(null, Map.of(
+                ":method", method,
+                ":authority", "www.example.com:443",
+                ":path", path
+        ));
+        return headersFrame;
+    }
+
     private QuicConnection createMockQuicConnection() throws Exception {
         ServerConnection connection = mock(ServerConnection.class);
         QuicStream stream = mock(QuicStream.class);
         when(connection.createStream(false)).thenReturn(stream);
         when(stream.getOutputStream()).thenReturn(new ByteArrayOutputStream());
         return connection;
+    }
+
+    private void setEncoder(Http3ServerConnectionImpl http3Connection, Encoder encoder) {
+        FieldSetter.setField(http3Connection, "encoder", encoder);
     }
 
     private static class StatusCallbackAnswer implements Answer<Void> {

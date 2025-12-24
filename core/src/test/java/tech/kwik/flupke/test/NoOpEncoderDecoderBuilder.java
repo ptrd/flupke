@@ -42,7 +42,11 @@ public class NoOpEncoderDecoderBuilder {
             public ByteBuffer compressHeaders(List<Map.Entry<String, String>> headers) {
                 mockEncoderCompressedHeaders = headers;
                 int uncompressedSize = headers.stream().mapToInt(e -> e.getKey().length() + e.getValue().length() + 2).sum();
-                return ByteBuffer.allocate(uncompressedSize);
+                ByteBuffer buffer = ByteBuffer.allocate(uncompressedSize);
+                // Simulate writing uncompressed headers
+                buffer.limit(uncompressedSize);
+                buffer.position(uncompressedSize);
+                return buffer;
             }
         };
     }

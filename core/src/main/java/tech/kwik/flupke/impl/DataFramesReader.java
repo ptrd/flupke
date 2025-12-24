@@ -137,7 +137,7 @@ public class DataFramesReader extends InputStream {
 
     private void checkMaxData() throws IOException {
         if (maxDataSize > 0 && totalDataRead >= maxDataSize) {
-            throw new IOException("Maximum data size exceeded");
+            throw new MaxDataSizeExceededException();
         }
     }
 

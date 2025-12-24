@@ -20,7 +20,6 @@ package tech.kwik.flupke.server.impl;
 
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.QuicStream;
-import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.core.server.ApplicationProtocolConnection;
 import tech.kwik.core.server.ServerConnection;
@@ -34,9 +33,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PushbackInputStream;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -270,6 +267,15 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
         }
     }
 
+    private void sendHttpErrorResponse(int statusCode, String message, HttpServerResponse response) {
+        response.setStatus(statusCode);
+        try {
+            response.getOutputStream().close();
+        }
+        catch (IOException e) {
+        }
+    }
+
     private void sendHttpErrorResponse(int statusCode, String message, QuicStream quicStream) {
         sendHttpStatus(statusCode, message, quicStream, true);
     }
@@ -332,6 +338,10 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
                 response.setStatus(500);
             }
             response.getOutputStream().close();
+        }
+        catch (MaxDataSizeExceededException tooLarge) {
+            quicStream.abortReading(H3_REQUEST_REJECTED);
+            sendHttpErrorResponse(413, "Payload Too Large", response);
         }
         catch (IOException e) {
             // Ignore, there is nothing we can do. Note Kwik will not throw exception when writing to stream
