@@ -34,8 +34,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PushbackInputStream;
 import java.net.InetSocketAddress;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -296,30 +294,6 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
                 catch (IOException e) {}
             }
         }
-    }
-
-    List<Http3Frame> parseHttp3Frames(InputStream requestStream) throws IOException, HttpError {
-        // https://tools.ietf.org/html/draft-ietf-quic-http-34#section-4.1
-        // "An HTTP message (request or response) consists of:
-        //   1.  the header section, sent as a single HEADERS frame (see Section 7.2.2),
-        //   2.  optionally, the content, if present, sent as a series of DATA frames (see Section 7.2.1), and
-        //   3.  optionally, the trailer section, if present, sent as a single HEADERS frame."
-        List<Http3Frame> receivedFrames = new ArrayList<>();
-        int headerSize = 0;
-        int dataSize = 0;
-
-        Http3Frame frame;
-        while ((frame = readFrame(requestStream, maxHeaderSize - headerSize, maxDataSize - dataSize)) != null) {
-            receivedFrames.add(frame);
-            if (frame instanceof HeadersFrame) {
-                headerSize += ((HeadersFrame) frame).getHeadersSize();
-            }
-            else if (frame instanceof DataFrame) {
-                dataSize += ((DataFrame) frame).getDataLength();
-            }
-        }
-
-        return receivedFrames;
     }
 
     void handleHttpRequest(HeadersFrame headersFrame, QuicStream quicStream, Encoder qpackEncoder) throws ConnectionError {
