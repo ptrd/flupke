@@ -103,10 +103,11 @@ final class HttpServerResponseImpl implements HttpServerResponse {
         if (isConnect && status >= 200 && status < 300) {
             throw new IllegalStateException("CONNECT method cannot send body for 2xx status codes");
         }
-        return outputStream();
+        prepareOutputStream();
+        return dataFrameWriter;
     }
 
-    private OutputStream outputStream() {
+    private void prepareOutputStream() {
         if (!outputStarted) {
             HeadersFrame headersFrame = new HeadersFrame(createHttpHeaders(), Map.of(HeadersFrame.PSEUDO_HEADER_STATUS, Integer.toString(status())));
             try {
@@ -118,11 +119,11 @@ final class HttpServerResponseImpl implements HttpServerResponse {
             outputStarted = true;
             dataFrameWriter = new DataFrameWriter(quicOutputStream);
         }
-        return dataFrameWriter;
     }
 
     public void close() throws IOException {
-        outputStream().close();
+        prepareOutputStream();
+        dataFrameWriter.close();
     }
 
     @Override
