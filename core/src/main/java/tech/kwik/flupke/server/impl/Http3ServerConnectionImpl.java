@@ -321,16 +321,16 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
             requestHandler.handleRequest(request, response);
             dataFramesReader.checkForConnectionError();
             boolean noStatus = !response.isStatusSet();
-            if (noStatus) {
-                int statusCode = isConnect ? 501 : 500;
-                response.setStatus(statusCode);
-            }
 
-            if (extendedConnect && (response.status() >= 200 && response.status() < 300)) {
+            if (extendedConnect && (noStatus || (response.status() >= 200 && response.status() < 300))) {
                 handleExtendedConnectMethod(quicStream, headersFrame);
             }
             else {
                 dataFramesReader.close();
+                if (noStatus) {
+                    response.setStatus(500);
+                }
+
                 response.outputStream().close();
             }
         }

@@ -614,6 +614,41 @@ public class Http3ServerConnectionImplTest {
     }
 
     @Test
+    void extendedConnectShouldSucceedWhenRequestHandlerDoesNotSetStatus() throws Exception {
+        // Given
+        HttpRequestHandler requestHandler = mock(HttpRequestHandler.class);
+        AtomicBoolean extensionCalled = new AtomicBoolean(false);
+        Http3ServerExtension extensionHandler = new Http3ServerExtension() {
+            @Override
+            public void handleExtendedConnect(HttpHeaders headers, String protocol, String authority, String pathAndQuery, IntConsumer statusCallback, HttpStream requestResponseStream) {
+                extensionCalled.set(true);
+                statusCallback.accept(200);
+            }
+        };
+
+        CapturingEncoder encoder = new CapturingEncoder();
+        Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
+                .withHeaders(Map.of(":method", "CONNECT", ":protocol", "websockets", ":authority", "example.com"))
+                .withHandler(requestHandler)
+                .withEncoder(encoder)
+                .withExtensionHandler("websockets", http3ServerConnection -> extensionHandler)
+                .buildServerConnection();
+        OutputStream outputStream = mock(OutputStream.class);
+        QuicStream requestResponseStream = new QuicStreamBuilder()
+                .withInputData(fakeHeadersFrameData())
+                .withOutputStream(outputStream)
+                .build();
+
+        // When
+        http3Connection.handleBidirectionalStream(requestResponseStream);
+
+        // Then
+        verify(requestHandler).handleRequest(any(HttpServerRequest.class), any(HttpServerResponse.class));
+        assertThat(encoder.getCapturedHeaders().get(":status")).isEqualTo("200");
+        assertThat(extensionCalled.get()).isTrue();
+    }
+
+    @Test
     void extendedConnectShouldFailWhenRequestHandlerDoesNotReturn2xx() throws Exception {
         // Given
         HttpRequestHandler handler = (req, resp) -> resp.setStatus(403);
