@@ -40,7 +40,7 @@ class HttpServerResponseImplTest {
     // region status
     @Test
     void statusCodeOfZeroShouldNotBeAccepted() {
-        HttpServerResponseImpl response = new HttpServerResponseImpl(mock(QuicStream.class), mock(Encoder.class));
+        HttpServerResponseImpl response = new HttpServerResponseImpl(mock(QuicStream.class), mock(Encoder.class), false);
 
         assertThatThrownBy(
                 // When
@@ -52,7 +52,7 @@ class HttpServerResponseImplTest {
 
     @Test
     void statusCodeOfFourDigitsShouldNotBeAccepted() {
-        HttpServerResponseImpl response = new HttpServerResponseImpl(mock(QuicStream.class), mock(Encoder.class));
+        HttpServerResponseImpl response = new HttpServerResponseImpl(mock(QuicStream.class), mock(Encoder.class), false);
         assertThatThrownBy(
                 // When
                 () -> response.setStatus(1000))
@@ -63,7 +63,7 @@ class HttpServerResponseImplTest {
 
     @Test
     void whenStatusNotSetGetStatusShouldThrow() {
-        HttpServerResponseImpl response = new HttpServerResponseImpl(mock(QuicStream.class), mock(Encoder.class));
+        HttpServerResponseImpl response = new HttpServerResponseImpl(mock(QuicStream.class), mock(Encoder.class), false);
         assertThatThrownBy(
                 // When
                 () -> response.status())
@@ -77,12 +77,25 @@ class HttpServerResponseImplTest {
         // Given
         NoOpEncoderDecoderBuilder encoderBuilder = new NoOpEncoderDecoderBuilder();
         QuicStream quicStream = mock(QuicStream.class);
-        HttpServerResponseImpl response = new HttpServerResponseImpl(quicStream, encoderBuilder.encoder());
+        HttpServerResponseImpl response = new HttpServerResponseImpl(quicStream, encoderBuilder.encoder(), false);
 
         // When / Then
         assertThatThrownBy(response::getOutputStream)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("status not set");
+    }
+
+    @Test
+    void whenStatus2xxSetOnConnectOutputStreamShouldThrow() {
+        // Given
+        NoOpEncoderDecoderBuilder encoderBuilder = new NoOpEncoderDecoderBuilder();
+        QuicStream quicStream = mock(QuicStream.class);
+        HttpServerResponseImpl response = new HttpServerResponseImpl(quicStream, encoderBuilder.encoder(), true);
+        response.setStatus(200);
+        // When / Then
+        assertThatThrownBy(response::getOutputStream)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("CONNECT method cannot send body for 2xx status codes");
     }
     // endregion
 
@@ -93,7 +106,7 @@ class HttpServerResponseImplTest {
         NoOpEncoderDecoderBuilder encoderBuilder = new NoOpEncoderDecoderBuilder();
         QuicStream quicStream = mock(QuicStream.class);
         when(quicStream.getOutputStream()).thenReturn(mock(OutputStream.class));
-        HttpServerResponseImpl response = new HttpServerResponseImpl(quicStream, encoderBuilder.encoder());
+        HttpServerResponseImpl response = new HttpServerResponseImpl(quicStream, encoderBuilder.encoder(), false);
         response.setStatus(200);
 
         // When
@@ -111,7 +124,7 @@ class HttpServerResponseImplTest {
         QuicStream quicStream = new QuicStreamBuilder().build();
 
         CapturingEncoder encoder = new CapturingEncoder();
-        HttpServerResponseImpl response = new HttpServerResponseImpl(quicStream, encoder);
+        HttpServerResponseImpl response = new HttpServerResponseImpl(quicStream, encoder, false);
         response.setStatus(200);
 
         // When
@@ -132,7 +145,7 @@ class HttpServerResponseImplTest {
         QuicStream quicStream = new QuicStreamBuilder().build();
 
         CapturingEncoder encoder = new CapturingEncoder();
-        HttpServerResponseImpl response = new HttpServerResponseImpl(quicStream, encoder);
+        HttpServerResponseImpl response = new HttpServerResponseImpl(quicStream, encoder, false);
         response.setStatus(200);
 
         // When
@@ -147,7 +160,7 @@ class HttpServerResponseImplTest {
         // Given
         QuicStream quicStream = new QuicStreamBuilder().build();
         CapturingEncoder encoder = new CapturingEncoder();
-        HttpServerResponseImpl response = new HttpServerResponseImpl(quicStream, encoder);
+        HttpServerResponseImpl response = new HttpServerResponseImpl(quicStream, encoder, false);
         response.setStatus(200);
 
         // When
@@ -165,7 +178,7 @@ class HttpServerResponseImplTest {
         // Given
         QuicStream quicStream = new QuicStreamBuilder().build();
         CapturingEncoder encoder = new CapturingEncoder();
-        HttpServerResponseImpl response = new HttpServerResponseImpl(quicStream, encoder);
+        HttpServerResponseImpl response = new HttpServerResponseImpl(quicStream, encoder, false);
         response.setStatus(200);
 
         // When
@@ -182,7 +195,7 @@ class HttpServerResponseImplTest {
         // Given
         QuicStream quicStream = new QuicStreamBuilder().build();
         CapturingEncoder encoder = new CapturingEncoder();
-        HttpServerResponseImpl response = new HttpServerResponseImpl(quicStream, encoder);
+        HttpServerResponseImpl response = new HttpServerResponseImpl(quicStream, encoder, false);
         response.setStatus(200);
 
         // When
@@ -203,7 +216,7 @@ class HttpServerResponseImplTest {
         // Given
         QuicStream quicStream = new QuicStreamBuilder().build();
         CapturingEncoder encoder = new CapturingEncoder();
-        HttpServerResponseImpl response = new HttpServerResponseImpl(quicStream, encoder);
+        HttpServerResponseImpl response = new HttpServerResponseImpl(quicStream, encoder, false);
         response.setStatus(200);
 
         // When
