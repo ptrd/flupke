@@ -26,7 +26,11 @@ import tech.kwik.core.server.ServerConnection;
 import tech.kwik.flupke.HttpError;
 import tech.kwik.flupke.HttpStream;
 import tech.kwik.flupke.impl.*;
-import tech.kwik.flupke.server.*;
+import tech.kwik.flupke.server.Http3ServerConnection;
+import tech.kwik.flupke.server.Http3ServerExtension;
+import tech.kwik.flupke.server.Http3ServerExtensionFactory;
+import tech.kwik.flupke.server.HttpRequestHandler;
+import tech.kwik.flupke.server.HttpServerRequest;
 import tech.kwik.qpack.Encoder;
 
 import java.io.IOException;
@@ -299,8 +303,17 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
         String method = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_METHOD);
         String path = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PATH);
         String auth = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_AUTHORITY);
+
         boolean isConnect = "CONNECT".equals(method);
         boolean extendedConnect = isConnect && headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PROTOCOL) != null;
+        if (isConnect && !extendedConnect) {
+            // https://www.rfc-editor.org/rfc/rfc9110#section-9
+            // "An origin server that receives a request method that is unrecognized or not implemented SHOULD respond
+            // with the 501 (Not Implemented) status code. "
+            sendHttpErrorResponse(501, "", quicStream);
+            return;
+        }
+
         DataFramesReader dataFramesReader = new DataFramesReader(quicStream.getInputStream(), maxDataSize);
         HttpServerRequest request = new HttpServerRequestImpl(method, path, auth, headersFrame.headers(), clientAddress, dataFramesReader.getDataFramesStream());
         HttpServerResponseImpl response = new HttpServerResponseImpl(quicStream, qpackEncoder, isConnect);
@@ -309,16 +322,14 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
             dataFramesReader.checkForConnectionError();
             boolean noStatus = !response.isStatusSet();
             if (noStatus) {
-                // https://www.rfc-editor.org/rfc/rfc9110#section-9
-                // "An origin server that receives a request method that is unrecognized or not implemented SHOULD respond
-                // with the 501 (Not Implemented) status code. "
                 int statusCode = isConnect ? 501 : 500;
                 response.setStatus(statusCode);
             }
 
             if (extendedConnect && (response.status() >= 200 && response.status() < 300)) {
                 handleExtendedConnectMethod(quicStream, headersFrame);
-            } else {
+            }
+            else {
                 dataFramesReader.close();
                 response.outputStream().close();
             }
