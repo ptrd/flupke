@@ -51,6 +51,7 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
@@ -576,6 +577,68 @@ public class Http3ServerConnectionImplTest {
         // Then
         assertThat(encoder.getCapturedHeaders().get(":status")).isEqualTo("200");
         verify(outputStream, never()).close();
+    }
+
+    @Test
+    void extendedConnectShouldSucceedWhenRequestHandlerDoesReturn2xx() throws Exception {
+        // Given
+        HttpRequestHandler handler = (req, resp) -> resp.setStatus(200);
+        AtomicBoolean extensionCalled = new AtomicBoolean(false);
+        Http3ServerExtension extensionHandler = new Http3ServerExtension() {
+            @Override
+            public void handleExtendedConnect(HttpHeaders headers, String protocol, String authority, String pathAndQuery, IntConsumer statusCallback, HttpStream requestResponseStream) {
+                extensionCalled.set(true);
+                statusCallback.accept(200);
+            }
+        };
+
+        CapturingEncoder encoder = new CapturingEncoder();
+        Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
+                .withHeaders(Map.of(":method", "CONNECT", ":protocol", "websockets", ":authority", "example.com"))
+                .withHandler(handler)
+                .withEncoder(encoder)
+                .withExtensionHandler("websockets", http3ServerConnection -> extensionHandler)
+                .buildServerConnection();
+        OutputStream outputStream = mock(OutputStream.class);
+        QuicStream requestResponseStream = new QuicStreamBuilder()
+                .withInputData(fakeHeadersFrameData())
+                .withOutputStream(outputStream)
+                .build();
+
+        // When
+        http3Connection.handleBidirectionalStream(requestResponseStream);
+
+        // Then
+        assertThat(encoder.getCapturedHeaders().get(":status")).isEqualTo("200");
+        assertThat(extensionCalled.get()).isTrue();
+    }
+
+    @Test
+    void extendedConnectShouldFailWhenRequestHandlerDoesNotReturn2xx() throws Exception {
+        // Given
+        HttpRequestHandler handler = (req, resp) -> resp.setStatus(403);
+        Http3ServerExtension extensionHandler = mock(Http3ServerExtension.class);
+
+        CapturingEncoder encoder = new CapturingEncoder();
+        Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
+                .withHeaders(Map.of(":method", "CONNECT", ":protocol", "websockets", ":authority", "example.com"))
+                .withHandler(handler)
+                .withEncoder(encoder)
+                .withExtensionHandler("websockets", http3ServerConnection -> extensionHandler)
+                .buildServerConnection();
+        OutputStream outputStream = mock(OutputStream.class);
+        QuicStream requestResponseStream = new QuicStreamBuilder()
+                .withInputData(fakeHeadersFrameData())
+                .withOutputStream(outputStream)
+                .build();
+
+        // When
+        http3Connection.handleBidirectionalStream(requestResponseStream);
+
+        // Then
+        assertThat(encoder.getCapturedHeaders().get(":status")).isEqualTo("403");
+        verify(outputStream).close();
+        verify(extensionHandler, never()).handleExtendedConnect(any(HttpHeaders.class), anyString(), anyString(), anyString(), any(IntConsumer.class), any(HttpStream.class));
     }
 
     @Test
