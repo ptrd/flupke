@@ -106,8 +106,7 @@ final class HttpServerResponseImpl implements HttpServerResponse {
         return outputStream();
     }
 
-    //pkg-private so that the internals are unaffected by the above constraint
-    OutputStream outputStream() {
+    private OutputStream outputStream() {
         if (!outputStarted) {
             HeadersFrame headersFrame = new HeadersFrame(createHttpHeaders(), Map.of(HeadersFrame.PSEUDO_HEADER_STATUS, Integer.toString(status())));
             try {
@@ -120,6 +119,10 @@ final class HttpServerResponseImpl implements HttpServerResponse {
             dataFrameWriter = new DataFrameWriter(quicOutputStream);
         }
         return dataFrameWriter;
+    }
+
+    public void close() throws IOException {
+        outputStream().close();
     }
 
     @Override

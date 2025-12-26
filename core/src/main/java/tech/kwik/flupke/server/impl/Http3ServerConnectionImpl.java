@@ -331,7 +331,7 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
                     response.setStatus(500);
                 }
 
-                response.outputStream().close();
+                response.close();
             }
         }
         catch (IOException e) {
