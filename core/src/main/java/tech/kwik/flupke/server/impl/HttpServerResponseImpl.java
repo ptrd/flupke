@@ -42,6 +42,12 @@ final class HttpServerResponseImpl implements HttpServerResponse {
     private HttpHeaders httpHeaders;
     private final Map<String, List<String>> headers;
 
+    /**
+     * Creates a new HttpServerResponseImpl.
+     * @param quicStream    the QUIC stream to write the response to
+     * @param qpackEncoder  the QPACK encoder to use for encoding headers
+     * @param isConnect     whether this response object is a response to a CONNECT request
+     */
     public HttpServerResponseImpl(QuicStream quicStream, Encoder qpackEncoder, boolean isConnect) {
         this.qpackEncoder = qpackEncoder;
         this.quicOutputStream = quicStream.getOutputStream();
