@@ -88,9 +88,21 @@ public class ClientSessionFactoryImpl extends AbstractSessionFactoryImpl impleme
     }
 
     @Override
+    public Session createSession(HttpRequest request) throws IOException, HttpError {
+        return createSession(request, s -> {}, s -> {});
+    }
+
+    @Override
     public Session createSession(URI webTransportUri, Consumer<WebTransportStream> unidirectionalStreamHandler,
                                  Consumer<WebTransportStream> bidirectionalStreamHandler) throws IOException, HttpError {
-        if (!server.equals(webTransportUri.getHost()) || serverPort != webTransportUri.getPort()) {
+        HttpRequest request = HttpRequest.newBuilder(webTransportUri).build();
+        return createSession(request, unidirectionalStreamHandler, bidirectionalStreamHandler);
+    }
+
+    @Override
+    public Session createSession(HttpRequest request, Consumer<WebTransportStream> unidirectionalStreamHandler,
+                                 Consumer<WebTransportStream> bidirectionalStreamHandler) throws IOException, HttpError {
+        if (!server.equals(request.uri().getHost()) || serverPort != request.uri().getPort()) {
             throw new IllegalArgumentException("WebTransport URI must have the same host and port as the server URI used with the constructor");
         }
         // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-limiting-the-number-of-simu
@@ -106,9 +118,8 @@ public class ClientSessionFactoryImpl extends AbstractSessionFactoryImpl impleme
             //  The :scheme field MUST be https. "
             String protocol = "webtransport";
             String schema = "https";
-            HttpRequest request = HttpRequest.newBuilder(webTransportUri).build();
             CapsuleProtocolStream connectStream = new CapsuleProtocolStreamImpl(httpClientConnection.sendExtendedConnect(request, protocol, schema, Duration.ofSeconds(5)));
-            WebTransportContext context = new WebTransportContext(webTransportUri);
+            WebTransportContext context = new WebTransportContext(request.uri());
             SessionImpl session = new SessionImpl(httpClientConnection, context, connectStream, unidirectionalStreamHandler, bidirectionalStreamHandler, this);
             registerSession(session);
             return session;

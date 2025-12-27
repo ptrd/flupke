@@ -31,21 +31,29 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-class HttpServerResponseImpl implements HttpServerResponse {
+final class HttpServerResponseImpl implements HttpServerResponse {
 
     private final Encoder qpackEncoder;
     private final OutputStream quicOutputStream;
     private int status = -1;
     private boolean outputStarted;
+    private final boolean isConnect;
     private DataFrameWriter dataFrameWriter;
     private HttpHeaders httpHeaders;
-    private Map<String, List<String>> headers;
+    private final Map<String, List<String>> headers;
 
-    public HttpServerResponseImpl(QuicStream quicStream, Encoder qpackEncoder) {
+    /**
+     * Creates a new HttpServerResponseImpl.
+     * @param quicStream    the QUIC stream to write the response to
+     * @param qpackEncoder  the QPACK encoder to use for encoding headers
+     * @param isConnect     whether this response object is a response to a CONNECT request
+     */
+    public HttpServerResponseImpl(QuicStream quicStream, Encoder qpackEncoder, boolean isConnect) {
         this.qpackEncoder = qpackEncoder;
         this.quicOutputStream = quicStream.getOutputStream();
         this.httpHeaders = HttpHeaders.of(Map.of(), (a, b) -> true);
         this.headers = new java.util.HashMap<>();
+        this.isConnect = isConnect;
     }
 
     /**
@@ -98,11 +106,18 @@ class HttpServerResponseImpl implements HttpServerResponse {
 
     @Override
     public OutputStream getOutputStream() {
+        if (isConnect && status >= 200 && status < 300) {
+            throw new IllegalStateException("CONNECT method cannot send body for 2xx status codes");
+        }
+        prepareOutputStream();
+        return dataFrameWriter;
+    }
+
+    private void prepareOutputStream() {
         if (!outputStarted) {
             HeadersFrame headersFrame = new HeadersFrame(createHttpHeaders(), Map.of(HeadersFrame.PSEUDO_HEADER_STATUS, Integer.toString(status())));
-            OutputStream outputStream = quicOutputStream;
             try {
-                outputStream.write(headersFrame.toBytes(qpackEncoder));
+                quicOutputStream.write(headersFrame.toBytes(qpackEncoder));
             }
             catch (IOException e) {
                 // Ignore, there is nothing we can do. Note Kwik will not throw exception when writing to stream.
@@ -110,7 +125,11 @@ class HttpServerResponseImpl implements HttpServerResponse {
             outputStarted = true;
             dataFrameWriter = new DataFrameWriter(quicOutputStream);
         }
-        return dataFrameWriter;
+    }
+
+    public void close() throws IOException {
+        prepareOutputStream();
+        dataFrameWriter.close();
     }
 
     @Override

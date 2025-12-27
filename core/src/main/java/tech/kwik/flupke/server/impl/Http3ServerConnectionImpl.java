@@ -121,13 +121,7 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
         // "All client-initiated bidirectional streams are used for HTTP requests and responses."
         try {
             HeadersFrame headersFrame = readRequestHeadersFrame(quicStream.getInputStream(), maxHeaderSize);
-            String httpMethod = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_METHOD);
-            if (httpMethod.equals("CONNECT")) {
-                handleConnectMethod(quicStream, headersFrame);
-            }
-            else {
-                handleHttpRequest(headersFrame, quicStream, encoder);
-            }
+            handleHttpRequest(headersFrame, quicStream, encoder);
         }
         catch (IOException ioError) {
             quicStream.abortReading(H3_INTERNAL_ERROR);
@@ -142,18 +136,6 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
         }
         catch (ConnectionError e) {
             connectionError(e.getHttp3ErrorCode());
-        }
-    }
-
-    private void handleConnectMethod(QuicStream quicStream, HeadersFrame headersFrame) {
-        if (headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PROTOCOL) != null) {
-            handleExtendedConnectMethod(quicStream, headersFrame);
-        }
-        else {
-            // https://www.rfc-editor.org/rfc/rfc9110#section-9
-            // "An origin server that receives a request method that is unrecognized or not implemented SHOULD respond
-            // with the 501 (Not Implemented) status code. "
-            sendHttpErrorResponse(501, "", quicStream);
         }
     }
 
@@ -300,18 +282,37 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
         String method = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_METHOD);
         String path = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PATH);
         String auth = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_AUTHORITY);
+
+        boolean isConnect = "CONNECT".equals(method);
+        boolean extendedConnect = isConnect && headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PROTOCOL) != null;
+        if (isConnect && !extendedConnect) {
+            // https://www.rfc-editor.org/rfc/rfc9110#section-9
+            // "An origin server that receives a request method that is unrecognized or not implemented SHOULD respond
+            // with the 501 (Not Implemented) status code. "
+            sendHttpErrorResponse(501, "", quicStream);
+            return;
+        }
+
         DataFramesReader dataFramesReader = new DataFramesReader(quicStream.getInputStream(), maxDataSize);
         HttpServerRequest request = new HttpServerRequestImpl(method, path, auth, headersFrame.headers(), clientAddress, dataFramesReader.getDataFramesStream());
-        HttpServerResponse response = new HttpServerResponseImpl(quicStream, qpackEncoder);
-
+        HttpServerResponseImpl response = new HttpServerResponseImpl(quicStream, qpackEncoder, isConnect);
         try {
             requestHandler.handleRequest(request, response);
             dataFramesReader.checkForConnectionError();
-            dataFramesReader.close();
-            if (!response.isStatusSet()) {
-                response.setStatus(500);
+            boolean noStatus = !response.isStatusSet();
+
+            if (extendedConnect && (noStatus || (response.status() >= 200 && response.status() < 300))) {
+                handleExtendedConnectMethod(quicStream, headersFrame);
             }
-            response.getOutputStream().close();
+            else {
+                dataFramesReader.close();
+                if (noStatus) {
+                    // no HTTP response status set by request handler => internal server error.
+                    response.setStatus(500);
+                }
+
+                response.close();
+            }
         }
         catch (MaxDataSizeExceededException tooLarge) {
             quicStream.abortReading(H3_REQUEST_REJECTED);
