@@ -29,6 +29,7 @@ import java.io.OutputStreamWriter;
 import java.net.http.HttpHeaders;
 import java.security.MessageDigest;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
@@ -36,9 +37,10 @@ import java.util.function.BiConsumer;
 
 public class HttpBinRequestHandler implements HttpRequestHandler {
 
-    private final Map<RequestKey, BiConsumer<HttpServerRequest, HttpServerResponse>> handlers = new HashMap<>();
+    private final Map<RequestKey, BiConsumer<HttpServerRequest, HttpServerResponse>> handlers = new LinkedHashMap<>();
 
     public HttpBinRequestHandler() {
+        handlers.put(new RequestKey("GET", "/"), this::indexRequest);
         handlers.put(new RequestKey("GET", "/headers"), this::getHeadersRequest);
         handlers.put(new RequestKey("POST", "/headers"), this::postHeadersRequest);
         handlers.put(new RequestKey("POST", "/md5"), this::postForMd5);
@@ -53,6 +55,34 @@ public class HttpBinRequestHandler implements HttpRequestHandler {
         }
         else {
             response.setStatus(404);
+        }
+    }
+
+    private void indexRequest(HttpServerRequest httpServerRequest, HttpServerResponse httpServerResponse) {
+        httpServerResponse.setStatus(200);
+        try {
+            String title = "httpbin powered by Flupke";
+            String message = "Welcome to httpbin powered by Flupke!";
+            OutputStreamWriter writer = new OutputStreamWriter(httpServerResponse.getOutputStream());
+            writer.write("<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"><title>" + title + "</title>" +
+                    "<style>body { font-family: Arial, sans-serif; background: #f7f7f7; margin: 40px; } h1 { color: #333; }" +
+                    "table { border-collapse: collapse; width: 400px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }" +
+                    "th, td { padding: 12px 18px; border-bottom: 1px solid #eee; text-align: left; } " +
+                    "th { background: #f0f0f0; color: #555; } tr:last-child td { border-bottom: none; }" +
+                    "</style></head><body><h1>" + message + "</h1><table><tr><th>Method</th><th>Path</th></tr>\n");
+            handlers.forEach((key, value) -> {
+                try {
+                    writer.write("<tr><td>" + key.method + "</td><td>" + key.path + "</td></tr>\n");
+                }
+                catch (IOException e) {
+                    // Ignore
+                }
+            });
+            writer.write("</table></body></html>");
+            writer.flush();
+        }
+        catch (IOException e) {
+            // Nothing we can do here, status is already set, can't be changed anymore
         }
     }
 
