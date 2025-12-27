@@ -85,20 +85,52 @@ public class WebTransportEchoServer {
                 .withLogger(log)
                 .build();
 
-        HttpRequestHandler dummyGetHandler = (request, response) -> {
-            if (request.method().equals("GET")) {
-                response.setStatus(200);
+        String webTransportPath = "/echo";
+
+        // For WebTransport protocol, one can set a request handler for checking prerequisites, like authorisation.
+        // When the request is invalid, set the appropriate HTTP status code in the response.
+        // When the request is valid, it is ok to set a 200 status code, but it is not required as the WebTransport protocol implementation will take over from there.
+        HttpRequestHandler checkAuthorisationHandler = (request, response) -> {
+            if (request.path().equals(webTransportPath)) {
+                String authHeader = request.headers().firstValue("Authorization").orElse(null);
+                if (authHeader == null || !authHeader.equals("Bearer secret-token")) {
+                    response.setStatus(401);  // Unauthorized
+                    response.addHeader("WWW-Authenticate", "Bearer realm=\"example\"");
+                }
+                else {
+                    // Request is ok, WebTransport protocol will start.
+                    // No need to set a status code here (but it is ok to set any 2xx code).
+                }
             }
             else {
-                response.setStatus(405);
+                response.setStatus(404);  // Not Found
             }
         };
-        // Set a handler for non-CONNECT requests; a no-op handler (e.g. (req, resp) -> {} ) would also work, but would
-        // always return an error status (4xx), which might be confusing.
-        HttpRequestHandler httpRequestHandler = dummyGetHandler;
+
+        // Even for WebTransport a request handler is required, but it doesn't need to do anthing.
+        // However, with a no-op handler, the server will always respond with an error status 500 for
+        // non-WebTransport requests. To have proper error responses, use a handler like the one below.
+        HttpRequestHandler dummyHandler = (request, response) -> {};
+
+        // To have correct error responses, use a handler like this:
+        HttpRequestHandler errorResponseHandler = (request, response) -> {
+            if (request.path().equals(webTransportPath)) {
+                if (!request.method().equals("CONNECT")) {
+                    response.setStatus(405);  // Method Not Allowed
+                    response.getOutputStream().write(("Method " + request.method() + " not allowed. " +
+                            "This is a WebTransport server. " +
+                            "Use CONNECT method to establish a WebTransport session.\n").getBytes());
+                }
+            }
+            else {
+                response.setStatus(404);  // Not Found
+            }
+        };
+
+        HttpRequestHandler httpRequestHandler = dummyHandler;
 
         WebTransportHttp3ApplicationProtocolFactory webTransportProtocolFactory = new WebTransportHttp3ApplicationProtocolFactory(httpRequestHandler);
-        webTransportProtocolFactory.registerWebTransportServer("/echo", this::startEchoHandler);
+        webTransportProtocolFactory.registerWebTransportServer(webTransportPath, this::startEchoHandler);
         serverConnector.registerApplicationProtocol(HTTP3_PROTOCOL_ID, webTransportProtocolFactory);
         serverConnector.start();
     }

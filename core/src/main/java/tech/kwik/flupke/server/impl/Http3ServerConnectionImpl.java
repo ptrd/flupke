@@ -328,6 +328,7 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
             else {
                 dataFramesReader.close();
                 if (noStatus) {
+                    // no HTTP response status set by request handler => internal server error.
                     response.setStatus(500);
                 }
 
