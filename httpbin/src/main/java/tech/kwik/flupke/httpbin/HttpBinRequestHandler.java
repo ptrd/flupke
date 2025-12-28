@@ -42,18 +42,18 @@ public class HttpBinRequestHandler implements HttpRequestHandler {
     private final Map<RequestKey, BiConsumer<HttpServerRequest, HttpServerResponse>> handlers = new LinkedHashMap<>();
 
     public HttpBinRequestHandler() {
-        handlers.put(new RequestKey("GET", "/"), this::indexRequest);
-        handlers.put(new RequestKey("GET", "/headers"), this::getHeadersRequest);
-        handlers.put(new RequestKey("POST", "/response-headers"), this::postHeadersRequest);
-        handlers.put(new RequestKey("POST", "/md5"), this::postForMd5);
-        handlers.put(new RequestKey("GET", "/bytes"), this::getBytes);
+        handlers.put(new RequestKey("GET", "/", "index"), this::indexRequest);
+        handlers.put(new RequestKey("GET", "/headers", "headers as json "), this::getHeadersRequest);
+        handlers.put(new RequestKey("POST", "/response-headers", "headers specified by json body"), this::postHeadersRequest);
+        handlers.put(new RequestKey("POST", "/md5", "md5 hash of request body"), this::postForMd5);
+        handlers.put(new RequestKey("GET", "/bytes", "/bytes/{n}: return n bytes"), this::getBytes);
     }
 
     @Override
     public void handleRequest(HttpServerRequest request, HttpServerResponse response) {
         String path = base(request.path());
         BiConsumer<HttpServerRequest, HttpServerResponse> handler =
-                handlers.get(new RequestKey(request.method(), path));
+                handlers.get(new RequestKey(request.method(), path, null));
         if (handler != null) {
             handler.accept(request, response);
         }
@@ -85,13 +85,13 @@ public class HttpBinRequestHandler implements HttpRequestHandler {
             OutputStreamWriter writer = new OutputStreamWriter(httpServerResponse.getOutputStream());
             writer.write("<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"><title>" + title + "</title>" +
                     "<style>body { font-family: Arial, sans-serif; background: #f7f7f7; margin: 40px; } h1 { color: #333; }" +
-                    "table { border-collapse: collapse; width: 400px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }" +
+                    "table { border-collapse: collapse; width: 600px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }" +
                     "th, td { padding: 12px 18px; border-bottom: 1px solid #eee; text-align: left; } " +
                     "th { background: #f0f0f0; color: #555; } tr:last-child td { border-bottom: none; }" +
-                    "</style></head><body><h1>" + message + "</h1><table><tr><th>Method</th><th>Path</th></tr>\n");
+                    "</style></head><body><h1>" + message + "</h1><table><tr><th>Method</th><th>Path</th><th>Result</th></tr>\n");
             handlers.forEach((key, value) -> {
                 try {
-                    writer.write("<tr><td>" + key.method + "</td><td>" + key.path + "</td></tr>\n");
+                    writer.write("<tr><td>" + key.method + "</td><td>" + key.path  + "</td><td>" + key.description + "</td></tr>\n");
                 }
                 catch (IOException e) {
                     // Ignore
@@ -204,10 +204,12 @@ public class HttpBinRequestHandler implements HttpRequestHandler {
     static private class RequestKey {
         String method;
         String path;
+        String description;
 
-        RequestKey(String method, String path) {
+        RequestKey(String method, String path, String description) {
             this.method = method;
             this.path = path;
+            this.description = description;
         }
 
         @Override
