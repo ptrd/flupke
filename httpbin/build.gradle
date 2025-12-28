@@ -1,0 +1,28 @@
+plugins {
+    id 'buildlogic.java-common-conventions'
+}
+
+dependencies {
+    implementation(project(':flupke'))
+    implementation group: 'tech.kwik', name: 'kwik', version: '0.10.4'
+    implementation("org.json:json:20250517")
+
+    testImplementation("net.javacrumbs.json-unit:json-unit:4.1.0")
+    testImplementation("net.javacrumbs.json-unit:json-unit-assertj:4.1.0")
+}
+
+publishing {
+    publications {
+        flupke(MavenPublication) {
+            artifactId = 'flupke-httpbin'
+            from components.java
+            pom pomContent
+            pom.name = 'Flupke HttpBin'
+            pom.description = 'HttpBin sample for Flupke, the HTTP/3 implementation in Java'
+        }
+    }
+}
+
+signing {
+    sign publishing.publications.flupke
+}

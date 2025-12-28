@@ -36,6 +36,8 @@ public class Http3ApplicationProtocolFactory implements ApplicationProtocolConne
     private final HttpRequestHandler httpRequestHandler;
     private final ExecutorService executorService;
     private Map<String, Http3ServerExtensionFactory> extensions;
+    private long maxHeaderSize = 10 * 1024;
+    private long maxDataSize = 10 * 1024 * 1024;
 
     public Http3ApplicationProtocolFactory(HttpRequestHandler requestHandler) {
         this(requestHandler, Map.of());
@@ -53,7 +55,7 @@ public class Http3ApplicationProtocolFactory implements ApplicationProtocolConne
 
     @Override
     public final ApplicationProtocolConnection createConnection(String protocol, QuicConnection quicConnection) {
-        return new Http3ServerConnectionImpl(quicConnection, httpRequestHandler, executorService, extensions);
+        return new Http3ServerConnectionImpl(quicConnection, httpRequestHandler, maxHeaderSize, maxDataSize, executorService, extensions);
     }
 
     @Override
@@ -92,5 +94,27 @@ public class Http3ApplicationProtocolFactory implements ApplicationProtocolConne
 
     public void setExtensions(Map<String, Http3ServerExtensionFactory> extensions) {
         this.extensions = Objects.requireNonNull(extensions);
+    }
+
+    public long getMaxDataSize() {
+        return maxDataSize;
+    }
+
+    public void setMaxDataSize(long maxDataSize) {
+        if (maxDataSize < 0) {
+            throw new IllegalArgumentException("maxDataSize must be a positive value");
+        }
+        this.maxDataSize = maxDataSize;
+    }
+
+    public long getMaxHeaderSize() {
+        return maxHeaderSize;
+    }
+
+    public void setMaxHeaderSize(long maxHeaderSize) {
+        if (maxHeaderSize < 0) {
+            throw new IllegalArgumentException("maxHeaderSize must be a positive value");
+        }
+        this.maxHeaderSize = maxHeaderSize;
     }
 }
