@@ -33,6 +33,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 
 public class HttpBinRequestHandler implements HttpRequestHandler {
@@ -44,18 +46,35 @@ public class HttpBinRequestHandler implements HttpRequestHandler {
         handlers.put(new RequestKey("GET", "/headers"), this::getHeadersRequest);
         handlers.put(new RequestKey("POST", "/response-headers"), this::postHeadersRequest);
         handlers.put(new RequestKey("POST", "/md5"), this::postForMd5);
+        handlers.put(new RequestKey("GET", "/bytes"), this::getBytes);
     }
 
     @Override
     public void handleRequest(HttpServerRequest request, HttpServerResponse response) {
+        String path = base(request.path());
         BiConsumer<HttpServerRequest, HttpServerResponse> handler =
-                handlers.get(new RequestKey(request.method(), request.path()));
+                handlers.get(new RequestKey(request.method(), path));
         if (handler != null) {
             handler.accept(request, response);
         }
         else {
             response.setStatus(404);
         }
+    }
+
+    private String base(String path) {
+        String base;
+        if (path.startsWith("/")) {
+            base = path.substring(1);
+        }
+        else {
+            base = path;
+        }
+        int slashIndex = base.indexOf('/');
+        if (slashIndex != -1) {
+            base = base.substring(0, slashIndex);
+        }
+        return "/" + base;
     }
 
     private void indexRequest(HttpServerRequest httpServerRequest, HttpServerResponse httpServerResponse) {
@@ -150,6 +169,35 @@ public class HttpBinRequestHandler implements HttpRequestHandler {
         }
         catch (Exception e) {
             httpServerResponse.setStatus(500);
+        }
+    }
+
+    private void getBytes(HttpServerRequest httpServerRequest, HttpServerResponse httpServerResponse) {
+        String path = httpServerRequest.path();
+        Matcher m = Pattern.compile("/bytes/(\\d.+)").matcher(path);
+        if (m.matches()) {
+            String num = m.group(1);
+            int numBytes = Integer.parseInt(num);
+            try {
+                httpServerResponse.setStatus(200);
+                int bufferSize = 8192;
+                for (int bytesSent = 0; bytesSent < numBytes; ) {
+                    int bytesToSend = Math.min(bufferSize, numBytes - bytesSent);
+                    byte[] buffer = new byte[bytesToSend];
+                    for (int i = 0; i < bytesToSend; i++) {
+                        buffer[i] = (byte) ((bytesSent + i) % 256);
+                    }
+                    httpServerResponse.getOutputStream().write(buffer);
+                    bytesSent += bytesToSend;
+                }
+                httpServerResponse.getOutputStream().flush();
+            }
+            catch (Exception e) {
+                httpServerResponse.setStatus(500);
+            }
+        }
+        else {
+            httpServerResponse.setStatus(400);
         }
     }
 

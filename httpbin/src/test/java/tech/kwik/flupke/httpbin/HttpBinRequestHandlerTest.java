@@ -128,6 +128,48 @@ class HttpBinRequestHandlerTest {
         verify(response).setStatus(200);
     }
 
+    @Test
+    void getBytesShouldReturnSpecifiedNumberOfBytes() throws Exception {
+        int numBytes = 10240;
+        HttpServerRequest request = new HttpServerRequestImpl(
+                "GET",
+                "/bytes/" + numBytes,
+                "www.example.com",
+                HttpHeaders.of(Map.of(), (s1, s2) -> true),
+                null,
+                mock(java.io.InputStream.class)
+        );
+
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        HttpServerResponse response = mock(HttpServerResponse.class);
+        when(response.getOutputStream()).thenReturn(output);
+
+        httpBinRequestHandler.handleRequest(request, response);
+
+        assertThat(output.size()).isEqualTo(numBytes);
+        verify(response).setStatus(200);
+    }
+
+    @Test
+    void getBytesWithInvalidNumShouldReturn400() throws Exception {
+        HttpServerRequest request = new HttpServerRequestImpl(
+                "GET",
+                "/bytes/eight",
+                "www.example.com",
+                HttpHeaders.of(Map.of(), (s1, s2) -> true),
+                null,
+                mock(java.io.InputStream.class)
+        );
+
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        HttpServerResponse response = mock(HttpServerResponse.class);
+        when(response.getOutputStream()).thenReturn(output);
+
+        httpBinRequestHandler.handleRequest(request, response);
+
+        verify(response).setStatus(400);
+    }
+
     private static class HttpServerResponseWithHeaders extends HttpServerResponseImpl {
 
         private HttpHeaders headers;
