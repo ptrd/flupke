@@ -72,7 +72,8 @@ public class PostExample {
             }
             HttpResponse<String> httpResponse = client.send(request, HttpResponse.BodyHandlers.ofString());
             System.out.println("Got HTTP response " + httpResponse);
-            System.out.println("-   HTTP headers: " + httpResponse.headers());
+            System.out.println("-   HTTP headers: ");
+            httpResponse.headers().map().forEach((k, v) -> System.out.println("--  " + k + "\t" + v));
             System.out.println("-   HTTP body (" + httpResponse.body().length() + " bytes):");
             if (httpResponse.body().length() > 10 * 1024) {
                 String outputFile = "http3-response.txt";
