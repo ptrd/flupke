@@ -42,7 +42,7 @@ public class HttpBinRequestHandler implements HttpRequestHandler {
     public HttpBinRequestHandler() {
         handlers.put(new RequestKey("GET", "/"), this::indexRequest);
         handlers.put(new RequestKey("GET", "/headers"), this::getHeadersRequest);
-        handlers.put(new RequestKey("POST", "/headers"), this::postHeadersRequest);
+        handlers.put(new RequestKey("POST", "/response-headers"), this::postHeadersRequest);
         handlers.put(new RequestKey("POST", "/md5"), this::postForMd5);
     }
 

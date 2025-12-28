@@ -87,7 +87,7 @@ class HttpBinRequestHandlerTest {
                         .put("Set-Cookie", List.of("sessionId=abc123", "theme=light", "lang=en-US"))
                         .put("User-Agent", "JUnit-Test"));
         HttpServerRequest request = new HttpServerRequestImpl("POST",
-                "/headers",
+                "/response-headers",
                 "www.example.com",
                 HttpHeaders.of(Map.of(), (s1, s2) -> true),
                 null,
