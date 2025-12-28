@@ -1,5 +1,23 @@
 # Releases
 
+## 0.9.4 (2025-12-28)
+
+**Note:** this release introduces the use of request handlers for WebTransport. This might lead to different
+behaviour for cases where request handlers were used in combination with WebTransport.
+See the `WebTransportEchoServer` sample for explanation.
+
+- added convenience methods to `HttpServerResponse` for adding headers
+- added httpbin module providing a limited implementation of a httpbin-server (see `HttpBinServer`)
+- added server method to set max header and max data size
+- added connect-handle to enable interception for CONNECT method, which can be used to implement for example authorization checks for WebTransport ([issue 25](https://github.com/ptrd/flupke/issues/25))
+- reduce memory usage when serializing client request body
+- run callback methods on separate threads
+- fix: handling of requests that are too large
+- fix: handle zero-length data frames correctly
+- fix: data frame serialization (when created from partial array)
+- fix: write partial byte array to http stream (used in WebTransport only)
+- improved client error handling
+
 ## 0.9.3 (2025-11-27)
 
 - added method to let server http request object provide the authority (equivalent to HTTP/1 "Host" header)
