@@ -34,13 +34,15 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PushbackInputStream;
 import java.net.InetSocketAddress;
+import java.net.http.HttpHeaders;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-import java.util.function.IntConsumer;
 
 import static tech.kwik.flupke.impl.SettingsFrame.SETTINGS_ENABLE_CONNECT_PROTOCOL;
 
@@ -148,9 +150,9 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
             String path = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PATH);
 
             AtomicInteger returnedStatusCode = new AtomicInteger();
-            IntConsumer statusCallback = statusCode -> {
+            BiConsumer<Integer, Map<String, List<String>>> statusCallback = (statusCode, headers) -> {
                 returnedStatusCode.set(statusCode);
-                sendHttpStatus(statusCode, null, quicStream, statusCode != 200);
+                sendHttpStatus(statusCode, headers, null, quicStream, statusCode != 200);
             };
             HttpStream streamWrapper = new HttpStreamImpl(quicStream) {
                 @Override
@@ -257,13 +259,14 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
     }
 
     private void sendHttpErrorResponse(int statusCode, String message, QuicStream quicStream) {
-        sendHttpStatus(statusCode, message, quicStream, true);
+        sendHttpStatus(statusCode, Map.of(), message, quicStream, true);
     }
 
-    private void sendHttpStatus(int statusCode, String message, QuicStream quicStream, boolean closeOutput) {
+    private void sendHttpStatus(int statusCode, Map<String, List<String>> headers, String message, QuicStream quicStream, boolean closeOutput) {
         try {
             OutputStream outputStream = quicStream.getOutputStream();
-            HeadersFrame headersFrame = new HeadersFrame(HeadersFrame.PSEUDO_HEADER_STATUS, Integer.toString(statusCode));
+            HeadersFrame headersFrame = new HeadersFrame(HttpHeaders.of(headers, (a,b) -> true),
+                    Map.of(HeadersFrame.PSEUDO_HEADER_STATUS, Integer.toString(statusCode)));
             outputStream.write(headersFrame.toBytes(encoder));
         }
         catch (IOException e) {

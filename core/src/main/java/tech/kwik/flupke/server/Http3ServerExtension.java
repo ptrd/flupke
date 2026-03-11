@@ -22,7 +22,9 @@ package tech.kwik.flupke.server;
 import tech.kwik.flupke.HttpStream;
 
 import java.net.http.HttpHeaders;
-import java.util.function.IntConsumer;
+import java.util.List;
+import java.util.Map;
+import java.util.function.BiConsumer;
 
 public interface Http3ServerExtension {
 
@@ -38,5 +40,5 @@ public interface Http3ServerExtension {
      * @param statusCallback
      * @param requestResponseStream
      */
-    void handleExtendedConnect(HttpHeaders headers, String protocol, String authority, String pathAndQuery, IntConsumer statusCallback, HttpStream requestResponseStream);
+    void handleExtendedConnect(HttpHeaders headers, String protocol, String authority, String pathAndQuery, BiConsumer<Integer, Map<String, List<String>>> statusCallback, HttpStream requestResponseStream);
 }

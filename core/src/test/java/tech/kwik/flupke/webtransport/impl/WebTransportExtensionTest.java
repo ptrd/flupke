@@ -45,7 +45,7 @@ class WebTransportExtensionTest {
 
         // When
         AtomicInteger httpStatus = new AtomicInteger();
-        webTransportExtension.handleExtendedConnect(mock(HttpHeaders.class), "webtransport", "localhost", "/service", s -> httpStatus.set(s), mockHttpStream());
+        webTransportExtension.handleExtendedConnect(mock(HttpHeaders.class), "webtransport", "localhost", "/service", (s, h) -> httpStatus.set(s), mockHttpStream());
 
         // Then
         assertThat(httpStatus.get()).isEqualTo(200);
@@ -59,7 +59,7 @@ class WebTransportExtensionTest {
 
         // When
         AtomicInteger httpStatus = new AtomicInteger();
-        webTransportExtension.handleExtendedConnect(mock(HttpHeaders.class), "webtransport", "localhost", "/welcome", s -> httpStatus.set(s), mockHttpStream());
+        webTransportExtension.handleExtendedConnect(mock(HttpHeaders.class), "webtransport", "localhost", "/welcome", (s, h) -> httpStatus.set(s), mockHttpStream());
 
         // Then
         assertThat(httpStatus.get()).isEqualTo(404);
@@ -73,7 +73,7 @@ class WebTransportExtensionTest {
 
         // When
         AtomicInteger httpStatus = new AtomicInteger();
-        webTransportExtension.handleExtendedConnect(mock(HttpHeaders.class), "webtransport", "localhost", "/services", s -> httpStatus.set(s), mockHttpStream());
+        webTransportExtension.handleExtendedConnect(mock(HttpHeaders.class), "webtransport", "localhost", "/services", (s, h) -> httpStatus.set(s), mockHttpStream());
 
         // Then
         assertThat(httpStatus.get()).isEqualTo(404);
@@ -87,7 +87,7 @@ class WebTransportExtensionTest {
 
         // When
         AtomicInteger httpStatus = new AtomicInteger();
-        webTransportExtension.handleExtendedConnect(mock(HttpHeaders.class), "webtransport", "localhost", "/serv", s -> httpStatus.set(s), mockHttpStream());
+        webTransportExtension.handleExtendedConnect(mock(HttpHeaders.class), "webtransport", "localhost", "/serv", (s, h) -> httpStatus.set(s), mockHttpStream());
 
         // Then
         assertThat(httpStatus.get()).isEqualTo(404);
@@ -101,7 +101,7 @@ class WebTransportExtensionTest {
 
         // When
         AtomicInteger httpStatus = new AtomicInteger();
-        webTransportExtension.handleExtendedConnect(mock(HttpHeaders.class), "webtransport", "localhost", "/service?prop=value", s -> httpStatus.set(s), mockHttpStream());
+        webTransportExtension.handleExtendedConnect(mock(HttpHeaders.class), "webtransport", "localhost", "/service?prop=value", (s, h) -> httpStatus.set(s), mockHttpStream());
 
         // Then
         assertThat(httpStatus.get()).isEqualTo(200);

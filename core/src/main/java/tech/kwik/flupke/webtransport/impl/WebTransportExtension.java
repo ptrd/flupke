@@ -27,11 +27,12 @@ import tech.kwik.flupke.webtransport.Session;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.http.HttpHeaders;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-import java.util.function.IntConsumer;
 
 public class WebTransportExtension implements Http3ServerExtension {
 
@@ -47,17 +48,17 @@ public class WebTransportExtension implements Http3ServerExtension {
     }
 
     @Override
-    public void handleExtendedConnect(HttpHeaders headers, String protocol, String authority, String pathAndQuery, IntConsumer statusCallback, HttpStream requestResponseSteam) {
+    public void handleExtendedConnect(HttpHeaders headers, String protocol, String authority, String pathAndQuery, BiConsumer<Integer, Map<String, List<String>>> statusCallback, HttpStream requestResponseSteam) {
         Optional<Consumer<Session>> handler = findHandler(pathAndQuery);
         if (handler.isPresent()) {
             sessionFactory.prepareServerSession();
-            statusCallback.accept(200);
+            statusCallback.accept(200, Map.of());
             WebTransportContext context = new WebTransportContext(headers, authority, pathAndQuery);
             Session session = sessionFactory.createServerSession(context, new CapsuleProtocolStreamImpl(requestResponseSteam));
             async(() -> handler.get().accept(session));
         }
         else {
-            statusCallback.accept(404);
+            statusCallback.accept(404, Map.of());
         }
     }
 
