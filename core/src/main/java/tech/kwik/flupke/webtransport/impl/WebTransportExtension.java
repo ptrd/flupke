@@ -30,17 +30,17 @@ import java.net.http.HttpHeaders;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Stream;
 import java.util.concurrent.ExecutorService;
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 
 public class WebTransportExtension implements Http3ServerExtension {
 
     private final ServerSessionFactoryImpl sessionFactory;
-    private final Map<String, Consumer<Session>> handlers;
+    private final Map<String, WebTransportHandlerRegistration> handlers;
     private final ExecutorService executor;
 
-    public WebTransportExtension(Http3ServerConnection http3ServerConnection, Map<String, Consumer<Session>> webTransportHandlers,
+    public WebTransportExtension(Http3ServerConnection http3ServerConnection, Map<String, WebTransportHandlerRegistration> webTransportHandlers,
                                  ExecutorService executorService) {
         sessionFactory = new ServerSessionFactoryImpl(http3ServerConnection);
         this.handlers = webTransportHandlers;
@@ -49,13 +49,33 @@ public class WebTransportExtension implements Http3ServerExtension {
 
     @Override
     public void handleExtendedConnect(HttpHeaders headers, String protocol, String authority, String pathAndQuery, BiConsumer<Integer, Map<String, List<String>>> statusCallback, HttpStream requestResponseSteam) {
-        Optional<Consumer<Session>> handler = findHandler(pathAndQuery);
-        if (handler.isPresent()) {
+        Optional<WebTransportHandlerRegistration> registration = findHandler(pathAndQuery);
+        if (registration.isPresent()) {
+            // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-15.html#section-3.3
+            // "The client MAY include a WT-Available-Protocols header field in the CONNECT request. (...)
+            //  If the server receives such a header, it MAY include a WT-Protocol field in a successful (2xx) response.
+            //  If it does, the server MUST include a single choice from the client's list in that field. Servers MAY
+            //  reject the request if the client did not include a suitable protocol."
+            List<String> applicationProtocols = registration.get().applicationProtocols();
+            Map<String, List<String>> responseHeaders = Map.of();
+            if (!applicationProtocols.isEmpty()) {
+                Optional<String> matchedProtocol = headers.allValues("WT-Available-Protocols").stream()
+                        .flatMap(v -> Stream.of(v.split(",")))
+                        .map(String::trim)
+                        .map(p -> p.startsWith("\"") && p.endsWith("\"") ? p.substring(1, p.length() - 1) : p)
+                        .filter(applicationProtocols::contains)
+                        .findFirst();
+                if (matchedProtocol.isEmpty()) {
+                    statusCallback.accept(404, Map.of());
+                    return;
+                }
+                responseHeaders = Map.of("WT-Protocol", List.of("\"" + matchedProtocol.get() + "\""));
+            }
             sessionFactory.prepareServerSession();
-            statusCallback.accept(200, Map.of());
+            statusCallback.accept(200, responseHeaders);
             WebTransportContext context = new WebTransportContext(headers, authority, pathAndQuery);
             Session session = sessionFactory.createServerSession(context, new CapsuleProtocolStreamImpl(requestResponseSteam));
-            async(() -> handler.get().accept(session));
+            async(() -> registration.get().handler().accept(session));
         }
         else {
             statusCallback.accept(404, Map.of());
@@ -66,7 +86,7 @@ public class WebTransportExtension implements Http3ServerExtension {
         executor.submit(runnable);
     }
 
-    private Optional<Consumer<Session>> findHandler(String pathAndQuery) {
+    private Optional<WebTransportHandlerRegistration> findHandler(String pathAndQuery) {
         try {
             String path = new URI(pathAndQuery).getPath();
             return handlers.keySet().stream()

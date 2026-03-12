@@ -25,6 +25,7 @@ import tech.kwik.flupke.server.Http3ServerExtensionFactory;
 import tech.kwik.flupke.webtransport.Session;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
@@ -38,7 +39,7 @@ public class WebTransportExtensionFactory implements Http3ServerExtensionFactory
     //  Value: 0x14e9cd29
     public static final long WT_MAX_SESSIONS = 0x14e9cd29L;
 
-    private final Map<String, Consumer<Session>> webTransportHandlers = new HashMap<>();
+    private final Map<String, WebTransportHandlerRegistration> webTransportHandlers = new HashMap<>();
     private ExecutorService executor = Executors.newCachedThreadPool(new DaemonThreadFactory("webtransport"));
 
     @Override
@@ -58,10 +59,15 @@ public class WebTransportExtensionFactory implements Http3ServerExtensionFactory
      * Register a WebTransport server handler for a given path. The handler is called when a client connects to the server
      * using the given path. The handler is called with a Session object that represents the WebTransport connection on its own thread.
      * @param path
+     * @param applicationProtocols
      * @param callback
      */
     public void registerWebTransportServer(String path, Consumer<Session> callback) {
-        webTransportHandlers.put(path, callback);
+        registerWebTransportServer(path, List.of(), callback);
+    }
+
+    public void registerWebTransportServer(String path, List<String> applicationProtocols, Consumer<Session> callback) {
+        webTransportHandlers.put(path, new WebTransportHandlerRegistration(callback, applicationProtocols));
     }
 
     public void setExecutor(ExecutorService executor) {

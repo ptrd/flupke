@@ -22,6 +22,7 @@ import tech.kwik.flupke.server.Http3ApplicationProtocolFactory;
 import tech.kwik.flupke.server.HttpRequestHandler;
 import tech.kwik.flupke.webtransport.impl.WebTransportExtensionFactory;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
@@ -53,6 +54,10 @@ public class WebTransportHttp3ApplicationProtocolFactory extends Http3Applicatio
 
     public void registerWebTransportServer(String path, Consumer<Session> callback) {
         webTransportExtensionFactory.registerWebTransportServer(path, callback);
+    }
+
+    public void registerWebTransportServer(String path, List<String> applicationProtocols, Consumer<Session> callback) {
+        webTransportExtensionFactory.registerWebTransportServer(path, applicationProtocols, callback);
     }
 
     public void setExecutor(ExecutorService executor) {
