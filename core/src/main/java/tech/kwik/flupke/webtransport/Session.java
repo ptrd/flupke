@@ -19,6 +19,7 @@
 package tech.kwik.flupke.webtransport;
 
 import java.io.IOException;
+import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -115,6 +116,12 @@ public interface Session {
      * @return
      */
     String getPath();
+
+    /**
+     * Gets the negotiated application protocol, if any.
+     * @return the negotiated protocol, or empty if no protocol was negotiated
+     */
+    Optional<String> getNegotiatedProtocol();
 
     boolean isOpen();
 }

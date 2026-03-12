@@ -58,22 +58,24 @@ public class WebTransportExtension implements Http3ServerExtension {
             //  reject the request if the client did not include a suitable protocol."
             List<String> applicationProtocols = registration.get().applicationProtocols();
             Map<String, List<String>> responseHeaders = Map.of();
+            String negotiatedProtocol = null;
             if (!applicationProtocols.isEmpty()) {
-                Optional<String> matchedProtocol = headers.allValues("WT-Available-Protocols").stream()
+                Optional<String> match = headers.allValues("WT-Available-Protocols").stream()
                         .flatMap(v -> Stream.of(v.split(",")))
                         .map(String::trim)
                         .map(p -> p.startsWith("\"") && p.endsWith("\"") ? p.substring(1, p.length() - 1) : p)
                         .filter(applicationProtocols::contains)
                         .findFirst();
-                if (matchedProtocol.isEmpty()) {
+                if (match.isEmpty()) {
                     statusCallback.accept(404, Map.of());
                     return;
                 }
-                responseHeaders = Map.of("WT-Protocol", List.of("\"" + matchedProtocol.get() + "\""));
+                negotiatedProtocol = match.get();
+                responseHeaders = Map.of("WT-Protocol", List.of("\"" + negotiatedProtocol + "\""));
             }
             sessionFactory.prepareServerSession();
             statusCallback.accept(200, responseHeaders);
-            WebTransportContext context = new WebTransportContext(headers, authority, pathAndQuery);
+            WebTransportContext context = new WebTransportContext(headers, authority, pathAndQuery, negotiatedProtocol);
             Session session = sessionFactory.createServerSession(context, new CapsuleProtocolStreamImpl(requestResponseSteam));
             async(() -> registration.get().handler().accept(session));
         }

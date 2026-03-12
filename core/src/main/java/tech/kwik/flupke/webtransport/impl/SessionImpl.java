@@ -353,6 +353,11 @@ public class SessionImpl implements Session {
     }
 
     @Override
+    public Optional<String> getNegotiatedProtocol() {
+        return context.getNegotiatedProtocol();
+    }
+
+    @Override
     public boolean isOpen() {
         return state == State.OPEN;
     }

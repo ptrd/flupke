@@ -20,6 +20,7 @@ package tech.kwik.flupke.webtransport.impl;
 
 import java.net.URI;
 import java.net.http.HttpHeaders;
+import java.util.Optional;
 
 import static java.util.Collections.emptyMap;
 
@@ -28,17 +29,24 @@ public class WebTransportContext {
     private final String authority;
     private final String pathAndQuery;
     private final HttpHeaders headers;
+    private final String negotiatedProtocol;
 
     public WebTransportContext(HttpHeaders headers, String authority, String pathAndQuery) {
+        this(headers, authority, pathAndQuery, null);
+    }
+
+    public WebTransportContext(HttpHeaders headers, String authority, String pathAndQuery, String negotiatedProtocol) {
         this.headers = headers;
         this.authority = authority;
         this.pathAndQuery = pathAndQuery;
+        this.negotiatedProtocol = negotiatedProtocol;
     }
 
     public WebTransportContext(URI webTransportUri) {
         this.headers = HttpHeaders.of(emptyMap(), (k, v) -> true);
         this.authority = webTransportUri.getAuthority();
         this.pathAndQuery = webTransportUri.getPath() + (webTransportUri.getQuery() != null ? "?" + webTransportUri.getQuery() : "");
+        this.negotiatedProtocol = null;
     }
 
     public String getAuthority() {
@@ -51,5 +59,9 @@ public class WebTransportContext {
 
     public HttpHeaders getHeaders() {
         return headers;
+    }
+
+    public Optional<String> getNegotiatedProtocol() {
+        return Optional.ofNullable(negotiatedProtocol);
     }
 }
