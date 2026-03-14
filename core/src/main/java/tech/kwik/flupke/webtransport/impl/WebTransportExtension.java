@@ -30,9 +30,9 @@ import java.net.http.HttpHeaders;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Stream;
 import java.util.concurrent.ExecutorService;
 import java.util.function.BiConsumer;
+import java.util.stream.Stream;
 
 public class WebTransportExtension implements Http3ServerExtension {
 
@@ -42,7 +42,7 @@ public class WebTransportExtension implements Http3ServerExtension {
 
     public WebTransportExtension(Http3ServerConnection http3ServerConnection, Map<String, WebTransportHandlerRegistration> webTransportHandlers,
                                  ExecutorService executorService) {
-        sessionFactory = new ServerSessionFactoryImpl(http3ServerConnection);
+        sessionFactory = new ServerSessionFactoryImpl(http3ServerConnection, executorService);
         this.handlers = webTransportHandlers;
         this.executor = executorService;
     }

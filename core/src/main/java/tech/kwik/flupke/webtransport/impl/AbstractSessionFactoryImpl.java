@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static tech.kwik.flupke.webtransport.Constants.WEBTRANSPORT_BUFFERED_STREAM_REJECTED;
@@ -51,6 +52,11 @@ public abstract class AbstractSessionFactoryImpl implements SessionFactory {
     private volatile int streamsQueued;
     private final int maxStreamsQueued = 3;
     private volatile long latestSessionId = -1;
+    protected final ExecutorService executor;
+
+    public AbstractSessionFactoryImpl(ExecutorService executor) {
+        this.executor = executor;
+    }
 
     protected void handleUnidirectionalStream(HttpStream httpStream) {
         try {
@@ -150,17 +156,20 @@ public abstract class AbstractSessionFactoryImpl implements SessionFactory {
 
     @Override
     public void startSession(SessionImpl session) {
+        List<HttpStream> bufferedStreams;
         registrationLock.lock();
         try {
             // Check queue for streams that are waiting for this session
-            List<HttpStream> bufferedStreams = streamQueue.remove(session.getSessionId());
+            bufferedStreams = streamQueue.remove(session.getSessionId());
             if (bufferedStreams != null) {
-                bufferedStreams.forEach(session::handleStream);
                 streamsQueued -= bufferedStreams.size();
             }
         }
         finally {
             registrationLock.unlock();
+        }
+        if (bufferedStreams != null) {
+            bufferedStreams.forEach(stream -> executor.submit(() -> session.handleStream(stream)));
         }
     }
 

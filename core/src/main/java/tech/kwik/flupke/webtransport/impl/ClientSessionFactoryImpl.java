@@ -33,6 +33,8 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.http.HttpRequest;
 import java.time.Duration;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 
 import static tech.kwik.flupke.webtransport.Constants.STREAM_TYPE_WEBTRANSPORT;
@@ -51,11 +53,14 @@ public class ClientSessionFactoryImpl extends AbstractSessionFactoryImpl impleme
 
     /**
      * Creates a new WebTransport session factory for a given server.
-     * @param serverUri     server URI, only the host and port are used (i.e. path etc. is ignored)
-     * @param httpClient    the client to use for creating the HTTP/3 connection
-     * @throws IOException  if the connection to the server cannot be established
+     *
+     * @param serverUri       server URI, only the host and port are used (i.e. path etc. is ignored)
+     * @param httpClient      the client to use for creating the HTTP/3 connection
+     * @param executor
+     * @throws IOException if the connection to the server cannot be established
      */
-    public ClientSessionFactoryImpl(URI serverUri, Http3Client httpClient) throws IOException {
+    public ClientSessionFactoryImpl(URI serverUri, Http3Client httpClient, ExecutorService executor) throws IOException {
+        super(executor);
         this.server = serverUri.getHost();
         this.serverPort = serverUri.getPort();
 
@@ -151,7 +156,7 @@ public class ClientSessionFactoryImpl extends AbstractSessionFactoryImpl impleme
 
         @Override
         public ClientSessionFactory build() throws IOException {
-            return new ClientSessionFactoryImpl(serverUri, httpClient);
+            return new ClientSessionFactoryImpl(serverUri, httpClient, Executors.newCachedThreadPool());
         }
 
         @Override

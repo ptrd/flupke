@@ -22,6 +22,8 @@ import tech.kwik.flupke.core.CapsuleProtocolStream;
 import tech.kwik.flupke.server.Http3ServerConnection;
 import tech.kwik.flupke.webtransport.Session;
 
+import java.util.concurrent.ExecutorService;
+
 import static tech.kwik.flupke.webtransport.Constants.FRAME_TYPE_WEBTRANSPORT_STREAM;
 import static tech.kwik.flupke.webtransport.Constants.STREAM_TYPE_WEBTRANSPORT;
 
@@ -29,7 +31,8 @@ public class ServerSessionFactoryImpl extends AbstractSessionFactoryImpl {
 
     private final Http3ServerConnection http3ServerConnection;
 
-    public ServerSessionFactoryImpl(Http3ServerConnection http3ServerConnection) {
+    public ServerSessionFactoryImpl(Http3ServerConnection http3ServerConnection, ExecutorService executor) {
+        super(executor);
         this.http3ServerConnection = http3ServerConnection;
     }
 

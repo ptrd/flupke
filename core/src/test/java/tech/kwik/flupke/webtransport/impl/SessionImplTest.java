@@ -343,7 +343,7 @@ class SessionImplTest {
     void whenMaxSessionsIsReachedCreateSessionShouldFail() throws Exception {
         // Given
         Http3Client client = builder.buildClient();
-        ClientSessionFactoryImpl clientSessionFactory = new ClientSessionFactoryImpl(defaultWebtransportUri, client);
+        ClientSessionFactoryImpl clientSessionFactory = new ClientSessionFactoryImpl(defaultWebtransportUri, client, null);
         clientSessionFactory.createSession(defaultWebtransportUri);
 
         // When
@@ -360,7 +360,7 @@ class SessionImplTest {
         Http3Client client = builder
                 .withExtendedConnectStream(inputStream)
                 .buildClient();
-        ClientSessionFactoryImpl clientSessionFactory = new ClientSessionFactoryImpl(defaultWebtransportUri, client);
+        ClientSessionFactoryImpl clientSessionFactory = new ClientSessionFactoryImpl(defaultWebtransportUri, client, null);
         Session firstSession = clientSessionFactory.createSession(defaultWebtransportUri);
 
         // Register a listener that will open a new session when the first one is closed
@@ -659,7 +659,7 @@ class SessionImplTest {
     }
 
     private Session createSessionWith(Http3Client client) throws Exception {
-        Session session = new ClientSessionFactoryImpl(defaultWebtransportUri, client).createSession(defaultWebtransportUri);
+        Session session = new ClientSessionFactoryImpl(defaultWebtransportUri, client, null).createSession(defaultWebtransportUri);
         session.open();
         return session;
     }
@@ -671,7 +671,7 @@ class SessionImplTest {
     }
 
     private Session createSessionWith(Http3Client client, Consumer<WebTransportStream> unidirectionalStreamHandler, Consumer<WebTransportStream> bidirectionalStreamHandler) throws IOException, HttpError {
-        Session session = new ClientSessionFactoryImpl(defaultWebtransportUri, client).createSession(defaultWebtransportUri, unidirectionalStreamHandler, bidirectionalStreamHandler);
+        Session session = new ClientSessionFactoryImpl(defaultWebtransportUri, client, null).createSession(defaultWebtransportUri, unidirectionalStreamHandler, bidirectionalStreamHandler);
         session.open();
         return session;
     }
