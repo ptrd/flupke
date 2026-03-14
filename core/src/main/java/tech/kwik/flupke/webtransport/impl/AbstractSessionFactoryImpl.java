@@ -41,6 +41,10 @@ public abstract class AbstractSessionFactoryImpl implements SessionFactory {
     //  Value: 0x14e9cd29"
     public static final long SETTINGS_WT_MAX_SESSIONS = 0x14e9cd29L;
 
+    private enum SessionState {
+        NOT_CREATED, OPEN, CLOSED
+    }
+
     protected final Map<Long, SessionImpl> sessionRegistry = new ConcurrentHashMap<>();
     private final ReentrantLock registrationLock = new ReentrantLock();
     private final Map<Long, List<HttpStream>> streamQueue = new ConcurrentHashMap<>();
@@ -88,36 +92,48 @@ public abstract class AbstractSessionFactoryImpl implements SessionFactory {
     }
 
     private void attachStreamToSessionOrQueue(long sessionId, HttpStream httpStream) throws BufferedStreamsLimitExceededException {
+        SessionImpl session;
+        SessionState sessionState;
         registrationLock.lock();
         try {
-            SessionImpl session = sessionRegistry.get(sessionId);
+            session = sessionRegistry.get(sessionId);
             if (session != null && session.isOpen()) {
-                session.handleStream(httpStream);
+                sessionState = SessionState.OPEN;
             }
             else {
                 if (session == null && sessionId <= latestSessionId) {
-                    // Session already closed, ignore the stream
-                    httpStream.abortReading(WEBTRANSPORT_SESSION_GONE);
-                    if (httpStream.isBidirectional()) {
-                        httpStream.resetStream(WEBTRANSPORT_SESSION_GONE);
-                    }
-                    return;
+                    sessionState = SessionState.CLOSED;
                 }
-                // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-buffering-incoming-streams-
-                // "Similarly, a client may receive a server-initiated stream or a datagram before receiving the CONNECT
-                //  response headers from the server. To handle this case, WebTransport endpoints SHOULD buffer streams
-                //  and datagrams until those can be associated with an established session. To avoid resource exhaustion,
-                //  the endpoints MUST limit the number of buffered streams and datagrams."
-                if (streamsQueued >= maxStreamsQueued) {
-                    throw new BufferedStreamsLimitExceededException();
+                else {
+                    sessionState = SessionState.NOT_CREATED;
                 }
-                // Session not yet created, queue the stream
-                streamQueue.computeIfAbsent(sessionId, k -> new ArrayList<>()).add(httpStream);
-                streamsQueued++;
             }
         }
         finally {
             registrationLock.unlock();
+        }
+        if (sessionState == SessionState.OPEN) {
+            session.handleStream(httpStream);
+        }
+        else if (sessionState == SessionState.CLOSED) {
+            // Session already closed, ignore the stream
+            httpStream.abortReading(WEBTRANSPORT_SESSION_GONE);
+            if (httpStream.isBidirectional()) {
+                httpStream.resetStream(WEBTRANSPORT_SESSION_GONE);
+            }
+        }
+        else if (sessionState == SessionState.NOT_CREATED) {
+            // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-buffering-incoming-streams-
+            // "Similarly, a client may receive a server-initiated stream or a datagram before receiving the CONNECT
+            //  response headers from the server. To handle this case, WebTransport endpoints SHOULD buffer streams
+            //  and datagrams until those can be associated with an established session. To avoid resource exhaustion,
+            //  the endpoints MUST limit the number of buffered streams and datagrams."
+            if (streamsQueued >= maxStreamsQueued) {
+                throw new BufferedStreamsLimitExceededException();
+            }
+            // Session not yet created, queue the stream
+            streamQueue.computeIfAbsent(sessionId, k -> new ArrayList<>()).add(httpStream);
+            streamsQueued++;
         }
     }
 
