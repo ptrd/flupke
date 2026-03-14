@@ -92,6 +92,12 @@ public class Http3ApplicationProtocolFactory implements ApplicationProtocolConne
         return 1024;
     }
 
+    /**
+     * Set the registered HTTP/3 extensions.
+     * An extension is selected based on the value of the :protocol pseudo-header field of the extended connect request,
+     * which must match the key of the extension in this map.
+     * @param extensions
+     */
     public void setExtensions(Map<String, Http3ServerExtensionFactory> extensions) {
         this.extensions = Objects.requireNonNull(extensions);
     }

@@ -49,6 +49,12 @@ public class WebTransportHttp3ApplicationProtocolFactory extends Http3Applicatio
         this.maxConcurrentPeerInitiatedUnidirectionalStreams = maxConcurrentPeerInitiatedUnidirectionalStreams;
         this.maxConcurrentPeerInitiatedBidirectionalStreams = maxConcurrentPeerInitiatedBidirectionalStreams;
         webTransportExtensionFactory = new WebTransportExtensionFactory();
+        // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-15.html#section-3.2
+        // "The :protocol pseudo-header field ([RFC8441]) MUST be set to webtransport-h3."
+        setExtensions(Map.of("webtransport-h3", webTransportExtensionFactory));
+        // For backward compatibility with draft-ietf-webtrans-http3-13, also support "webtransport" as protocol name.
+        // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-13.html#section-3.2
+        // "The :protocol pseudo-header field([RFC8441]) MUST be set to webtransport."
         setExtensions(Map.of("webtransport", webTransportExtensionFactory));
     }
 
