@@ -78,4 +78,12 @@ public class WebTransportHttp3ApplicationProtocolFactory extends Http3Applicatio
     public long maxTotalPeerInitiatedUnidirectionalStreams() {
         return Integer.MAX_VALUE;
     }
+
+    @Override
+    public boolean enableDatagramExtension() {
+        // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-15.html#section-3.1
+        // "To indicate support, both the client and the server send a max_datagram_frame_size transport parameter with
+        //  a value greater than 0"
+        return true;
+    }
 }
