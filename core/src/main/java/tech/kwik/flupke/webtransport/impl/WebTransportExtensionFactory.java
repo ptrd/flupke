@@ -34,6 +34,11 @@ import java.util.function.Consumer;
 
 public class WebTransportExtensionFactory implements Http3ServerExtensionFactory {
 
+    // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-15.html#section-9.2
+    // "Setting Name:SETTINGS_WT_ENABLED
+    //  Value: 0x2c7cf000"
+    public static final long SETTINGS_WT_ENABLED = 0x2c7cf000L;
+
     // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-13.html#section-9.2
     // "Setting Name: WT_MAX_SESSIONS
     //  Value: 0x14e9cd29
@@ -49,10 +54,18 @@ public class WebTransportExtensionFactory implements Http3ServerExtensionFactory
 
     @Override
     public Map<Long, Long> getExtensionSettings() {
-        // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-13.html#section-3.1
-        // "A server supporting WebTransport over HTTP/3 MUST send both the SETTINGS_WT_MAX_SESSIONS setting with
-        //  a value greater than "0" ..."
-        return Map.of(WT_MAX_SESSIONS, 1L);
+        Map<Long, Long> wtSettings = Map.of(
+                // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-15.html#section-2.2
+                // "When an HTTP/3 connection is established, the server sends a SETTINGS_WT_ENABLED setting to indicate
+                //  support for WebTransport over HTTP/3. "
+                SETTINGS_WT_ENABLED, 1L,
+                // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-13.html#section-3.1
+                // "A server supporting WebTransport over HTTP/3 MUST send both the SETTINGS_WT_MAX_SESSIONS setting with
+                //  a value greater than "0" ..."
+                // (this settings is deprecated as of draft-15)
+                WT_MAX_SESSIONS, 1L
+        );
+        return wtSettings;
     }
 
     /**
