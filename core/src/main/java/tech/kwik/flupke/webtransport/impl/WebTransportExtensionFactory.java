@@ -44,6 +44,11 @@ public class WebTransportExtensionFactory implements Http3ServerExtensionFactory
     //  Value: 0x14e9cd29
     public static final long WT_MAX_SESSIONS = 0x14e9cd29L;
 
+    // https://www.rfc-editor.org/rfc/rfc9297#section-2.1.1
+    // "An endpoint can indicate to its peer that it is willing to receive HTTP/3 Datagrams by sending the
+    //  SETTINGS_H3_DATAGRAM (0x33) setting with a value of 1."
+    private static final long SETTINGS_H3_DATAGRAM = 0x33L;
+
     private final Map<String, WebTransportHandlerRegistration> webTransportHandlers = new HashMap<>();
     private ExecutorService executor = Executors.newCachedThreadPool(new DaemonThreadFactory("webtransport"));
 
@@ -63,7 +68,12 @@ public class WebTransportExtensionFactory implements Http3ServerExtensionFactory
                 // "A server supporting WebTransport over HTTP/3 MUST send both the SETTINGS_WT_MAX_SESSIONS setting with
                 //  a value greater than "0" ..."
                 // (this settings is deprecated as of draft-15)
-                WT_MAX_SESSIONS, 1L
+                WT_MAX_SESSIONS, 1L,
+                // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-15.html#section-3.1
+                // "both the client and the server indicate support for HTTP/3 datagrams by sending a SETTINGS_H3_DATAGRAM
+                //  setting value set to 1 in their SETTINGS frame"
+                SETTINGS_H3_DATAGRAM, 0L         // TODO: WebTransport over HTTP/3 requires support for datagrams
+
         );
         return wtSettings;
     }
