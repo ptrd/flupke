@@ -59,13 +59,21 @@ public class WebTransportExtensionFactory implements Http3ServerExtensionFactory
      * Register a WebTransport server handler for a given path. The handler is called when a client connects to the server
      * using the given path. The handler is called with a Session object that represents the WebTransport connection on its own thread.
      * @param path
-     * @param applicationProtocols
      * @param callback
      */
     public void registerWebTransportServer(String path, Consumer<Session> callback) {
         registerWebTransportServer(path, List.of(), callback);
     }
 
+    /**
+     * Register a WebTransport server handler for a given path. The handler is called when a client connects to the server
+     * using the given path. The handler is called with a Session object that represents the WebTransport connection on its own thread.
+     * The applicationProtocols parameter is a list of application protocols that the server supports and is used for
+     * application protocol negotiation during the WebTransport handshake.
+     * @param path
+     * @param applicationProtocols
+     * @param callback
+     */
     public void registerWebTransportServer(String path, List<String> applicationProtocols, Consumer<Session> callback) {
         webTransportHandlers.put(path, new WebTransportHandlerRegistration(callback, applicationProtocols));
     }
