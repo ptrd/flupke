@@ -27,6 +27,8 @@ import tech.kwik.flupke.webtransport.Session;
 import tech.kwik.flupke.webtransport.WebTransportHttp3ApplicationProtocolFactory;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.security.KeyStore;
 import java.util.Arrays;
@@ -154,6 +156,7 @@ public class WebTransportInteropServer {
 
         WebTransportHttp3ApplicationProtocolFactory webTransportProtocolFactory = new WebTransportHttp3ApplicationProtocolFactory(httpRequestHandler);
         System.out.println("Starting WebTransport server on path " + webTransportPath);
+        webTransportProtocolFactory.setMaxStreamsQueued(10);
         webTransportProtocolFactory.registerWebTransportServer(webTransportPath, supportedApplicationProtocols, this::startWebtransport);
         serverConnector.registerApplicationProtocol(HTTP3_PROTOCOL_ID, webTransportProtocolFactory);
         serverConnector.start();
@@ -186,6 +189,21 @@ public class WebTransportInteropServer {
 
     private void startWebtransport(Session session) {
         System.out.println("Starting handler for WebTransport session: " + session.getSessionId());
+        File sessionDir = new File(wwwDir, session.getPath());
+        if (sessionDir.exists() && sessionDir.isDirectory() && sessionDir.canRead()) {
+            System.out.println("Serving files for session " + session.getSessionId() + " from directory " + sessionDir.getPath());
+        }
+        else {
+            System.out.println("No directory found for session " + session.getSessionId() + ", not serving any files");
+            System.out.println("contents of www dir:");
+            File[] subdirs = wwwDir.listFiles(File::isDirectory);
+            if (subdirs != null) {
+                for (File subdir : subdirs) {
+                    System.out.println(" - " + subdir.getName());
+                }
+            }
+        }
+
         try {
             Files.writeString(java.nio.file.Path.of("/downloads/negotiated_protocol.txt"), session.getNegotiatedProtocol().get() + "\n");
         }
@@ -198,7 +216,25 @@ public class WebTransportInteropServer {
         });
 
         session.setBidirectionalStreamReceiveHandler(stream -> {
-            System.out.println("Received a bidirectional stream for session " + session.getSessionId());
+            try {
+                String request = new String(stream.getInputStream().readAllBytes());
+                System.out.println("Received request " + request + " on stream " + stream.getStreamId() + " for session " + session.getSessionId() + " on thread " + Thread.currentThread().getName());
+
+                if (request.startsWith("GET ")) {
+                    File requestedFile = new File(new File(wwwDir, session.getPath()), request.substring(4).trim());
+                    if (requestedFile.exists() && requestedFile.isFile() && requestedFile.canRead()) {
+                        Files.copy(requestedFile.toPath(), stream.getOutputStream());
+                        stream.getOutputStream().close();
+                        System.out.println("Served file " + requestedFile.getPath() + " for request " + request + " on stream " + stream.getStreamId() + " for session " + session.getSessionId());
+                    }
+                    else {
+                        System.out.println("Requested file not found: " + requestedFile.getPath());
+                    }
+                }
+            }
+            catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
         });
 
         // Make sure the session is opened _after_ setting the handlers, otherwise we might miss incoming streams.
