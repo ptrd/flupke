@@ -300,6 +300,21 @@ public class SessionImpl implements Session {
             public InputStream getInputStream() {
                 return httpStream.getInputStream();
             }
+
+            @Override
+            public boolean isUnidirectional() {
+                return httpStream.isUnidirectional();
+            }
+
+            @Override
+            public boolean isBidirectional() {
+                return httpStream.isBidirectional();
+            }
+
+            @Override
+            public long getStreamId() {
+                return httpStream.getStreamId();
+            }
         };
     }
 
@@ -313,6 +328,21 @@ public class SessionImpl implements Session {
             @Override
             public InputStream getInputStream() {
                 return inputStream.getInputStream();
+            }
+
+            @Override
+            public boolean isUnidirectional() {
+                return inputStream.isUnidirectional();
+            }
+
+            @Override
+            public boolean isBidirectional() {
+                return inputStream.isBidirectional();
+            }
+
+            @Override
+            public long getStreamId() {
+                return inputStream.getStreamId();
             }
         };
     }

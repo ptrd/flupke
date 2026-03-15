@@ -47,4 +47,23 @@ public interface WebTransportStream {
      * @return
      */
     InputStream getInputStream();
+
+    /**
+     * Returns true if this is a unidirectional stream, false if this is a bidirectional stream.
+     * @return
+     */
+    boolean isUnidirectional();
+
+    /**
+     * Returns true if this is a bidirectional stream, false if this is a unidirectional stream.
+     * @return
+     */
+    boolean isBidirectional();
+
+    /**
+     * Returns the stream ID of this WebTransport stream.
+     * @return
+     */
+    long getStreamId();
+
 }
