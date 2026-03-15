@@ -41,7 +41,7 @@ class ServerSessionFactoryImplTest {
     @Test
     void whenDataIsReceivedByFactoryItShouldBePassedToTheSession() throws Exception{
         // Given
-        ServerSessionFactoryImpl factory = new ServerSessionFactoryImpl(mock(Http3ServerConnection.class), null);
+        ServerSessionFactoryImpl factory = new ServerSessionFactoryImpl(mock(Http3ServerConnection.class), null, 3);
 
         Session session = factory.createServerSession(mock(WebTransportContext.class), emptyCapsuleProtocolStream());
         Consumer<WebTransportStream> bidirectionalStreamHandler = mock(Consumer.class);

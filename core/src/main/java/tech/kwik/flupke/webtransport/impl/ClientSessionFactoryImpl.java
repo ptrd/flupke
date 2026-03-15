@@ -60,7 +60,20 @@ public class ClientSessionFactoryImpl extends AbstractSessionFactoryImpl impleme
      * @throws IOException if the connection to the server cannot be established
      */
     public ClientSessionFactoryImpl(URI serverUri, Http3Client httpClient, ExecutorService executor) throws IOException {
-        super(executor);
+        this(serverUri, httpClient, executor, 3);
+    }
+
+    /**
+     * Creates a new WebTransport session factory for a given server.
+     *
+     * @param serverUri         server URI, only the host and port are used (i.e. path etc. is ignored)
+     * @param httpClient        the client to use for creating the HTTP/3 connection
+     * @param executor
+     * @param maxStreamsQueued  the maximum number of streams that can be queued per session
+     * @throws IOException if the connection to the server cannot be established
+     */
+    public ClientSessionFactoryImpl(URI serverUri, Http3Client httpClient, ExecutorService executor, int maxStreamsQueued) throws IOException {
+        super(executor, maxStreamsQueued);
         this.server = serverUri.getHost();
         this.serverPort = serverUri.getPort();
 
@@ -153,10 +166,11 @@ public class ClientSessionFactoryImpl extends AbstractSessionFactoryImpl impleme
 
         private URI serverUri;
         private Http3Client httpClient;
+        private int maxStreamsQueued = 3;
 
         @Override
         public ClientSessionFactory build() throws IOException {
-            return new ClientSessionFactoryImpl(serverUri, httpClient, Executors.newCachedThreadPool());
+            return new ClientSessionFactoryImpl(serverUri, httpClient, Executors.newCachedThreadPool(), maxStreamsQueued);
         }
 
         @Override
@@ -168,6 +182,12 @@ public class ClientSessionFactoryImpl extends AbstractSessionFactoryImpl impleme
         @Override
         public Builder httpClient(Http3Client httpClient) {
             this.httpClient = httpClient;
+            return this;
+        }
+
+        @Override
+        public Builder maxStreamsQueued(int maxStreamsQueued) {
+            this.maxStreamsQueued = maxStreamsQueued;
             return this;
         }
     }

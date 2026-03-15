@@ -31,8 +31,8 @@ public class ServerSessionFactoryImpl extends AbstractSessionFactoryImpl {
 
     private final Http3ServerConnection http3ServerConnection;
 
-    public ServerSessionFactoryImpl(Http3ServerConnection http3ServerConnection, ExecutorService executor) {
-        super(executor);
+    public ServerSessionFactoryImpl(Http3ServerConnection http3ServerConnection, ExecutorService executor, int maxStreamsQueued) {
+        super(executor, maxStreamsQueued);
         this.http3ServerConnection = http3ServerConnection;
     }
 

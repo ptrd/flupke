@@ -37,7 +37,7 @@ class AbstractSessionFactoryImplTest {
 
     @BeforeEach
     void setUp() {
-        sessionFactory = new AbstractSessionFactoryImpl(null) {};
+        sessionFactory = new AbstractSessionFactoryImpl(null, 3) {};
     }
 
     @Test

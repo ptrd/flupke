@@ -35,6 +35,7 @@ public class WebTransportHttp3ApplicationProtocolFactory extends Http3Applicatio
     private final int maxConcurrentPeerInitiatedUnidirectionalStreams;
     private final int maxConcurrentPeerInitiatedBidirectionalStreams;
     private final WebTransportExtensionFactory webTransportExtensionFactory;
+    private int maxStreamsQueued = 3;
 
     public WebTransportHttp3ApplicationProtocolFactory(HttpRequestHandler requestHandler) {
         this(requestHandler, MAX_CONCURRENT_PEER_INITIATED_UNIDIRECTIONAL_STREAMS, MAX_CONCURRENT_PEER_INITIATED_BIDIRECTIONAL_STREAMS);
@@ -92,4 +93,15 @@ public class WebTransportHttp3ApplicationProtocolFactory extends Http3Applicatio
         //  a value greater than 0"
         return true;
     }
+
+    /**
+     * Sets the maximum number of streams that can be queued per session. When a new stream is received for a session
+     * that is not yet created, it is queued until the session is created. If the number of queued streams exceeds this
+     * limit, the stream is rejected with a WEBTRANSPORT_BUFFERED_STREAM_REJECTED error code.
+     * @param maxStreamsQueued
+     */
+    public void setMaxStreamsQueued(int maxStreamsQueued) {
+        webTransportExtensionFactory.setMaxStreamsQueued(maxStreamsQueued);
+    }
+
 }

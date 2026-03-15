@@ -51,10 +51,11 @@ public class WebTransportExtensionFactory implements Http3ServerExtensionFactory
 
     private final Map<String, WebTransportHandlerRegistration> webTransportHandlers = new HashMap<>();
     private ExecutorService executor = Executors.newCachedThreadPool(new DaemonThreadFactory("webtransport"));
+    private int maxStreamsQueued;
 
     @Override
     public Http3ServerExtension createExtension(Http3ServerConnection http3ServerConnection) {
-        return new WebTransportExtension(http3ServerConnection, webTransportHandlers, executor);
+        return new WebTransportExtension(http3ServerConnection, webTransportHandlers, executor, maxStreamsQueued);
     }
 
     @Override
@@ -103,5 +104,15 @@ public class WebTransportExtensionFactory implements Http3ServerExtensionFactory
 
     public void setExecutor(ExecutorService executor) {
         this.executor = Objects.requireNonNull(executor);
+    }
+
+    /**
+     * Sets the maximum number of streams that can be queued per session. When a new stream is received for a session
+     * that is not yet created, it is queued until the session is created. If the number of queued streams exceeds this
+     * limit, the stream is rejected with a WEBTRANSPORT_BUFFERED_STREAM_REJECTED error code.
+     * @param maxStreamsQueued
+     */
+    public void setMaxStreamsQueued(int maxStreamsQueued) {
+        this.maxStreamsQueued = maxStreamsQueued;
     }
 }

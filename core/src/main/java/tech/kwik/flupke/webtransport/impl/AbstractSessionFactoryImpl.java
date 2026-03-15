@@ -50,12 +50,13 @@ public abstract class AbstractSessionFactoryImpl implements SessionFactory {
     private final ReentrantLock registrationLock = new ReentrantLock();
     private final Map<Long, List<HttpStream>> streamQueue = new ConcurrentHashMap<>();
     private volatile int streamsQueued;
-    private final int maxStreamsQueued = 3;
+    private final int maxStreamsQueued;
     private volatile long latestSessionId = -1;
     protected final ExecutorService executor;
 
-    public AbstractSessionFactoryImpl(ExecutorService executor) {
+    public AbstractSessionFactoryImpl(ExecutorService executor, int maxStreamsQueued) {
         this.executor = executor;
+        this.maxStreamsQueued = maxStreamsQueued;
     }
 
     protected void handleUnidirectionalStream(HttpStream httpStream) {

@@ -105,5 +105,13 @@ public interface ClientSessionFactory {
         Builder serverUri(URI serverUri);
 
         Builder httpClient(Http3Client httpClient);
+
+        /**
+         * Sets the maximum number of streams that can be queued per session. When a new stream is received for a session
+         * that is not yet created, it is queued until the session is created. If the number of queued streams exceeds this
+         * limit, the stream is rejected with a WEBTRANSPORT_BUFFERED_STREAM_REJECTED error code.
+         * @param maxStreamsQueued
+         */
+        Builder maxStreamsQueued(int maxStreamsQueued);
     }
 }

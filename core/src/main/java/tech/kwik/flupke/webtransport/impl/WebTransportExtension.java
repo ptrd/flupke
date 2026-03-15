@@ -41,8 +41,8 @@ public class WebTransportExtension implements Http3ServerExtension {
     private final ExecutorService executor;
 
     public WebTransportExtension(Http3ServerConnection http3ServerConnection, Map<String, WebTransportHandlerRegistration> webTransportHandlers,
-                                 ExecutorService executorService) {
-        sessionFactory = new ServerSessionFactoryImpl(http3ServerConnection, executorService);
+                                 ExecutorService executorService, int maxStreamsQueued) {
+        sessionFactory = new ServerSessionFactoryImpl(http3ServerConnection, executorService, maxStreamsQueued);
         this.handlers = webTransportHandlers;
         this.executor = executorService;
     }
