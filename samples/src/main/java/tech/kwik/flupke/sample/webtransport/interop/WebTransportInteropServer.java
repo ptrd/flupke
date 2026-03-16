@@ -25,9 +25,11 @@ import tech.kwik.core.server.ServerConnector;
 import tech.kwik.flupke.server.HttpRequestHandler;
 import tech.kwik.flupke.webtransport.Session;
 import tech.kwik.flupke.webtransport.WebTransportHttp3ApplicationProtocolFactory;
+import tech.kwik.flupke.webtransport.WebTransportStream;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.security.KeyStore;
@@ -221,15 +223,7 @@ public class WebTransportInteropServer {
                 System.out.println("Received request " + request + " on stream " + stream.getStreamId() + " for session " + session.getSessionId() + " on thread " + Thread.currentThread().getName());
 
                 if (request.startsWith("GET ")) {
-                    File requestedFile = new File(new File(wwwDir, session.getPath()), request.substring(4).trim());
-                    if (requestedFile.exists() && requestedFile.isFile() && requestedFile.canRead()) {
-                        Files.copy(requestedFile.toPath(), stream.getOutputStream());
-                        stream.getOutputStream().close();
-                        System.out.println("Served file " + requestedFile.getPath() + " for request " + request + " on stream " + stream.getStreamId() + " for session " + session.getSessionId());
-                    }
-                    else {
-                        System.out.println("Requested file not found: " + requestedFile.getPath());
-                    }
+                    copyFile(session, stream.getStreamId(), stream.getOutputStream(), request.substring(4).trim());
                 }
             }
             catch (IOException e) {
@@ -237,7 +231,38 @@ public class WebTransportInteropServer {
             }
         });
 
+        session.setUnidirectionalStreamReceiveHandler(stream -> {
+            try {
+                String request = new String(stream.getInputStream().readAllBytes());
+                System.out.println("Received unidirectional stream with request " + request + " for session " + session.getSessionId() + " on thread " + Thread.currentThread().getName());
+
+                if (request.startsWith("GET ")) {
+                    String fileName = request.substring(4).trim();
+                    WebTransportStream unidirectionalStream = session.createUnidirectionalStream();
+                    OutputStream outputStream = unidirectionalStream.getOutputStream();
+                    outputStream.write(("PUSH " + fileName + "\n").getBytes());
+                    copyFile(session, stream.getStreamId(), outputStream, fileName);
+                }
+            }
+            catch (IOException e) {
+                System.out.println("IO error while processing unidirectional stream: " + e.getMessage());
+                throw new UncheckedIOException(e);
+            }
+        });
+
         // Make sure the session is opened _after_ setting the handlers, otherwise we might miss incoming streams.
         session.open();
+    }
+
+    private void copyFile(Session session, long streamId, OutputStream outputStream, String fileName) throws IOException {
+        File requestedFile = new File(new File(wwwDir, session.getPath()), fileName);
+        if (requestedFile.exists() && requestedFile.isFile() && requestedFile.canRead()) {
+            Files.copy(requestedFile.toPath(), outputStream);
+            outputStream.close();
+            System.out.println("Served file " + requestedFile.getPath() + " for request " + fileName + " on stream " + streamId + " for session " + session.getSessionId());
+        }
+        else {
+            System.out.println("Requested file not found: " + requestedFile.getPath());
+        }
     }
 }
