@@ -36,6 +36,7 @@ import java.security.KeyStore;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static tech.kwik.flupke.server.Http3ApplicationProtocolFactory.HTTP3_PROTOCOL_ID;
 
@@ -156,10 +157,18 @@ public class WebTransportInteropServer {
             }
         };
 
+        String testcase = System.getenv("TESTCASE");
+        System.out.println("Testcase: " + testcase);
+
         WebTransportHttp3ApplicationProtocolFactory webTransportProtocolFactory = new WebTransportHttp3ApplicationProtocolFactory(httpRequestHandler);
         System.out.println("Starting WebTransport server on path " + webTransportPath);
         webTransportProtocolFactory.setMaxStreamsQueued(10);
-        webTransportProtocolFactory.registerWebTransportServer(webTransportPath, supportedApplicationProtocols, this::startWebtransport);
+        if ("transfer-bidirectional-send".equals(testcase)) {
+            webTransportProtocolFactory.registerWebTransportServer(webTransportPath, supportedApplicationProtocols, this::startTransferBidirectionalSend);
+        }
+        else {
+            webTransportProtocolFactory.registerWebTransportServer(webTransportPath, supportedApplicationProtocols, this::startWebtransport);
+        }
         serverConnector.registerApplicationProtocol(HTTP3_PROTOCOL_ID, webTransportProtocolFactory);
         serverConnector.start();
     }
@@ -252,6 +261,95 @@ public class WebTransportInteropServer {
 
         // Make sure the session is opened _after_ setting the handlers, otherwise we might miss incoming streams.
         session.open();
+    }
+
+    private void startTransferBidirectionalSend(Session session) {
+        System.out.println("Starting transfer-bidirectional-send handler for session: " + session.getSessionId());
+
+        String requestsEnvVar = System.getenv("REQUESTS");
+        if (requestsEnvVar == null || requestsEnvVar.isEmpty()) {
+            System.out.println("REQUESTS env var not set, nothing to do");
+            return;
+        }
+
+        String sessionPath = session.getPath();
+
+        File downloadsDir = resolveDownloadsDir(sessionPath);
+        if (downloadsDir == null) {
+            return;
+        }
+
+        List<String> matchingFiles = extractMatchingFiles(requestsEnvVar, sessionPath);
+
+        session.open();
+
+        List<Thread> threads = matchingFiles.stream()
+                .map(file -> startDownloadThread(() -> downloadFile(session, file, downloadsDir)))
+                .collect(Collectors.toList());
+
+        waitForDownloads(threads);
+    }
+
+    private File resolveDownloadsDir(String sessionPath) {
+        File downloadsDir = new File("/downloads", sessionPath);
+        downloadsDir.mkdirs();
+        if (!downloadsDir.exists() || !downloadsDir.isDirectory() || !downloadsDir.canWrite()) {
+            System.out.println("Downloads dir '" + downloadsDir + "' does not exist, is not a directory, or is not writable");
+            return null;
+        }
+        System.out.println("Saving downloaded files to directory " + downloadsDir.getPath());
+        return downloadsDir;
+    }
+
+    private List<String> extractMatchingFiles(String requestsEnvVar, String sessionPath) {
+        return Stream.of(requestsEnvVar.split(" "))
+                .filter(r -> r.contains("/"))
+                .filter(r -> ("/" + r.substring(0, r.indexOf('/'))).equals(sessionPath))
+                .map(r -> r.substring(r.indexOf('/') + 1))
+                .collect(Collectors.toList());
+    }
+
+    private Thread startDownloadThread(Runnable task) {
+        Thread thread = new Thread(task);
+        thread.start();
+        return thread;
+    }
+
+    private void downloadFile(Session session, String file, File downloadsDir) {
+        try {
+            WebTransportStream stream = session.createBidirectionalStream();
+            stream.getOutputStream().write(("GET " + file).getBytes());
+            stream.getOutputStream().close();
+            System.out.println("Sent GET " + file + " on stream " + stream.getStreamId() + " for session " + session.getSessionId() + " on thread " + Thread.currentThread().getName());
+            byte[] data = stream.getInputStream().readAllBytes();
+            File downloadFile = new File(downloadsDir, file);
+            Files.write(downloadFile.toPath(), data);
+            System.out.println("Downloaded " + file + " to " + downloadFile.getPath());
+        }
+        catch (IOException e) {
+            System.err.println("Error downloading " + file + ": " + e.getMessage());
+        }
+    }
+
+    private void waitForDownloads(List<Thread> threads) {
+        long deadline = System.currentTimeMillis() + 90_000;
+        for (Thread thread : threads) {
+            try {
+                long remaining = deadline - System.currentTimeMillis();
+                if (remaining <= 0) {
+                    System.err.println("Timed out waiting for downloads to complete");
+                    break;
+                }
+                thread.join(remaining);
+                if (thread.isAlive()) {
+                    System.err.println("Timed out waiting for downloads to complete");
+                    break;
+                }
+            }
+            catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
     }
 
     private void copyFile(Session session, long streamId, OutputStream outputStream, String fileName) throws IOException {
