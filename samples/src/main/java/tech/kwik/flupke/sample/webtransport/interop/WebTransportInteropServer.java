@@ -27,10 +27,7 @@ import tech.kwik.flupke.webtransport.Session;
 import tech.kwik.flupke.webtransport.WebTransportHttp3ApplicationProtocolFactory;
 import tech.kwik.flupke.webtransport.WebTransportStream;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.io.UncheckedIOException;
+import java.io.*;
 import java.nio.file.Files;
 import java.security.KeyStore;
 import java.util.Arrays;
@@ -161,10 +158,14 @@ public class WebTransportInteropServer {
         System.out.println("Testcase: " + testcase);
 
         WebTransportHttp3ApplicationProtocolFactory webTransportProtocolFactory = new WebTransportHttp3ApplicationProtocolFactory(httpRequestHandler);
+        webTransportProtocolFactory.setMaxUnidirectionalStreamReceiverBufferSize(1_000_000);
         System.out.println("Starting WebTransport server on path " + webTransportPath);
         webTransportProtocolFactory.setMaxStreamsQueued(10);
         if ("transfer-bidirectional-send".equals(testcase)) {
             webTransportProtocolFactory.registerWebTransportServer(webTransportPath, supportedApplicationProtocols, this::startTransferBidirectionalSend);
+        }
+        else if ("transfer-unidirectional-send".equals(testcase)) {
+            webTransportProtocolFactory.registerWebTransportServer(webTransportPath, supportedApplicationProtocols, this::startTransferUnidirectionalSend);
         }
         else {
             webTransportProtocolFactory.registerWebTransportServer(webTransportPath, supportedApplicationProtocols, this::startWebtransport);
@@ -288,6 +289,80 @@ public class WebTransportInteropServer {
                 .collect(Collectors.toList());
 
         waitForDownloads(threads);
+    }
+
+    private void startTransferUnidirectionalSend(Session session) {
+        System.out.println("Starting transfer-unidirectional-send handler for session: " + session.getSessionId());
+
+        String requestsEnvVar = System.getenv("REQUESTS");
+        if (requestsEnvVar == null || requestsEnvVar.isEmpty()) {
+            System.out.println("REQUESTS env var not set, nothing to do");
+            return;
+        }
+
+        String sessionPath = session.getPath();
+
+        File downloadsDir = resolveDownloadsDir(sessionPath);
+        if (downloadsDir == null) {
+            return;
+        }
+
+        List<String> matchingFiles = extractMatchingFiles(requestsEnvVar, sessionPath);
+
+        session.setUnidirectionalStreamReceiveHandler(stream -> receivePush(stream, downloadsDir));
+
+        session.open();
+
+        matchingFiles.stream()
+                .forEach(file -> sendUnidirectionalGet(session, file));
+    }
+
+    private void sendUnidirectionalGet(Session session, String file) {
+        try {
+            WebTransportStream stream = session.createUnidirectionalStream();
+            stream.getOutputStream().write(("GET " + file).getBytes());
+            stream.getOutputStream().close();
+            System.out.println("Sent GET " + file + " on unidirectional stream " + stream.getStreamId() + " for session " + session.getSessionId());
+        }
+        catch (IOException e) {
+            System.err.println("Error sending GET " + file + ": " + e.getMessage());
+        }
+    }
+
+    private void receivePush(WebTransportStream stream, File downloadsDir) {
+        try {
+            InputStream inputStream = stream.getInputStream();
+
+            ByteArrayOutputStream headerBytes = new ByteArrayOutputStream();
+            int b;
+            while ((b = inputStream.read()) != -1 && b != '\n') {
+                headerBytes.write(b);
+            }
+            if (b == -1) {
+                System.err.println("Received malformed PUSH on stream " + stream.getStreamId() + ": no newline found");
+                return;
+            }
+            String header = headerBytes.toString();
+            if (!header.startsWith("PUSH ")) {
+                System.err.println("Received unexpected header on stream " + stream.getStreamId() + ": " + header);
+                return;
+            }
+            String fileName = header.substring(5).trim();
+            System.out.println("Received PUSH " + fileName + " on thread " + Thread.currentThread().getName());
+
+            File downloadFile = new File(downloadsDir, fileName);
+            try (OutputStream outputStream = Files.newOutputStream(downloadFile.toPath())) {
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                }
+            }
+            System.out.println("Received PUSH " + fileName + ", written to " + downloadFile.getPath());
+        }
+        catch (IOException e) {
+            System.err.println("Error receiving PUSH on stream " + stream.getStreamId() + ": " + e.getMessage());
+        }
     }
 
     private File resolveDownloadsDir(String sessionPath) {
