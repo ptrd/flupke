@@ -32,6 +32,7 @@ import java.nio.file.Files;
 import java.security.KeyStore;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -289,6 +290,12 @@ public class WebTransportInteropServer {
                 .collect(Collectors.toList());
 
         waitForDownloads(threads);
+        try {
+            session.close();
+        }
+        catch (IOException e) {
+            System.err.println("Error closing session: " + e.getMessage());
+        }
     }
 
     private void startTransferUnidirectionalSend(Session session) {
@@ -309,12 +316,12 @@ public class WebTransportInteropServer {
 
         List<String> matchingFiles = extractMatchingFiles(requestsEnvVar, sessionPath);
 
-        session.setUnidirectionalStreamReceiveHandler(stream -> receivePush(stream, downloadsDir));
+        CountDownLatch allReceived = new CountDownLatch(matchingFiles.size());
+        session.setUnidirectionalStreamReceiveHandler(stream -> receivePush(stream, downloadsDir, allReceived, session));
 
         session.open();
 
-        matchingFiles.stream()
-                .forEach(file -> sendUnidirectionalGet(session, file));
+        matchingFiles.forEach(file -> sendUnidirectionalGet(session, file));
     }
 
     private void sendUnidirectionalGet(Session session, String file) {
@@ -329,7 +336,7 @@ public class WebTransportInteropServer {
         }
     }
 
-    private void receivePush(WebTransportStream stream, File downloadsDir) {
+    private void receivePush(WebTransportStream stream, File downloadsDir, CountDownLatch allReceived, Session session) {
         try {
             InputStream inputStream = stream.getInputStream();
 
@@ -362,6 +369,18 @@ public class WebTransportInteropServer {
         }
         catch (IOException e) {
             System.err.println("Error receiving PUSH on stream " + stream.getStreamId() + ": " + e.getMessage());
+        }
+        finally {
+            allReceived.countDown();
+            if (allReceived.getCount() == 0) {
+                System.out.println("All expected files received, closing session");
+                try {
+                    session.close();
+                }
+                catch (IOException e) {
+                    System.err.println("Error closing session: " + e.getMessage());
+                }
+            }
         }
     }
 
