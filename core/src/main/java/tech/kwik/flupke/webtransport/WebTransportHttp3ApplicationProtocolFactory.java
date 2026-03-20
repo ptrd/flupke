@@ -36,6 +36,8 @@ public class WebTransportHttp3ApplicationProtocolFactory extends Http3Applicatio
     private final int maxConcurrentPeerInitiatedBidirectionalStreams;
     private final WebTransportExtensionFactory webTransportExtensionFactory;
     private int maxStreamsQueued = 3;
+    private long maxUnidirectionalStreamReceiverBufferSize = 0;
+    private long maxBididirectionalStreamReceiverBufferSize = 0;
 
     public WebTransportHttp3ApplicationProtocolFactory(HttpRequestHandler requestHandler) {
         this(requestHandler, MAX_CONCURRENT_PEER_INITIATED_UNIDIRECTIONAL_STREAMS, MAX_CONCURRENT_PEER_INITIATED_BIDIRECTIONAL_STREAMS);
@@ -79,6 +81,38 @@ public class WebTransportHttp3ApplicationProtocolFactory extends Http3Applicatio
     @Override
     public int maxConcurrentPeerInitiatedBidirectionalStreams() {
         return maxConcurrentPeerInitiatedBidirectionalStreams;
+    }
+
+    @Override
+    public long maxUnidirectionalStreamReceiverBufferSize() {
+        if (maxUnidirectionalStreamReceiverBufferSize == 0) {
+            // If the buffer size is not set, use the default buffer size of the underlying HTTP/3 implementation.
+            return super.maxUnidirectionalStreamReceiverBufferSize();
+        }
+        return maxUnidirectionalStreamReceiverBufferSize;
+    }
+
+    public void setMaxUnidirectionalStreamReceiverBufferSize(long bufferSize) {
+        if (bufferSize < 1024) {
+            throw new IllegalArgumentException("maxUnidirectionalStreamReceiverBufferSize must be at least 1024 bytes");
+        }
+        this.maxUnidirectionalStreamReceiverBufferSize = bufferSize;
+    }
+
+    @Override
+    public long maxBidirectionalStreamReceiverBufferSize() {
+        if (maxBididirectionalStreamReceiverBufferSize == 0) {
+            // If the buffer size is not set, use the default buffer size of the underlying HTTP/3 implementation.
+            return super.maxBidirectionalStreamReceiverBufferSize();
+        }
+        return maxBididirectionalStreamReceiverBufferSize;
+    }
+
+    public void setMaxBidirectionalStreamReceiverBufferSize(long bufferSize) {
+        if (bufferSize < 1024) {
+            throw new IllegalArgumentException("maxBidirectionalStreamReceiverBufferSize must be at least 1024 bytes");
+        }
+        this.maxBididirectionalStreamReceiverBufferSize = bufferSize;
     }
 
     @Override
