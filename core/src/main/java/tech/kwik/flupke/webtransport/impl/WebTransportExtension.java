@@ -32,20 +32,29 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class WebTransportExtension implements Http3ServerExtension {
 
     private final ServerSessionFactoryImpl sessionFactory;
     private final Map<String, WebTransportHandlerRegistration> handlers;
+    private final List<WebTransportHandlerRegistration> regexHandlers;
     private final ExecutorService executor;
 
-    public WebTransportExtension(Http3ServerConnection http3ServerConnection, Map<String, WebTransportHandlerRegistration> webTransportHandlers,
+    public WebTransportExtension(Http3ServerConnection http3ServerConnection, List<WebTransportHandlerRegistration> registrations,
                                  ExecutorService executorService, int maxStreamsQueued) {
         sessionFactory = new ServerSessionFactoryImpl(http3ServerConnection, executorService, maxStreamsQueued);
-        this.handlers = webTransportHandlers;
+        // Preprocessing: split registrations into a map for static paths (O(1) lookup) and an ordered list for regexes.
+        this.handlers = registrations.stream()
+                .filter(r -> !r.isRegexBased())
+                .collect(Collectors.toMap(WebTransportHandlerRegistration::staticPath, r -> r));
+        this.regexHandlers = registrations.stream()
+                .filter(WebTransportHandlerRegistration::isRegexBased)
+                .collect(Collectors.toList());
         this.executor = executorService;
     }
+
 
     @Override
     public void handleExtendedConnect(HttpHeaders headers, String protocol, String authority, String pathAndQuery, BiConsumer<Integer, Map<String, List<String>>> statusCallback, HttpStream requestResponseSteam) {
@@ -91,10 +100,14 @@ public class WebTransportExtension implements Http3ServerExtension {
     private Optional<WebTransportHandlerRegistration> findHandler(String pathAndQuery) {
         try {
             String path = new URI(pathAndQuery).getPath();
-            return handlers.keySet().stream()
-                    .filter(path::equals)
-                    .findFirst()
-                    .map(handlers::get);
+            // Static registrations are tried first.
+            if (handlers.containsKey(path)) {
+                return Optional.of(handlers.get(path));
+            }
+            // Then regex registrations, in the order they were registered (first match wins).
+            return regexHandlers.stream()
+                    .filter(r -> r.pathPattern().matcher(path).matches())
+                    .findFirst();
         }
         catch (URISyntaxException e) {
             return Optional.empty();
