@@ -68,7 +68,7 @@ public class WebTransportExtension implements Http3ServerExtension {
             List<String> applicationProtocols = registration.get().applicationProtocols();
             Map<String, List<String>> responseHeaders = Map.of();
             String negotiatedProtocol = null;
-            if (!applicationProtocols.isEmpty()) {
+            if (!applicationProtocols.isEmpty() && headers.firstValue("WT-Available-Protocols").isPresent()) {
                 Optional<String> match = headers.allValues("WT-Available-Protocols").stream()
                         .flatMap(v -> Stream.of(v.split(",")))
                         .map(String::trim)

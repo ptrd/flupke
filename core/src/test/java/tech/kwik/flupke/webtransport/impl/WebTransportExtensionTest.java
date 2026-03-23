@@ -157,6 +157,21 @@ class WebTransportExtensionTest {
     }
 
     @Test
+    void whenNoWtAvailableProtocolsHeaderPresentConnectSucceeds() {
+        // Given
+        List<WebTransportHandlerRegistration> handlers = List.of(new WebTransportHandlerRegistration("/service", session -> {}, List.of("proto-a", "proto-b")));
+        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers, executor, 3);
+        HttpHeaders headers = HttpHeaders.of(Map.of(), (k, v) -> true);
+
+        // When
+        AtomicInteger httpStatus = new AtomicInteger();
+        webTransportExtension.handleExtendedConnect(headers, "webtransport", "localhost", "/service", (s, h) -> httpStatus.set(s), mockHttpStream());
+
+        // Then
+        assertThat(httpStatus.get()).isEqualTo(200);
+    }
+
+    @Test
     void whenNoApplicationProtocolsRegisteredProtocolHeaderIsIgnored() {
         // Given
         List<WebTransportHandlerRegistration> handlers = List.of(new WebTransportHandlerRegistration("/service", session -> {}, List.of()));
