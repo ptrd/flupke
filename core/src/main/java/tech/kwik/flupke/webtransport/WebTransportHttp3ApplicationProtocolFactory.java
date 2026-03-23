@@ -69,6 +69,29 @@ public class WebTransportHttp3ApplicationProtocolFactory extends Http3Applicatio
         webTransportExtensionFactory.registerWebTransportServer(path, applicationProtocols, callback);
     }
 
+    /**
+     * Register a WebTransport server handler for paths matching the given regex.
+     * When multiple regex registrations exist, the first one registered wins.
+     * Static path registrations are always tried before regex registrations.
+     * @param pathRegex  a regular expression that is matched against the request path (without query string)
+     * @param callback
+     */
+    public void registerWebTransportServerByRegex(String pathRegex, Consumer<Session> callback) {
+        webTransportExtensionFactory.registerWebTransportServerByRegex(pathRegex, callback);
+    }
+
+    /**
+     * Register a WebTransport server handler for paths matching the given regex.
+     * When multiple regex registrations exist, the first one registered wins.
+     * Static path registrations are always tried before regex registrations.
+     * @param pathRegex            a regular expression that is matched against the request path (without query string)
+     * @param applicationProtocols list of application protocols supported by this handler
+     * @param callback
+     */
+    public void registerWebTransportServerByRegex(String pathRegex, List<String> applicationProtocols, Consumer<Session> callback) {
+        webTransportExtensionFactory.registerWebTransportServerByRegex(pathRegex, applicationProtocols, callback);
+    }
+
     public void setExecutor(ExecutorService executor) {
         webTransportExtensionFactory.setExecutor(executor);
     }

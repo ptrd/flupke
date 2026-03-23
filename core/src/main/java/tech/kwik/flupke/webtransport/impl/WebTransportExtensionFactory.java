@@ -24,13 +24,14 @@ import tech.kwik.flupke.server.Http3ServerExtension;
 import tech.kwik.flupke.server.Http3ServerExtensionFactory;
 import tech.kwik.flupke.webtransport.Session;
 
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
+import java.util.regex.Pattern;
 
 public class WebTransportExtensionFactory implements Http3ServerExtensionFactory {
 
@@ -49,13 +50,13 @@ public class WebTransportExtensionFactory implements Http3ServerExtensionFactory
     //  SETTINGS_H3_DATAGRAM (0x33) setting with a value of 1."
     private static final long SETTINGS_H3_DATAGRAM = 0x33L;
 
-    private final Map<String, WebTransportHandlerRegistration> webTransportHandlers = new HashMap<>();
+    private final List<WebTransportHandlerRegistration> handlers = new ArrayList<>();
     private ExecutorService executor = Executors.newCachedThreadPool(new DaemonThreadFactory("webtransport"));
     private int maxStreamsQueued;
 
     @Override
     public Http3ServerExtension createExtension(Http3ServerConnection http3ServerConnection) {
-        return new WebTransportExtension(http3ServerConnection, webTransportHandlers, executor, maxStreamsQueued);
+        return new WebTransportExtension(http3ServerConnection, handlers, executor, maxStreamsQueued);
     }
 
     @Override
@@ -83,10 +84,10 @@ public class WebTransportExtensionFactory implements Http3ServerExtensionFactory
      * Register a WebTransport server handler for a given path. The handler is called when a client connects to the server
      * using the given path. The handler is called with a Session object that represents the WebTransport connection on its own thread.
      * @param path
-     * @param callback
+     * @param handler
      */
-    public void registerWebTransportServer(String path, Consumer<Session> callback) {
-        registerWebTransportServer(path, List.of(), callback);
+    public void registerWebTransportServer(String path, Consumer<Session> handler) {
+        registerWebTransportServer(path, List.of(), handler);
     }
 
     /**
@@ -96,10 +97,37 @@ public class WebTransportExtensionFactory implements Http3ServerExtensionFactory
      * application protocol negotiation during the WebTransport handshake.
      * @param path
      * @param applicationProtocols
-     * @param callback
+     * @param handler
      */
-    public void registerWebTransportServer(String path, List<String> applicationProtocols, Consumer<Session> callback) {
-        webTransportHandlers.put(path, new WebTransportHandlerRegistration(callback, applicationProtocols));
+    public void registerWebTransportServer(String path, List<String> applicationProtocols, Consumer<Session> handler) {
+        handlers.add(new WebTransportHandlerRegistration(path, handler, applicationProtocols));
+    }
+
+    /**
+     * Register a WebTransport server handler for paths matching the given regex. When multiple regex registrations exist,
+     * the first one registered wins. Static path registrations are always tried before regex registrations.
+     * The handler is called when a client connects to the server using the given path. The handler is called with a
+     * Session object that represents the WebTransport connection on its own thread.
+     * @param pathRegex  a regular expression that is matched against the request path (without query string)
+     * @param handler
+     */
+    public void registerWebTransportServerByRegex(String pathRegex, Consumer<Session> handler) {
+        registerWebTransportServerByRegex(pathRegex, List.of(), handler);
+    }
+
+    /**
+     * Register a WebTransport server handler for paths matching the given regex. When multiple regex registrations exist,
+     * the first one registered wins. Static path registrations are always tried before regex registrations.
+     * The handler is called when a client connects to the server using the given path. The handler is called with a
+     * Session object that represents the WebTransport connection on its own thread.
+     * The applicationProtocols parameter is a list of application protocols that the server supports and is used for
+     * application protocol negotiation during the WebTransport handshake.
+     * @param pathRegex            a regular expression that is matched against the request path (without query string)
+     * @param applicationProtocols list of application protocols supported by this handler
+     * @param handler
+     */
+    public void registerWebTransportServerByRegex(String pathRegex, List<String> applicationProtocols, Consumer<Session> handler) {
+        handlers.add(new WebTransportHandlerRegistration(Pattern.compile(pathRegex), handler, applicationProtocols));
     }
 
     public void setExecutor(ExecutorService executor) {

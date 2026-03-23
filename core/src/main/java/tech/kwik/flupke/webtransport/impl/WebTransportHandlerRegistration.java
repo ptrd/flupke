@@ -22,19 +22,39 @@ import tech.kwik.flupke.webtransport.Session;
 
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.regex.Pattern;
 
 class WebTransportHandlerRegistration {
 
     private final Consumer<Session> handler;
     private final List<String> applicationProtocols;
+    private final String staticPath;
+    private final Pattern pathPattern;
 
-    WebTransportHandlerRegistration(Consumer<Session> handler) {
-        this(handler, List.of());
-    }
-
-    WebTransportHandlerRegistration(Consumer<Session> handler, List<String> applicationProtocols) {
+    /**
+     * Constructor for static-path registrations.
+     * @param staticPath
+     * @param handler
+     * @param applicationProtocols
+     */
+    WebTransportHandlerRegistration(String staticPath, Consumer<Session> handler, List<String> applicationProtocols) {
         this.handler = handler;
         this.applicationProtocols = applicationProtocols;
+        this.staticPath = staticPath;
+        this.pathPattern = null;
+    }
+
+    /**
+     * Constructor for regex-based registrations.
+     * @param pathPattern
+     * @param handler
+     * @param applicationProtocols
+     */
+    WebTransportHandlerRegistration(Pattern pathPattern, Consumer<Session> handler, List<String> applicationProtocols) {
+        this.handler = handler;
+        this.applicationProtocols = applicationProtocols;
+        this.staticPath = null;
+        this.pathPattern = pathPattern;
     }
 
     Consumer<Session> handler() {
@@ -43,5 +63,20 @@ class WebTransportHandlerRegistration {
 
     List<String> applicationProtocols() {
         return applicationProtocols;
+    }
+
+    String staticPath() {
+        return staticPath;
+    }
+
+    /**
+     * Returns the compiled path regex pattern, or {@code null} for static-path registrations.
+     */
+    Pattern pathPattern() {
+        return pathPattern;
+    }
+
+    boolean isRegexBased() {
+        return pathPattern != null;
     }
 }
