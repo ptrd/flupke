@@ -134,10 +134,11 @@ public class WebTransportInteropServer {
                 .build();
 
         String webTransportPath = determineWebTransportEndpoints();
+        String extendedPath = webTransportPath + "(/.*)?";
         List<String> supportedApplicationProtocols = determineProtocols();
 
         HttpRequestHandler httpRequestHandler = (request, response) -> {
-            if (request.path().equals(webTransportPath)) {
+            if (request.path().startsWith(webTransportPath)) {
                 if (!request.method().equals("CONNECT")) {
                     System.out.println("Received non-CONNECT request on WebTransport path: " + request.method() + " " + request.path());
                     response.setStatus(405);  // Method Not Allowed
@@ -160,16 +161,16 @@ public class WebTransportInteropServer {
 
         WebTransportHttp3ApplicationProtocolFactory webTransportProtocolFactory = new WebTransportHttp3ApplicationProtocolFactory(httpRequestHandler);
         webTransportProtocolFactory.setMaxUnidirectionalStreamReceiverBufferSize(1_000_000);
-        System.out.println("Starting WebTransport server on path " + webTransportPath);
+        System.out.println("Starting WebTransport server on path " + extendedPath);
         webTransportProtocolFactory.setMaxStreamsQueued(10);
         if ("transfer-bidirectional-send".equals(testcase)) {
-            webTransportProtocolFactory.registerWebTransportServer(webTransportPath, supportedApplicationProtocols, this::startTransferBidirectionalSend);
+            webTransportProtocolFactory.registerWebTransportServerByRegex(extendedPath, supportedApplicationProtocols, this::startTransferBidirectionalSend);
         }
         else if ("transfer-unidirectional-send".equals(testcase)) {
-            webTransportProtocolFactory.registerWebTransportServer(webTransportPath, supportedApplicationProtocols, this::startTransferUnidirectionalSend);
+            webTransportProtocolFactory.registerWebTransportServerByRegex(extendedPath, supportedApplicationProtocols, this::startTransferUnidirectionalSend);
         }
         else {
-            webTransportProtocolFactory.registerWebTransportServer(webTransportPath, supportedApplicationProtocols, this::startWebtransport);
+            webTransportProtocolFactory.registerWebTransportServerByRegex(extendedPath, supportedApplicationProtocols, this::startWebtransport);
         }
         serverConnector.registerApplicationProtocol(HTTP3_PROTOCOL_ID, webTransportProtocolFactory);
         serverConnector.start();
