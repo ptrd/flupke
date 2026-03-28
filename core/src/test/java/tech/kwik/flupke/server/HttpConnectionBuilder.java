@@ -92,7 +92,7 @@ public class HttpConnectionBuilder {
         }
         ServerConnection quicConnection = mock(ServerConnection.class);
         when(quicConnection.createStream(anyBoolean())).thenReturn(httpControlStream);
-        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(quicConnection, handler, executor, extensions);
+        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(quicConnection, handler, false, executor, extensions);
         if (encoder != null) {
             FieldSetter.setField(http3Connection, Http3ServerConnectionImpl.class.getDeclaredField("encoder"), encoder);
         }

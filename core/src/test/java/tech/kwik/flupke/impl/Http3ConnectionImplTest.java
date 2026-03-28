@@ -32,6 +32,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -46,7 +48,7 @@ public class Http3ConnectionImplTest {
     public void readFrameShouldThrowErrorWhenDataFrameTooLarge() {
         // Given
         QuicConnection quicConnection = mock(QuicConnection.class);
-        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection);
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection, false);
         byte[] data = new byte[10000];
         data[0] = 0x00; // Type: Data frame
         data[1] = 0x4f; // Length: 0x4fff = 4095
@@ -64,7 +66,7 @@ public class Http3ConnectionImplTest {
     public void unknownFrameIsIgnored() throws IOException, HttpError {
         // Given
         QuicConnection quicConnection = mock(QuicConnection.class);
-        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection);
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection, false);
         byte[] data = new byte[100];
         data[0] = 0x21; // Type: reserved
         data[1] = 0x09; // Length: 9
@@ -83,7 +85,7 @@ public class Http3ConnectionImplTest {
     @Test
     public void attemptToRegisterDefaultStreamTypeShouldFail() {
         // Given
-        Http3ConnectionImpl connection = new Http3ConnectionImpl(mock(QuicConnection.class));
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(mock(QuicConnection.class), false);
 
         // When
         assertThatThrownBy(() -> connection.registerUnidirectionalStreamType(STREAM_TYPE_PUSH_STREAM, mock(Consumer.class)))
@@ -95,7 +97,7 @@ public class Http3ConnectionImplTest {
     @Test
     public void attemptToRegisterReservedStreamTypeShouldFail() {
         // Given
-        Http3ConnectionImpl connection = new Http3ConnectionImpl(mock(QuicConnection.class));
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(mock(QuicConnection.class), false);
 
         // When
         long reservedType = 0x1f * 3 + 0x21;  // 0x1f * N + 0x21 for non-negative integer values of N
@@ -110,7 +112,7 @@ public class Http3ConnectionImplTest {
     @Test
     public void registeredHandlerShouldBeCalled() {
         // Given
-        Http3ConnectionImpl connection = new Http3ConnectionImpl(mock(QuicConnection.class));
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(mock(QuicConnection.class), false);
         ByteBuffer buffer = ByteBuffer.allocate(11);
         connection.registerUnidirectionalStreamType(0x22, stream -> {
             try {
@@ -139,7 +141,7 @@ public class Http3ConnectionImplTest {
     public void closingProcessControlStreamShouldLeadToConnectionError() {
         // Given
         QuicConnection quicConnection = mock(QuicConnection.class);
-        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection);
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection, false);
 
         // When
         connection.processControlStream(new ByteArrayInputStream(new byte[0]));
@@ -154,7 +156,7 @@ public class Http3ConnectionImplTest {
     public void closingExtensionControlStreamShouldNotLeadToConnectionError() {
         // Given
         QuicConnection quicConnection = mock(QuicConnection.class);
-        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection);
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection, false);
         connection.registerUnidirectionalStreamType(0x22, stream -> {});
 
         // When
@@ -170,7 +172,7 @@ public class Http3ConnectionImplTest {
     public void unknownExtensionControlStreamLeadsToQuicStreamClose() {
         // Given
         QuicConnection quicConnection = mock(QuicConnection.class);
-        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection);
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection, false);
 
         // When
         QuicStream quicStream = mock(QuicStream.class);
@@ -188,7 +190,7 @@ public class Http3ConnectionImplTest {
     public void qpackDecoderStreamShouldNotBeClosed() {
         // Given
         QuicConnection quicConnection = mock(QuicConnection.class);
-        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection);
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection, false);
 
         // When
         QuicStream quicStream = mock(QuicStream.class);
@@ -203,7 +205,7 @@ public class Http3ConnectionImplTest {
     @Test
     public void streamWithUnsupportedStreamTypeShouldBeDiscarded() {
         // Given
-        Http3ConnectionImpl connection = new Http3ConnectionImpl(mock(QuicConnection.class));
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(mock(QuicConnection.class), false);
 
         byte[] streamData = new byte[] { 0x37 };
         QuicStream quicStream = mock(QuicStream.class);
@@ -312,6 +314,207 @@ public class Http3ConnectionImplTest {
         // Then
         assertThat(connection.getPeerSettingsParameter(0x22)).isPresent();
         assertThat(connection.getPeerSettingsParameter(0x22).get()).isEqualTo(0x33);
+    }
+    //endregion
+
+    //region datagram settings
+    @Test
+    public void whenDatagramIsEnabledSettingsFrameShouldContainH3DatagramParameter() throws Exception {
+        // Given
+        ByteArrayOutputStream controlStreamOutput = new ByteArrayOutputStream();
+        Http3ConnectionImpl connection = new Http3ConnectionBuilder()
+                .withDatagramEnabled()
+                .withUnidirectionalQuicStream(controlStreamOutput)
+                .build();
+
+        // When
+        connection.startControlStream();
+
+        // Then: stream type | SETTINGS frame type | payload length | QPACK_MAX_TABLE_CAPACITY=0 | QPACK_BLOCKED_STREAMS=0 | SETTINGS_H3_DATAGRAM=1
+        assertThat(controlStreamOutput.toByteArray()).isEqualTo(new byte[] { 0x00, 0x04, 0x06, 0x01, 0x00, 0x07, 0x00, 0x33, 0x01 });
+    }
+
+    @Test
+    public void whenDatagramIsNotEnabledSettingsFrameShouldNotContainH3DatagramParameter() throws Exception {
+        // Given
+        ByteArrayOutputStream controlStreamOutput = new ByteArrayOutputStream();
+        Http3ConnectionImpl connection = new Http3ConnectionBuilder()
+                .withUnidirectionalQuicStream(controlStreamOutput)
+                .build();
+
+        // When
+        connection.startControlStream();
+
+        // Then: stream type | SETTINGS frame type | payload length | QPACK_MAX_TABLE_CAPACITY=0 | QPACK_BLOCKED_STREAMS=0
+        assertThat(controlStreamOutput.toByteArray()).isEqualTo(new byte[] { 0x00, 0x04, 0x04, 0x01, 0x00, 0x07, 0x00 });
+    }
+    //endregion
+
+    //region register datagram handler
+    @Test
+    public void registerDatagramHandlerShouldFailWhenDatagramNotEnabled() {
+        // Given
+        QuicConnection quicConnection = mock(QuicConnection.class);
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection, false);
+
+        // When
+        assertThatThrownBy(() -> connection.registerDatagramHandler(0L, data -> {}))
+                // Then
+                .isInstanceOf(IllegalStateException.class);
+
+        verify(quicConnection, never()).setDatagramHandler(any());
+    }
+
+    @Test
+    public void registerDatagramHandlerShouldFailForNegativeStreamId() {
+        // Given
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(mock(QuicConnection.class), true);
+
+        // When
+        assertThatThrownBy(() -> connection.registerDatagramHandler(-4L, data -> {}))
+                // Then
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    public void registerDatagramHandlerShouldFailForStreamIdNotMultipleOfFour() {
+        // Given
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(mock(QuicConnection.class), true);
+
+        // When
+        assertThatThrownBy(() -> connection.registerDatagramHandler(3L, data -> {}))
+                // Then
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    public void registeredHandlerShouldBeCalledWhenMatchingDatagramArrives() {
+        // Given
+        QuicConnection quicConnection = mock(QuicConnection.class);
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection, true);
+
+        List<byte[]> received = new ArrayList<>();
+        connection.registerDatagramHandler(8L, received::add);
+
+        ArgumentCaptor<Consumer<byte[]>> quicHandlerCaptor = ArgumentCaptor.forClass(Consumer.class);
+        verify(quicConnection).setDatagramHandler(quicHandlerCaptor.capture());
+
+        // When: datagram arrives with quarter stream id 2 (= stream id 8/4) followed by payload
+        byte[] datagram = new byte[] { 0x02, 0x01, 0x02, 0x03 };
+        quicHandlerCaptor.getValue().accept(datagram);
+
+        // Then
+        assertThat(received).hasSize(1);
+        assertThat(received.get(0)).containsExactly(0x01, 0x02, 0x03);
+    }
+
+    @Test
+    public void malformedDatagramShouldTriggerConnectionError() {
+        // Given
+        QuicConnection quicConnection = mock(QuicConnection.class);
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection, true);
+
+        connection.registerDatagramHandler(8L, data -> {});
+
+        ArgumentCaptor<Consumer<byte[]>> quicHandlerCaptor = ArgumentCaptor.forClass(Consumer.class);
+        verify(quicConnection).setDatagramHandler(quicHandlerCaptor.capture());
+
+        // When: datagram with invalid variable-length integer encoding (0xff is not valid as a first byte)
+        quicHandlerCaptor.getValue().accept(new byte[] { (byte) 0xff });
+
+        // Then
+        ArgumentCaptor<Long> errorCaptor = ArgumentCaptor.forClass(Long.class);
+        verify(quicConnection).close(errorCaptor.capture(), any());
+        assertThat(errorCaptor.getValue()).isEqualTo(H3_DATAGRAM_ERROR);
+    }
+
+    @Test
+    public void registeredHandlerShouldNotBeCalledWhenDatagramArrivesForDifferentStreamId() {
+        // Given
+        QuicConnection quicConnection = mock(QuicConnection.class);
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection, true);
+
+        List<byte[]> received = new ArrayList<>();
+        connection.registerDatagramHandler(8L, received::add);
+
+        ArgumentCaptor<Consumer<byte[]>> quicHandlerCaptor = ArgumentCaptor.forClass(Consumer.class);
+        verify(quicConnection).setDatagramHandler(quicHandlerCaptor.capture());
+
+        // When: datagram arrives with quarter stream id 3 (= stream id 12), not 8
+        byte[] datagram = new byte[] { 0x03, 0x01, 0x02, 0x03 };
+        quicHandlerCaptor.getValue().accept(datagram);
+
+        // Then
+        assertThat(received).isEmpty();
+    }
+    //endregion
+
+    //region send datagram
+    @Test
+    public void sendDatagramShouldForwardToQuicConnectionWhenEnabled() {
+        // Given
+        QuicConnection quicConnection = mock(QuicConnection.class);
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection, true);
+
+        // When
+        connection.sendDatagram(0, new byte[] { 0x01, 0x02, 0x03 });
+
+        // Then
+        verify(quicConnection).sendDatagram(any(byte[].class));
+    }
+
+    @Test
+    public void sendDatagramShouldPrependQuarterStreamIdBeforeData() {
+        // Given
+        QuicConnection quicConnection = mock(QuicConnection.class);
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection, true);
+        ArgumentCaptor<byte[]> captor = ArgumentCaptor.forClass(byte[].class);
+
+        // When
+        connection.sendDatagram(8, new byte[] { 0x01, 0x02 });
+
+        // Then
+        verify(quicConnection).sendDatagram(captor.capture());
+        byte[] sent = captor.getValue();
+        assertThat(sent[0]).isEqualTo((byte) 0x02);  // quarter stream id = 8/4 = 2
+        assertThat(sent[1]).isEqualTo((byte) 0x01);
+        assertThat(sent[2]).isEqualTo((byte) 0x02);
+    }
+
+    @Test
+    public void sendDatagramShouldFailWhenDatagramNotEnabled() {
+        // Given
+        QuicConnection quicConnection = mock(QuicConnection.class);
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection, false);
+
+        // When
+        assertThatThrownBy(() -> connection.sendDatagram(0, new byte[] { 0x01 }))
+                // Then
+                .isInstanceOf(IllegalStateException.class);
+
+        verify(quicConnection, never()).sendDatagram(any());
+    }
+
+    @Test
+    public void sendDatagramShouldFailForNegativeStreamId() {
+        // Given
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(mock(QuicConnection.class), true);
+
+        // When
+        assertThatThrownBy(() -> connection.sendDatagram(-4, new byte[] { 0x01 }))
+                // Then
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    public void sendDatagramShouldFailForStreamIdNotMultipleOfFour() {
+        // Given
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(mock(QuicConnection.class), true);
+
+        // When
+        assertThatThrownBy(() -> connection.sendDatagram(3, new byte[] { 0x01 }))
+                // Then
+                .isInstanceOf(IllegalArgumentException.class);
     }
     //endregion
 

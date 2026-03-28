@@ -137,7 +137,7 @@ public class Http3ClientConnectionBuilder {
     static private class Http3ClientConnectionImplExt extends Http3ClientConnectionImpl {
 
         public Http3ClientConnectionImplExt(QuicConnection quicConnection) {
-            super(quicConnection, Executors.newCachedThreadPool());
+            super(quicConnection, false, Executors.newCachedThreadPool());
         }
 
         /**

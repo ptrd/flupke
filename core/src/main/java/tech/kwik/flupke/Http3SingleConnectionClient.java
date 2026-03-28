@@ -34,7 +34,7 @@ public class Http3SingleConnectionClient extends Http3Client {
     }
     
     public Http3SingleConnectionClient(QuicConnection quicConnection, Duration connectTimeout, Long receiveBufferSize, InetAddress localAddress) {
-        super(connectTimeout, receiveBufferSize, false, 0, 0, localAddress, null, null, null);
+        super(connectTimeout, receiveBufferSize, false, false, 0,0, localAddress, null, null, null);
 
         http3ConnectionFactory = new Http3SingleConnectionFactory(quicConnection);
     }

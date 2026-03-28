@@ -34,6 +34,14 @@ public interface Http3Connection {
     void registerUnidirectionalStreamType(long streamType, Consumer<HttpStream> handler);
 
     /**
+     * Register handler for receiving HTTP Datagrams.
+     * See https://www.rfc-editor.org/rfc/rfc9297
+     * @param streamId  the ID of the client-initiated bidirectional stream that the received datagrams are associated with.
+     * @param handler
+     */
+    void registerDatagramHandler(Long streamId, Consumer<byte[]> handler);
+
+    /**
      * HTTP/3 extension method: create a new unidirectional stream for the given stream type.
      * The data that is sent on this stream is not framed in HTTP/3 frames. The stream type is sent in conformance with
      * the HTTP/3 specification.
@@ -52,6 +60,14 @@ public interface Http3Connection {
      * frames or in a format that is compatible with HTTP/3 framing.
      */
     HttpStream createBidirectionalStream() throws IOException;
+
+    /**
+     * Sends a HTTP Datagram.
+     * See https://www.rfc-editor.org/rfc/rfc9297
+     * @param streamId the ID of the client-initiated bidirectional stream that the datagram is associated with.
+     * @param data the data to send in the datagram
+     */
+    void sendDatagram(long streamId, byte[] data);
 
     /**
      * HTTP/3 extension method for adding additional settings.

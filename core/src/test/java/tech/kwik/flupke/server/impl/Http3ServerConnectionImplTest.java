@@ -385,7 +385,7 @@ public class Http3ServerConnectionImplTest {
                 response.setStatus(201);
             }
         };
-        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), handler, executor, emptyMap());
+        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), handler, false, executor, emptyMap());
 
         // When
         HeadersFrame requestHeadersFrame = createHeadersFrame("GET", new URI("https://www.example.com/index.html"));
@@ -410,7 +410,7 @@ public class Http3ServerConnectionImplTest {
             }
         };
 
-        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), handler, executor, emptyMap());
+        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), handler, false, executor, emptyMap());
 
         // When
         HeadersFrame requestHeadersFrame = new HeadersFrame();
@@ -432,7 +432,7 @@ public class Http3ServerConnectionImplTest {
     void statusShouldAlwaysBeSetEvenWhenHandlerDoesNot() throws Exception {
         // Given
         HttpRequestHandler handler = (req, resp) -> {};
-        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), handler, executor, emptyMap());
+        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), handler, false, executor, emptyMap());
 
         // When
         HeadersFrame requestHeadersFrame = new HeadersFrame();
@@ -455,7 +455,7 @@ public class Http3ServerConnectionImplTest {
         HttpRequestHandler httpRequestHandler = (req, resp) -> {
             req.body().readAllBytes();
         };
-        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), httpRequestHandler, maxHeaderSize, maxDataSize, executor, emptyMap());
+        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), httpRequestHandler, maxHeaderSize, maxDataSize, false, executor, emptyMap());
         byte[] rawData = new byte[10000];
         rawData[0] = FRAME_TYPE_DATA;
         rawData[1] = 0x44; // 0x44ff == 1279
@@ -483,7 +483,7 @@ public class Http3ServerConnectionImplTest {
         // Given
         long maxHeaderSize = 1000;
         long maxDataSize = Long.MAX_VALUE;
-        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize, executor, emptyMap());
+        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize, false, executor, emptyMap());
         setEncoder(http3Connection, noOpEncoderDecoderBuilder.encoder());
         HeadersFrame largeHeaders = new HeadersFrame("superlarge", "*".repeat(1000));
 
@@ -506,7 +506,7 @@ public class Http3ServerConnectionImplTest {
         // Given
         long maxHeaderSize = 1000;
         long maxDataSize = Long.MAX_VALUE;
-        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize, executor, emptyMap());
+        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize, false, executor, emptyMap());
 
         HeadersFrame largeHeaders = new HeadersFrame("superlarge", "*".repeat(1000));
         byte[] data = largeHeaders.toBytes(Encoder.newBuilder().build());
