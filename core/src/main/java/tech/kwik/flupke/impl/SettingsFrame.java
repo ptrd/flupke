@@ -39,6 +39,9 @@ public class SettingsFrame extends Http3Frame {
     // https://www.rfc-editor.org/rfc/rfc9220#name-iana-considerations
     public static final int SETTINGS_ENABLE_CONNECT_PROTOCOL = 0x08;
 
+    // https://www.rfc-editor.org/rfc/rfc9297#section-5.1
+    public static final int SETTINGS_H3_DATAGRAM = 0x33;
+
     private int qpackMaxTableCapacity;
     private int qpackBlockedStreams;
     private boolean settingsEnableConnectProtocol;

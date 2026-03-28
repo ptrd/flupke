@@ -48,6 +48,7 @@ public class Http3ClientBuilder implements HttpClient.Builder {
     private Duration connectTimeout;
     private Long receiveBufferSize;
     private boolean disableCertificateCheck;
+    private boolean datagramEnabled;
     private Logger logger;
     private int additionalUnidirectionalStreams;
     private int additionalBidirectionalStreams;
@@ -171,8 +172,17 @@ public class Http3ClientBuilder implements HttpClient.Builder {
         return this;
     }
 
+    /**
+     * Enables the HTTP/3 datagram extension (RFC 9297).
+     * @return this builder
+     */
+    public Http3ClientBuilder enableDatagram() {
+        this.datagramEnabled = true;
+        return this;
+    }
+
     @Override
     public HttpClient build() {
-        return new Http3Client(connectTimeout, receiveBufferSize, disableCertificateCheck, additionalUnidirectionalStreams, additionalBidirectionalStreams, address, trustManager, keyManager, logger);
+        return new Http3Client(connectTimeout, receiveBufferSize, disableCertificateCheck, datagramEnabled, additionalUnidirectionalStreams, additionalBidirectionalStreams, address, trustManager, keyManager, logger);
     }
 }

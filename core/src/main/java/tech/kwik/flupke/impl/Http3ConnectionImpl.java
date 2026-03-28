@@ -20,6 +20,7 @@ package tech.kwik.flupke.impl;
 
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.QuicStream;
+import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.flupke.Http3Connection;
 import tech.kwik.flupke.HttpError;
@@ -41,9 +42,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
-import static tech.kwik.flupke.impl.SettingsFrame.QPACK_BLOCKED_STREAMS;
-import static tech.kwik.flupke.impl.SettingsFrame.QPACK_MAX_TABLE_CAPACITY;
-import static tech.kwik.flupke.impl.SettingsFrame.SETTINGS_ENABLE_CONNECT_PROTOCOL;
+import static tech.kwik.flupke.impl.SettingsFrame.*;
 
 public class Http3ConnectionImpl implements Http3Connection {
 
@@ -91,6 +90,9 @@ public class Http3ConnectionImpl implements Http3Connection {
     public static final int H3_CONNECT_ERROR = 0x010f;
     // The requested operation cannot be served over HTTP/3. The peer should retry over HTTP/1.1."
     public static final int H3_VERSION_FALLBACK = 0x0110;
+    // https://www.rfc-editor.org/rfc/rfc9297#section-5.2
+    // "Datagram or Capsule Protocol parse error"
+    public static final int H3_DATAGRAM_ERROR = 0x33;
 
     // https://www.rfc-editor.org/rfc/rfc9114.html#name-frame-types
     public static final int FRAME_TYPE_DATA = 0x00;
@@ -113,17 +115,32 @@ public class Http3ConnectionImpl implements Http3Connection {
     private final List<Long> internalSettingsParameterIds = List.of(
             (long) QPACK_MAX_TABLE_CAPACITY,
             (long) QPACK_BLOCKED_STREAMS,
-            (long) SETTINGS_ENABLE_CONNECT_PROTOCOL
+            (long) SETTINGS_ENABLE_CONNECT_PROTOCOL,
+            (long) SETTINGS_H3_DATAGRAM
     );
     protected Encoder qpackEncoder;
+    private Map<Long, Consumer<byte[]>> datagramHandlers;
+    private final boolean datagramEnabled;
 
-
-    public Http3ConnectionImpl(QuicConnection quicConnection) {
+    /**
+     * @param quicConnection the underlying QUIC connection to use for this HTTP/3 connection
+     * @param datagramEnabled whether HTTP3 datagram extension (RFC 9297) is enabled
+     */
+    public Http3ConnectionImpl(QuicConnection quicConnection, boolean datagramEnabled) {
         this.quicConnection = quicConnection;
+        this.datagramEnabled = datagramEnabled;
         qpackDecoder = Decoder.newBuilder().build();
         settingsParameters = new HashMap<>();
         settingsParameters.put((long) QPACK_MAX_TABLE_CAPACITY, 0L);
         settingsParameters.put((long) QPACK_BLOCKED_STREAMS, 0L);
+        if (datagramEnabled) {
+            // https://www.rfc-editor.org/rfc/rfc9297#section-2.1.1
+            // "An endpoint can indicate to its peer that it is willing to receive HTTP/3 Datagrams by sending the
+            //  SETTINGS_H3_DATAGRAM (0x33) setting with a value of 1."
+            settingsParameters.put((long) SETTINGS_H3_DATAGRAM, 1L);
+            datagramHandlers = new HashMap<>();
+            quicConnection.setDatagramHandler(this::handleDatagram);
+        }
 
         peerSettingsParameters = new HashMap<>();
 
@@ -143,6 +160,45 @@ public class Http3ConnectionImpl implements Http3Connection {
             throw new IllegalArgumentException("Cannot register reserved stream type");
         }
         unidirectionalStreamHandler.put(streamType, handler);
+    }
+
+    @Override
+    public void registerDatagramHandler(Long streamId, Consumer<byte[]> httpDatagramHandler) {
+        if (!datagramEnabled) {
+            throw new IllegalStateException("Datagram extension is not enabled on this connection");
+        }
+        if (streamId < 0 || streamId % 4 != 0) {
+            throw new IllegalArgumentException("Stream id must be a non-negative integer and a multiple of 4");
+        }
+        datagramHandlers.put(streamId, httpDatagramHandler);
+    }
+
+    private void handleDatagram(byte[] data) {
+        ByteBuffer buffer = ByteBuffer.wrap(data);
+        try {
+            // https://www.rfc-editor.org/rfc/rfc9297#section-2.1
+            // "When used with HTTP/3, the Datagram Data field of QUIC DATAGRAM frames uses the following format:
+            //    HTTP/3 Datagram {
+            //      Quarter Stream ID (i),
+            //      HTTP Datagram Payload (..),
+            //    }"
+            long quarterStreamId = VariableLengthInteger.parseLong(buffer);
+            byte[] datagramData = new byte[buffer.remaining()];
+            buffer.get(datagramData);
+            Consumer<byte[]> handler = datagramHandlers.get(4 * quarterStreamId);
+            // https://www.rfc-editor.org/rfc/rfc9297#section-2.1
+            // "f an HTTP/3 Datagram is received and its Quarter Stream ID field maps to a stream that has not yet been
+            //  created, the receiver SHALL either drop that datagram silently ..."
+            if (handler != null) {
+                handler.accept(datagramData);
+            }
+        }
+        catch (InvalidIntegerEncodingException e) {
+            // https://www.rfc-editor.org/rfc/rfc9297#section-2.1
+            // "Receipt of a QUIC DATAGRAM frame whose payload is too short to allow parsing the Quarter Stream ID
+            //  field MUST be treated as an HTTP/3 connection error of type H3_DATAGRAM_ERROR (0x33)."
+            connectionError(H3_DATAGRAM_ERROR);
+        }
     }
 
     @Override
@@ -192,6 +248,27 @@ public class Http3ConnectionImpl implements Http3Connection {
     @Override
     public HttpStream createBidirectionalStream() throws IOException {
         return wrap(quicConnection.createStream(true));
+    }
+
+    @Override
+    public void sendDatagram(long streamId, byte[] data) {
+        if (!datagramEnabled) {
+            throw new IllegalStateException("Datagram extension is not enabled on this connection");
+        }
+        if (streamId < 0 || streamId % 4 != 0) {
+            throw new IllegalArgumentException("Stream id must be a non-negative integer and a multiple of 4");
+        }
+        // https://www.rfc-editor.org/rfc/rfc9297#section-2.1
+        // "When used with HTTP/3, the Datagram Data field of QUIC DATAGRAM frames uses the following format:
+        //    HTTP/3 Datagram {
+        //      Quarter Stream ID (i),
+        //      HTTP Datagram Payload (..),
+        //    }"
+        long quarterStreamId = streamId / 4;
+        ByteBuffer buffer = ByteBuffer.allocate(VariableLengthInteger.bytesNeeded(quarterStreamId) + data.length);
+        VariableLengthInteger.encode(quarterStreamId, buffer);
+        buffer.put(data);
+        quicConnection.sendDatagram(buffer.array());
     }
 
     @Override

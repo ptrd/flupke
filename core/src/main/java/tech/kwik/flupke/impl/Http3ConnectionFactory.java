@@ -36,11 +36,13 @@ import static tech.kwik.flupke.Http3ClientConnection.DEFAULT_HTTP3_PORT;
 public class Http3ConnectionFactory {
 
     private final Http3Client http3Client;
+    private final boolean datagramEnabled;
     private final Map<UdpAddress, Http3ClientConnection> connections;
     protected ExecutorService executorService;
 
-    public Http3ConnectionFactory(Http3Client http3Client, ExecutorService executorService) {
+    public Http3ConnectionFactory(Http3Client http3Client, boolean datagramEnabled, ExecutorService executorService) {
         this.http3Client = http3Client;
+        this.datagramEnabled = datagramEnabled;
         connections = new ConcurrentHashMap<>();
         this.executorService = Objects.requireNonNull(executorService);
     }
@@ -103,7 +105,8 @@ public class Http3ConnectionFactory {
         Http3ClientConnection http3Connection;
         try {
             Duration connectTimeout = http3Client.connectTimeout().orElse(DEFAULT_CONNECT_TIMEOUT);
-            http3Connection = new Http3ClientConnectionImpl(address.host, address.port, connectTimeout, http3Client, http3Client.getDatagramSocketFactory(), executorService, http3Client.getLogger());
+            http3Connection = new Http3ClientConnectionImpl(address.host, address.port, connectTimeout, http3Client,
+                    http3Client.getDatagramSocketFactory(), datagramEnabled, executorService, http3Client.getLogger());
         }
         catch (IOException e) {
             throw new RuntimeException(e);

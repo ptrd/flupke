@@ -18,9 +18,9 @@
  */
 package tech.kwik.flupke.test;
 
-import tech.kwik.flupke.impl.Http3ConnectionImpl;
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.QuicStream;
+import tech.kwik.flupke.impl.Http3ConnectionImpl;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -37,6 +37,7 @@ public class Http3ConnectionBuilder {
     private OutputStream unidirectionalOutputStream;
     private InputStream bidirectionalInputStream;
     private OutputStream bidirectionalOutputStream;
+    private boolean datagramEnabled;
 
     public Http3ConnectionBuilder withUnidirectionalQuicStream(OutputStream output) {
         unidirectionalOutputStream = output;
@@ -59,9 +60,14 @@ public class Http3ConnectionBuilder {
             when(quicConnection.createStream(true)).thenReturn(bidirectionalStream);
         }
 
-        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection);
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection, datagramEnabled);
 
         return connection;
+    }
+
+    public Http3ConnectionBuilder withDatagramEnabled() {
+        datagramEnabled = true;
+        return this;
     }
 
     public Http3ConnectionBuilder withBidirectionalQuicStream(ByteArrayInputStream input, ByteArrayOutputStream output) {

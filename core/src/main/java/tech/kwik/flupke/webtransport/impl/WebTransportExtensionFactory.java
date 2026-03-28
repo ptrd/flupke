@@ -70,12 +70,7 @@ public class WebTransportExtensionFactory implements Http3ServerExtensionFactory
                 // "A server supporting WebTransport over HTTP/3 MUST send both the SETTINGS_WT_MAX_SESSIONS setting with
                 //  a value greater than "0" ..."
                 // (this settings is deprecated as of draft-15)
-                WT_MAX_SESSIONS, 1L,
-                // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-15.html#section-3.1
-                // "both the client and the server indicate support for HTTP/3 datagrams by sending a SETTINGS_H3_DATAGRAM
-                //  setting value set to 1 in their SETTINGS frame"
-                SETTINGS_H3_DATAGRAM, 0L         // TODO: WebTransport over HTTP/3 requires support for datagrams
-
+                WT_MAX_SESSIONS, 1L
         );
         return wtSettings;
     }

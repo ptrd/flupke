@@ -40,7 +40,7 @@ public class Http3ConnectionFactoryTest {
 
     @BeforeEach
     public void setupObjectUnderTest() {
-        connectionFactory = new Http3ConnectionFactory((Http3Client) Http3Client.newHttpClient(), Executors.newCachedThreadPool());
+        connectionFactory = new Http3ConnectionFactory((Http3Client) Http3Client.newHttpClient(), false, Executors.newCachedThreadPool());
     }
 
     @Test
@@ -89,7 +89,7 @@ public class Http3ConnectionFactoryTest {
     @Disabled("test ignored because it takes too long")
     public void testDefaultConnectionTimeout() throws Exception {
         // Given
-        Http3ConnectionFactory connectionFactory = new Http3ConnectionFactory((Http3Client) Http3Client.newHttpClient(), null);
+        Http3ConnectionFactory connectionFactory = new Http3ConnectionFactory((Http3Client) Http3Client.newHttpClient(), false, null);
         HttpRequest request = HttpRequest.newBuilder().uri(new URI("http://localhost:61482/index.html")).build();
         Http3ClientConnection connection = connectionFactory.getConnection(request);
 

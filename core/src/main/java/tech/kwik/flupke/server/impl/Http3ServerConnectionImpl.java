@@ -66,12 +66,12 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
     private final ReentrantLock extensionInstantiationLock;
     private Map<Long, Consumer<HttpStream>> bidirectionalStreamHandler = new ConcurrentHashMap<>();
 
-    public Http3ServerConnectionImpl(QuicConnection quicConnection, HttpRequestHandler requestHandler, ExecutorService executorService, Map<String, Http3ServerExtensionFactory> extensions) {
-        this(quicConnection, requestHandler, DEFAULT_MAX_HEADER_SIZE, DEFAULT_MAX_DATA_SIZE, executorService, extensions);
+    public Http3ServerConnectionImpl(QuicConnection quicConnection, HttpRequestHandler requestHandler, boolean datagramEnabled, ExecutorService executorService, Map<String, Http3ServerExtensionFactory> extensions) {
+        this(quicConnection, requestHandler, DEFAULT_MAX_HEADER_SIZE, DEFAULT_MAX_DATA_SIZE, datagramEnabled, executorService, extensions);
     }
 
-    public Http3ServerConnectionImpl(QuicConnection quicConnection, HttpRequestHandler requestHandler, long maxHeaderSize, long maxDataSize, ExecutorService executorService, Map<String, Http3ServerExtensionFactory> extensions) {
-        super(quicConnection);
+    public Http3ServerConnectionImpl(QuicConnection quicConnection, HttpRequestHandler requestHandler, long maxHeaderSize, long maxDataSize, boolean datagramEnabled, ExecutorService executorService, Map<String, Http3ServerExtensionFactory> extensions) {
+        super(quicConnection, datagramEnabled);
         this.requestHandler = requestHandler;
         this.maxHeaderSize = maxHeaderSize;
         this.maxDataSize = maxDataSize;
