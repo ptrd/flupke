@@ -28,6 +28,7 @@ import tech.kwik.flupke.webtransport.WebTransportHttp3ApplicationProtocolFactory
 import tech.kwik.flupke.webtransport.WebTransportStream;
 
 import java.io.*;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.security.KeyStore;
 import java.util.Arrays;
@@ -259,6 +260,33 @@ public class WebTransportInteropServer {
             catch (IOException e) {
                 System.out.println("IO error while processing unidirectional stream: " + e.getMessage());
                 throw new UncheckedIOException(e);
+            }
+        });
+
+        session.setDatagramHandler(data -> {
+            String message = new String(data);
+            if (message.startsWith("GET ")) {
+                String fileName = message.substring(4).trim();
+                File requestedFile = new File(new File(wwwDir, session.getPath()), fileName);
+                if (requestedFile.exists() && requestedFile.isFile() && requestedFile.canRead()) {
+                    try {
+                        ByteBuffer datagramBuffer = ByteBuffer.allocate(1500);
+                        datagramBuffer.put(("PUSH " + fileName + "\n").getBytes());
+                        byte[] fileData = Files.readAllBytes(requestedFile.toPath());
+                        datagramBuffer.put(fileData);
+                        datagramBuffer.flip();
+                        byte[] datagramData = new byte[datagramBuffer.limit()];
+                        datagramBuffer.get(datagramData);
+                        session.sendDatagram(datagramData);
+                        System.out.println("Sent datagram with contents of file " + requestedFile.getPath() + " for request " + fileName + " on session " + session.getSessionId());
+                    }
+                    catch (IOException e) {
+                        System.err.println("Error reading file for datagram response: " + e.getMessage());
+                    }
+                }
+                else {
+                    System.out.println("Requested file not found for datagram response: " + requestedFile.getPath());
+                }
             }
         });
 
