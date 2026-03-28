@@ -163,6 +163,11 @@ public class SessionImpl implements Session {
         }
     }
 
+    public void sendDatagram(byte[] data) throws IOException {
+        checkState();
+        http3Connection.sendDatagram(sessionId, data);
+    }
+
     @Override
     public void setUnidirectionalStreamReceiveHandler(Consumer<WebTransportStream> handler) {
         unidirectionalStreamReceiveHandler = Objects.requireNonNull(handler);
@@ -171,6 +176,11 @@ public class SessionImpl implements Session {
     @Override
     public void setBidirectionalStreamReceiveHandler(Consumer<WebTransportStream> handler) {
         bidirectionalStreamReceiveHandler = Objects.requireNonNull(handler);
+    }
+
+    @Override
+    public void setDatagramHandler(Consumer<byte[]> handler) {
+        http3Connection.registerDatagramHandler(sessionId, Objects.requireNonNull(handler));
     }
 
     @Override

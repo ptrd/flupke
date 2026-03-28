@@ -151,6 +151,11 @@ public class WebTransportHttp3ApplicationProtocolFactory extends Http3Applicatio
         return true;
     }
 
+    @Override
+    public boolean httpDatagramEnabled() {
+        return true;
+    }
+
     /**
      * Sets the maximum number of streams that can be queued per session. When a new stream is received for a session
      * that is not yet created, it is queued until the session is created. If the number of queued streams exceeds this
