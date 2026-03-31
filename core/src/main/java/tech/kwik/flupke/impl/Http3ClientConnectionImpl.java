@@ -70,8 +70,10 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     private long maxReceivedHeaderSize = MAX_RECEIVED_HEADER_SIZE;
     private long maxReceivedDataSize = MAX_RECEIVED_DATA_SIZE;
 
-    public Http3ClientConnectionImpl(String host, int port, Duration connectTimeout, Http3ConnectionSettings connectionSettings, DatagramSocketFactory datagramSocketFactory, boolean datagramEnabled, ExecutorService executorService, Logger logger) throws IOException {
-        this(createQuicConnection(host, port, connectTimeout, connectionSettings, datagramSocketFactory, logger), datagramEnabled, executorService);
+    public Http3ClientConnectionImpl(String host, int port, Duration connectTimeout, Http3ConnectionSettings connectionSettings,
+                                     DatagramSocketFactory datagramSocketFactory, boolean datagramEnabled, ExecutorService executorService,
+                                     Logger logger) throws IOException {
+        this(createQuicConnection(host, port, connectTimeout, connectionSettings, datagramSocketFactory, datagramEnabled, logger), datagramEnabled, executorService);
     }
 
     public Http3ClientConnectionImpl(QuicConnection quicConnection, boolean datagramEnabled, ExecutorService executorService) {
@@ -164,7 +166,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         }
     }
 
-    private static QuicConnection createQuicConnection(String host, int port, Duration connectTimeout, Http3ConnectionSettings connectionSettings, DatagramSocketFactory datagramSocketFactory, Logger logger) throws SocketException, UnknownHostException {
+    private static QuicConnection createQuicConnection(String host, int port, Duration connectTimeout, Http3ConnectionSettings connectionSettings, DatagramSocketFactory datagramSocketFactory, boolean enableQuicDatagram, Logger logger) throws SocketException, UnknownHostException {
         QuicClientConnection.Builder builder = QuicClientConnection.newBuilder();
         try {
             builder.uri(new URI("//" + host + ":" + port));
@@ -197,6 +199,9 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
 
         builder.socketFactory(datagramSocketFactory);
         builder.logger(logger != null? logger: new NullLogger());
+        if (enableQuicDatagram) {
+            builder.enableDatagramExtension();
+        }
         return builder.build();
     }
 
