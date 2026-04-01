@@ -35,12 +35,19 @@ import static tech.kwik.flupke.webtransport.Constants.WEBTRANSPORT_SESSION_GONE;
 
 public abstract class AbstractSessionFactoryImpl implements SessionFactory {
 
-    // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-13.html#section-9.2
-    // "The SETTINGS_WT_MAX_SESSIONS setting indicates that the specified HTTP/3 endpoint is WebTransport-capable and
-    //  the number of concurrent sessions it is willing to receive."
-    // "Setting Name: WT_MAX_SESSIONS
-    //  Value: 0x14e9cd29"
-    public static final long SETTINGS_WT_MAX_SESSIONS = 0x14e9cd29L;
+    // WebTransport setting IDs — multiple variants for cross-draft compatibility.
+
+    // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-13.html
+    // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-14.html
+    public static final long SETTINGS_WT_MAX_SESSIONS_DRAFT_13_14 = 0x14e9cd29L;
+    // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-07.html
+    // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-12.html
+    public static final long SETTINGS_WT_MAX_SESSIONS_DRAFT_07_12 = 0xc671706aL;
+    // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-06.html
+    public static final long SETTINGS_WT_ENABLE_DRAFT_06 = 0x2b603742L;
+    // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-04.html
+    // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-05.html
+    public static final long SETTINGS_WT_MAX_SESSIONS_DRAFT_04_05 = 0x2b603743L;
 
     private enum SessionState {
         NOT_CREATED, OPEN, CLOSED

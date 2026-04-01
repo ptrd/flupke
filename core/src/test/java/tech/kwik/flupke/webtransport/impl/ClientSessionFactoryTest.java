@@ -50,7 +50,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.longThat;
 import static org.mockito.Mockito.*;
-import static tech.kwik.flupke.webtransport.impl.ClientSessionFactoryImpl.SETTINGS_WT_MAX_SESSIONS;
+import static tech.kwik.flupke.webtransport.impl.ClientSessionFactoryImpl.SETTINGS_WT_MAX_SESSIONS_DRAFT_07_12;
 import static tech.kwik.flupke.webtransport.impl.SessionImplTest.captureHttpConnectionBidirectionalStreamHandler;
 import static tech.kwik.flupke.webtransport.impl.SessionImplTest.httpStreamWith;
 
@@ -275,7 +275,7 @@ class ClientSessionFactoryTest {
         when(httpStream.getInputStream()).thenReturn(new WriteableByteArrayInputStream());  // Reading from this stream will block
         when(httpStream.getOutputStream()).thenReturn(mock(OutputStream.class));
         when(http3connection.sendExtendedConnect(any(), any(), any(), any())).thenReturn(httpStream);
-        when(http3connection.getPeerSettingsParameter(SETTINGS_WT_MAX_SESSIONS)).thenReturn(Optional.of(maxWebTransportSessions));
+        when(http3connection.getPeerSettingsParameter(SETTINGS_WT_MAX_SESSIONS_DRAFT_07_12)).thenReturn(Optional.of(maxWebTransportSessions));
         return http3connection;
     }
 
@@ -289,7 +289,7 @@ class ClientSessionFactoryTest {
         when(httpStream.getOutputStream()).thenReturn(mock(OutputStream.class));
 
         when(http3connection.sendExtendedConnect(any(), any(), any(), any())).thenReturn(httpStream);
-        when(http3connection.getPeerSettingsParameter(SETTINGS_WT_MAX_SESSIONS)).thenReturn(Optional.of(10L));
+        when(http3connection.getPeerSettingsParameter(SETTINGS_WT_MAX_SESSIONS_DRAFT_07_12)).thenReturn(Optional.of(10L));
 
         // Simulate the server performing the action asynchronously before returning the response to the extended CONNECT request.
         when(http3connection.sendExtendedConnect(any(), any(), any(), any())).thenAnswer(invocation -> {
