@@ -33,6 +33,8 @@ import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
+import static tech.kwik.flupke.webtransport.impl.AbstractSessionFactoryImpl.*;
+
 public class WebTransportExtensionFactory implements Http3ServerExtensionFactory {
 
     // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-15.html#section-9.2
@@ -66,12 +68,12 @@ public class WebTransportExtensionFactory implements Http3ServerExtensionFactory
                 // "When an HTTP/3 connection is established, the server sends a SETTINGS_WT_ENABLED setting to indicate
                 //  support for WebTransport over HTTP/3. "
                 SETTINGS_WT_ENABLED, 1L,
-                // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-13.html#section-3.1
-                // "A server supporting WebTransport over HTTP/3 MUST send both the SETTINGS_WT_MAX_SESSIONS setting with
-                //  a value greater than "0" ..."
-                // (this settings is deprecated as of draft-15)
-                WT_MAX_SESSIONS, 1L
-        );
+                // Advertise all WebTransport setting variants for cross-implementation compatibility.
+                SETTINGS_WT_MAX_SESSIONS_DRAFT_04_05, 1L,
+                SETTINGS_WT_ENABLE_DRAFT_06, 1L,
+                SETTINGS_WT_MAX_SESSIONS_DRAFT_07_12, 1L,
+                SETTINGS_WT_MAX_SESSIONS_DRAFT_13_14, 1L
+                );
         return wtSettings;
     }
 

@@ -93,6 +93,8 @@ public class Http3ConnectionImpl implements Http3Connection {
     // https://www.rfc-editor.org/rfc/rfc9297#section-5.2
     // "Datagram or Capsule Protocol parse error"
     public static final int H3_DATAGRAM_ERROR = 0x33;
+    // https://www.ietf.org/archive/id/draft-ietf-masque-h3-datagram-08.html
+    public static final long SETTINGS_ENABLE_DATAGRAM_DEPRECATED = 0xFFD277L;
 
     // https://www.rfc-editor.org/rfc/rfc9114.html#name-frame-types
     public static final int FRAME_TYPE_DATA = 0x00;
@@ -116,7 +118,8 @@ public class Http3ConnectionImpl implements Http3Connection {
             (long) QPACK_MAX_TABLE_CAPACITY,
             (long) QPACK_BLOCKED_STREAMS,
             (long) SETTINGS_ENABLE_CONNECT_PROTOCOL,
-            (long) SETTINGS_H3_DATAGRAM
+            (long) SETTINGS_H3_DATAGRAM,
+            (long) SETTINGS_ENABLE_DATAGRAM_DEPRECATED
     );
     protected Encoder qpackEncoder;
     private Map<Long, Consumer<byte[]>> datagramHandlers;
@@ -138,6 +141,7 @@ public class Http3ConnectionImpl implements Http3Connection {
             // "An endpoint can indicate to its peer that it is willing to receive HTTP/3 Datagrams by sending the
             //  SETTINGS_H3_DATAGRAM (0x33) setting with a value of 1."
             settingsParameters.put((long) SETTINGS_H3_DATAGRAM, 1L);
+            settingsParameters.put((long) SETTINGS_ENABLE_DATAGRAM_DEPRECATED, 1L);
             datagramHandlers = new HashMap<>();
             quicConnection.setDatagramHandler(this::handleDatagram);
         }

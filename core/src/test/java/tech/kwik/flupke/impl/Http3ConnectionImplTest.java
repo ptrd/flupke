@@ -331,7 +331,8 @@ public class Http3ConnectionImplTest {
         connection.startControlStream();
 
         // Then: stream type | SETTINGS frame type | payload length | QPACK_MAX_TABLE_CAPACITY=0 | QPACK_BLOCKED_STREAMS=0 | SETTINGS_H3_DATAGRAM=1
-        assertThat(controlStreamOutput.toByteArray()).isEqualTo(new byte[] { 0x00, 0x04, 0x06, 0x01, 0x00, 0x07, 0x00, 0x33, 0x01 });
+        SettingsFrame settingsFrame = new SettingsFrame().parsePayload(ByteBuffer.wrap(controlStreamOutput.toByteArray(), 1, controlStreamOutput.size() - 1));
+        assertThat(settingsFrame.getAllParameters()).containsEntry((long) SettingsFrame.SETTINGS_H3_DATAGRAM, 1L);
     }
 
     @Test
