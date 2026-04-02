@@ -34,6 +34,7 @@ import java.security.KeyStore;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -157,18 +158,20 @@ public class WebTransportInteropServer {
         webTransportProtocolFactory.setMaxUnidirectionalStreamReceiverBufferSize(1_000_000);
         System.out.println("Starting WebTransport server on path " + extendedPath);
         webTransportProtocolFactory.setMaxStreamsQueued(10);
+        Consumer<Session> webTransportHandler;
         if ("transfer-bidirectional-send".equals(testcase)) {
-            webTransportProtocolFactory.registerWebTransportServerByRegex(extendedPath, supportedApplicationProtocols, this::startTransferBidirectionalSend);
+            webTransportHandler = this::startTransferBidirectionalSend;
         }
         else if ("transfer-unidirectional-send".equals(testcase)) {
-            webTransportProtocolFactory.registerWebTransportServerByRegex(extendedPath, supportedApplicationProtocols, this::startTransferUnidirectionalSend);
+            webTransportHandler = this::startTransferUnidirectionalSend;
         }
         else if ("transfer-datagram-send".equals(testcase)) {
-            webTransportProtocolFactory.registerWebTransportServerByRegex(extendedPath, supportedApplicationProtocols, this::startTransferDatagramSend);
+            webTransportHandler = this::startTransferDatagramSend;
         }
         else {
-            webTransportProtocolFactory.registerWebTransportServerByRegex(extendedPath, supportedApplicationProtocols, this::startWebtransport);
+            webTransportHandler = this::startWebtransport;
         }
+        webTransportProtocolFactory.registerWebTransportServerByRegex(extendedPath, supportedApplicationProtocols, withExceptionLogging(webTransportHandler));
         serverConnector.registerApplicationProtocol(HTTP3_PROTOCOL_ID, webTransportProtocolFactory);
         serverConnector.start();
     }
@@ -511,6 +514,18 @@ public class WebTransportInteropServer {
                 Thread.currentThread().interrupt();
             }
         }
+    }
+
+    private Consumer<Session> withExceptionLogging(Consumer<Session> handler) {
+        return session -> {
+            try {
+                handler.accept(session);
+            }
+            catch (Exception e) {
+                System.err.println("Unhandled exception in session handler for session " + session.getSessionId() + ": " + e.getMessage());
+                e.printStackTrace();
+            }
+        };
     }
 
     private void copyFile(Session session, long streamId, OutputStream outputStream, String fileName) throws IOException {
