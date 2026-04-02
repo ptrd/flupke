@@ -47,15 +47,13 @@ import static tech.kwik.flupke.server.Http3ApplicationProtocolFactory.HTTP3_PROT
  */
 public class WebTransportInteropServer {
 
-    private final boolean retry;
     private final KeyStore keyStore;
     private final String certificateAlias;
     private final String keyPassword;
     private final int port;
     private final File wwwDir;
 
-    public WebTransportInteropServer(boolean retry, KeyStore keyStore, String certificateAlias, String keyPassword, int port, File wwwDir) {
-        this.retry = retry;
+    public WebTransportInteropServer(KeyStore keyStore, String certificateAlias, String keyPassword, int port, File wwwDir) {
         this.keyStore = keyStore;
         this.certificateAlias = certificateAlias;
         this.keyPassword = keyPassword;
@@ -64,7 +62,6 @@ public class WebTransportInteropServer {
     }
 
     public static void main(String[] args) throws Exception {
-        boolean retry = false;
         if (args.length < 5) {
             System.out.println("Expected at least 5 arguments, but got " + args.length);
             usageAndExit(Arrays.asList(args));
@@ -101,7 +98,7 @@ public class WebTransportInteropServer {
                 System.exit(1);
             }
         }
-        new WebTransportInteropServer(retry, keyStore, certificateAlias, keyPassword, port, wwwDir).start();
+        new WebTransportInteropServer(keyStore, certificateAlias, keyPassword, port, wwwDir).start();
     }
 
     private static void usageAndExit(List<String> actualArgs) {
@@ -110,17 +107,13 @@ public class WebTransportInteropServer {
         System.exit(1);
     }
 
-
     private void start() throws Exception {
         ServerConnectionConfig serverConnectionConfig = ServerConnectionConfig.builder()
-                .maxIdleTimeoutInSeconds(30)
                 .maxUnidirectionalStreamBufferSize(1_000_000)
                 .maxBidirectionalStreamBufferSize(1_000_000)
                 .maxConnectionBufferSize(10_000_000)
                 .maxOpenPeerInitiatedUnidirectionalStreams(10)
                 .maxOpenPeerInitiatedBidirectionalStreams(100)
-                .retryRequired(retry)
-                .connectionIdLength(8)
                 .build();
 
         SysOutLogger log = new SysOutLogger();
