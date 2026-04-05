@@ -20,6 +20,7 @@ package tech.kwik.flupke.webtransport.impl;
 
 import tech.kwik.flupke.HttpStream;
 import tech.kwik.flupke.impl.CapsuleProtocolStreamImpl;
+import tech.kwik.flupke.impl.StructuredFields;
 import tech.kwik.flupke.server.Http3ServerConnection;
 import tech.kwik.flupke.server.Http3ServerExtension;
 import tech.kwik.flupke.webtransport.Session;
@@ -33,7 +34,6 @@ import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class WebTransportExtension implements Http3ServerExtension {
 
@@ -69,10 +69,8 @@ public class WebTransportExtension implements Http3ServerExtension {
             Map<String, List<String>> responseHeaders = Map.of();
             String negotiatedProtocol = null;
             if (!applicationProtocols.isEmpty() && headers.firstValue("WT-Available-Protocols").isPresent()) {
-                Optional<String> match = headers.allValues("WT-Available-Protocols").stream()
-                        .flatMap(v -> Stream.of(v.split(",")))
-                        .map(String::trim)
-                        .map(p -> p.startsWith("\"") && p.endsWith("\"") ? p.substring(1, p.length() - 1) : p)
+                Optional<String> match = StructuredFields.parseStringList(headers.allValues("WT-Available-Protocols"))
+                        .stream()
                         .filter(applicationProtocols::contains)
                         .findFirst();
                 if (match.isEmpty()) {
@@ -80,7 +78,7 @@ public class WebTransportExtension implements Http3ServerExtension {
                     return;
                 }
                 negotiatedProtocol = match.get();
-                responseHeaders = Map.of("WT-Protocol", List.of("\"" + negotiatedProtocol + "\""));
+                responseHeaders = Map.of("WT-Protocol", List.of(StructuredFields.serializeString(negotiatedProtocol)));
             }
             sessionFactory.prepareServerSession();
             statusCallback.accept(200, responseHeaders);

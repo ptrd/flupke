@@ -997,7 +997,7 @@ public class Http3ClientConnectionImplTest {
                 .withBidirectionalQuicStream(new ByteArrayInputStream(MOCK_HEADER))
                 .withResponseHeaders(List.of(
                         Map.entry(":status", "200"),
-                        Map.entry("wt-protocol", "my-protocol")))
+                        Map.entry("wt-protocol", "\"my-protocol\"")))
                 .build();
         HttpRequest connectRequest = HttpRequest.newBuilder()
                 .uri(new URI("https://example.com/wt"))
@@ -1007,7 +1007,7 @@ public class Http3ClientConnectionImplTest {
         HttpResponse<HttpStream> result = http3Connection.sendExtendedConnectAndGetResponse(connectRequest, "webtransport", "https", Duration.ofMillis(100));
 
         // Then
-        assertThat(result.headers().firstValue("wt-protocol")).contains("my-protocol");
+        assertThat(result.headers().firstValue("wt-protocol")).contains("\"my-protocol\"");
     }
 
     @Test

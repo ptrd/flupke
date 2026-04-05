@@ -43,10 +43,14 @@ public class WebTransportContext {
     }
 
     public WebTransportContext(URI webTransportUri) {
+        this(webTransportUri, null);
+    }
+
+    public WebTransportContext(URI webTransportUri, String negotiatedProtocol) {
         this.headers = HttpHeaders.of(emptyMap(), (k, v) -> true);
         this.authority = webTransportUri.getAuthority();
         this.pathAndQuery = webTransportUri.getPath() + (webTransportUri.getQuery() != null ? "?" + webTransportUri.getQuery() : "");
-        this.negotiatedProtocol = null;
+        this.negotiatedProtocol = negotiatedProtocol;
     }
 
     public String getAuthority() {

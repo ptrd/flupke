@@ -21,8 +21,10 @@ package tech.kwik.flupke.webtransport.impl;
 import tech.kwik.flupke.Http3Client;
 import tech.kwik.flupke.Http3ClientConnection;
 import tech.kwik.flupke.HttpError;
+import tech.kwik.flupke.HttpStream;
 import tech.kwik.flupke.core.CapsuleProtocolStream;
 import tech.kwik.flupke.impl.CapsuleProtocolStreamImpl;
+import tech.kwik.flupke.impl.StructuredFields;
 import tech.kwik.flupke.webtransport.ClientSessionFactory;
 import tech.kwik.flupke.webtransport.Session;
 import tech.kwik.flupke.webtransport.WebTransportStream;
@@ -32,7 +34,10 @@ import java.io.InterruptedIOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
@@ -124,6 +129,25 @@ public class ClientSessionFactoryImpl extends AbstractSessionFactoryImpl impleme
     }
 
     @Override
+    public Session createSession(URI serverUri, List<String> availableProtocols) throws IOException, HttpError {
+        return createSession(serverUri, availableProtocols, s -> {}, s -> {});
+    }
+
+    @Override
+    public Session createSession(URI serverUri, List<String> availableProtocols,
+                                 Consumer<WebTransportStream> unidirectionalStreamHandler,
+                                 Consumer<WebTransportStream> bidirectionalStreamHandler) throws IOException, HttpError {
+        // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-15.html#section-3.3
+        // "The client MAY include a WT-Available-Protocols header field in the CONNECT request."
+        // "Both WT-Available-Protocols and WT-Protocol are Structured Fields [FIELDS]. WT-Available-Protocols is a List.
+        // (...) In both cases, the only valid value type is a String."
+        HttpRequest request = HttpRequest.newBuilder(serverUri)
+                .header("wt-available-protocols", StructuredFields.serializeStringList(availableProtocols))
+                .build();
+        return createSession(request, unidirectionalStreamHandler, bidirectionalStreamHandler);
+    }
+
+    @Override
     public Session createSession(HttpRequest request, Consumer<WebTransportStream> unidirectionalStreamHandler,
                                  Consumer<WebTransportStream> bidirectionalStreamHandler) throws IOException, HttpError {
         if (!server.equals(request.uri().getHost()) || serverPort != request.uri().getPort()) {
@@ -142,14 +166,18 @@ public class ClientSessionFactoryImpl extends AbstractSessionFactoryImpl impleme
             //  The :scheme field MUST be https. "
             String protocol = "webtransport";
             String schema = "https";
-            CapsuleProtocolStream connectStream = new CapsuleProtocolStreamImpl(httpClientConnection.sendExtendedConnect(request, protocol, schema, Duration.ofSeconds(5)));
-            WebTransportContext context = new WebTransportContext(request.uri());
+            HttpResponse<HttpStream> connectResponse = httpClientConnection.sendExtendedConnectAndGetResponse(request, protocol, schema, Duration.ofSeconds(5));
+            // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-15.html#section-3.3
+            // "If the server receives such a header, it MAY include a WT-Protocol field in a successful (2xx) response."
+            Optional<String> negotiatedProtocol = connectResponse.headers().firstValue("wt-protocol").map(StructuredFields::parseString);
+            CapsuleProtocolStream connectStream = new CapsuleProtocolStreamImpl(connectResponse.body());
+            WebTransportContext context = new WebTransportContext(request.uri(), negotiatedProtocol.orElse(null));
             SessionImpl session = new SessionImpl(httpClientConnection, context, connectStream, unidirectionalStreamHandler, bidirectionalStreamHandler, this);
             registerSession(session);
             return session;
         }
         catch (InterruptedException e) {
-            // Thrown by sendExtendedConnect
+            // Thrown by sendExtendedConnectAndGetResponse
             throw new InterruptedIOException("HTTP CONNECT request was interrupted");
         }
     }
