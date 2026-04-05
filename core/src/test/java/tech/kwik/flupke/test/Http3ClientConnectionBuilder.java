@@ -33,6 +33,7 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.AbstractMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executors;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -48,6 +49,9 @@ public class Http3ClientConnectionBuilder {
     private SettingsFrame settingsFrame;
     private InputStream bidirectionalInputStream;
     private OutputStream bidirectionalOutputStream;
+    private List<Map.Entry<String, String>> responseHeaders = List.of(
+            new AbstractMap.SimpleEntry<>(":status", "200"),
+            new AbstractMap.SimpleEntry<>("content-type", "text/plain"));
 
     public Http3ClientConnectionBuilder withUnidirectionalQuicStream(OutputStream output) {
         unidirectionalOutputStream = output;
@@ -93,9 +97,7 @@ public class Http3ClientConnectionBuilder {
             when(bidirectionalStream.getInputStream()).thenReturn(bidirectionalInputStream);
             when(bidirectionalStream.getOutputStream()).thenReturn(bidirectionalOutputStream);
             Decoder decoder = mock(Decoder.class);
-            when(decoder.decodeStream(any(InputStream.class))).thenReturn(List.of(
-                    new AbstractMap.SimpleEntry<>(":status", "200"),
-                    new AbstractMap.SimpleEntry<>("content-type", "text/plain")));
+            when(decoder.decodeStream(any(InputStream.class))).thenReturn(responseHeaders);
             FieldSetter.setField(connection, Http3ConnectionImpl.class.getDeclaredField("qpackDecoder"), decoder);
         }
 
@@ -115,6 +117,11 @@ public class Http3ClientConnectionBuilder {
     public Http3ClientConnectionBuilder withBidirectionalQuicStream(InputStream quicInputStream) {
         bidirectionalInputStream = quicInputStream;
         bidirectionalOutputStream = new ByteArrayOutputStream();
+        return this;
+    }
+
+    public Http3ClientConnectionBuilder withResponseHeaders(List<Map.Entry<String, String>> headers) {
+        responseHeaders = headers;
         return this;
     }
 

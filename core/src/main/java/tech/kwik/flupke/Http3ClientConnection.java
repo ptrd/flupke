@@ -66,6 +66,8 @@ public interface Http3ClientConnection extends Http3Connection {
      * not support it, an HttpError is thrown. In any case, the client has to wait for the SETTINGS frame to be received
      * (to determine whether the server supports Extended Connect), so this method may block for a while or throw a
      * HttpError if the SETTINGS frame is not received in time.
+     * @deprecated this method will be removed in favor of the more generic sendExtendedConnectAndGetResponse() (which
+     *             will be renamed to sendExtendedConnect after this method has been removed)
      * @param request
      * @param protocol  the protocol to use over the tunneled connection (e.g. "websocket" or "webtransport")
      * @param scheme    "http" or "https"
@@ -75,8 +77,27 @@ public interface Http3ClientConnection extends Http3Connection {
      * @throws HttpError
      * @throws InterruptedException
      */
+    @Deprecated(forRemoval = true)
     HttpStream sendExtendedConnect(HttpRequest request, String protocol, String scheme, Duration settingsFrameTimeout) throws InterruptedException, HttpError, IOException;
-    
+
+    /**
+     * Sends an Extended CONNECT request (that can be used for tunneling other protocols like websocket and
+     * webtransport) and returns both the stream and the response headers. The response headers may include
+     * application-protocol-specific fields, such as {@code WT-Protocol} for WebTransport application protocol negotiation.
+     * See https://www.rfc-editor.org/rfc/rfc9220.html and  https://www.rfc-editor.org/rfc/rfc8441.html.
+     * Note that this method is only supported by servers that support Extended Connect (RFC 9220). If the server does
+     * not support it, an HttpError is thrown. In any case, the client has to wait for the SETTINGS frame to be received
+     * (to determine whether the server supports Extended Connect), so this method may block for a while or throw a
+     * HttpError if the SETTINGS frame is not received in time.
+     *
+     * @param request               the request; the method is ignored
+     * @param protocol              the protocol to use over the tunnel (e.g. "webtransport")
+     * @param scheme                "http" or "https"
+     * @param settingsFrameTimeout  max time to wait for the SETTINGS frame
+     * @return an {@link HttpResponse} with the response headers and the stream as body
+     */
+    HttpResponse<HttpStream> sendExtendedConnectAndGetResponse(HttpRequest request, String protocol, String scheme, Duration settingsFrameTimeout) throws InterruptedException, HttpError, IOException;
+
     /**
      * HTTP/3 extension method: allow registration of a handler for an (incoming) bidirectional stream.
      * https://www.rfc-editor.org/rfc/rfc9114.html#name-bidirectional-streams

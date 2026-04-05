@@ -988,6 +988,46 @@ public class Http3ClientConnectionImplTest {
         assertThat(headersSent).containsKeys("x-test");
         assertThat(headersSent.get("x-test")).isEqualTo("testValue");
     }
+
+    @Test
+    public void sendExtendedConnectAndGetResponseShouldReturnNegotiatedProtocol() throws Exception {
+        // Given
+        Http3ClientConnection http3Connection = new Http3ClientConnectionBuilder()
+                .withEnableConnectProtocolSettings()
+                .withBidirectionalQuicStream(new ByteArrayInputStream(MOCK_HEADER))
+                .withResponseHeaders(List.of(
+                        Map.entry(":status", "200"),
+                        Map.entry("wt-protocol", "my-protocol")))
+                .build();
+        HttpRequest connectRequest = HttpRequest.newBuilder()
+                .uri(new URI("https://example.com/wt"))
+                .build();
+
+        // When
+        HttpResponse<HttpStream> result = http3Connection.sendExtendedConnectAndGetResponse(connectRequest, "webtransport", "https", Duration.ofMillis(100));
+
+        // Then
+        assertThat(result.headers().firstValue("wt-protocol")).contains("my-protocol");
+    }
+
+    @Test
+    public void sendExtendedConnectAndGetResponseShouldReturnStreamWhenNoProtocolNegotiated() throws Exception {
+        // Given
+        Http3ClientConnection http3Connection = new Http3ClientConnectionBuilder()
+                .withEnableConnectProtocolSettings()
+                .withBidirectionalQuicStream(new ByteArrayInputStream(MOCK_HEADER))
+                .build();
+        HttpRequest connectRequest = HttpRequest.newBuilder()
+                .uri(new URI("https://example.com/wt"))
+                .build();
+
+        // When
+        HttpResponse<HttpStream> result = http3Connection.sendExtendedConnectAndGetResponse(connectRequest, "webtransport", "https", Duration.ofMillis(100));
+
+        // Then
+        assertThat(result.body()).isNotNull();
+        assertThat(result.headers().firstValue("wt-protocol")).isEmpty();
+    }
     //endregion
 
     //region stream handlers

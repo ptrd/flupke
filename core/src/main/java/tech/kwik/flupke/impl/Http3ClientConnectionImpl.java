@@ -389,11 +389,16 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
                 ":authority", extractAuthority(request.uri()),
                 ":method", "CONNECT"));
 
-        return new HttpStreamImpl(createHttpStream(headersFrame));
+        return createHttpStreamWithHeaders(request, headersFrame).body();
     }
 
     @Override
     public HttpStream sendExtendedConnect(HttpRequest request, String protocol, String scheme, Duration settingsFrameTimeout) throws InterruptedException, HttpError, IOException {
+        return sendExtendedConnectAndGetResponse(request, protocol, scheme, settingsFrameTimeout).body();
+    }
+
+    @Override
+    public HttpResponse<HttpStream> sendExtendedConnectAndGetResponse(HttpRequest request, String protocol, String scheme, Duration settingsFrameTimeout) throws InterruptedException, HttpError, IOException {
         if (! settingsFrameReceived.await(settingsFrameTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
             throw new ProtocolException("No SETTINGS frame received in time.");
         }
@@ -414,7 +419,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
                 ":scheme", scheme,
                 ":path", extractPath(request.uri())));
 
-        return new HttpStreamImpl(createHttpStream(headersFrame));
+        return createHttpStreamWithHeaders(request, headersFrame);
     }
 
     private boolean isEnableConnectProtocol() {
@@ -434,7 +439,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         }
     }
 
-    private QuicStream createHttpStream(HeadersFrame headersFrame) throws IOException, HttpError {
+    private HttpResponse<HttpStream> createHttpStreamWithHeaders(HttpRequest request, HeadersFrame headersFrame) throws IOException, HttpError {
         QuicStream httpStream = quicConnection.createStream(true);
         httpStream.getOutputStream().write(headersFrame.toBytes(qpackEncoder));
 
@@ -457,7 +462,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
             }
             int statusCode = responseInfo.statusCode();
             if (statusCode >= 200 && statusCode < 300) {
-                return httpStream;
+                return new Http3Response<>(request, statusCode, responseInfo.headers(), new HttpStreamImpl(httpStream));
             }
             else {
                 throw new HttpError("CONNECT request failed", statusCode);
