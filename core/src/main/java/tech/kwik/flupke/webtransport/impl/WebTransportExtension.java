@@ -20,6 +20,8 @@ package tech.kwik.flupke.webtransport.impl;
 
 import tech.kwik.flupke.HttpStream;
 import tech.kwik.flupke.impl.CapsuleProtocolStreamImpl;
+import tech.kwik.flupke.impl.StructuredFields;
+import tech.kwik.flupke.impl.StructuredFieldsException;
 import tech.kwik.flupke.server.Http3ServerConnection;
 import tech.kwik.flupke.server.Http3ServerExtension;
 import tech.kwik.flupke.webtransport.Session;
@@ -33,7 +35,6 @@ import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class WebTransportExtension implements Http3ServerExtension {
 
@@ -69,18 +70,22 @@ public class WebTransportExtension implements Http3ServerExtension {
             Map<String, List<String>> responseHeaders = Map.of();
             String negotiatedProtocol = null;
             if (!applicationProtocols.isEmpty() && headers.firstValue("WT-Available-Protocols").isPresent()) {
-                Optional<String> match = headers.allValues("WT-Available-Protocols").stream()
-                        .flatMap(v -> Stream.of(v.split(",")))
-                        .map(String::trim)
-                        .map(p -> p.startsWith("\"") && p.endsWith("\"") ? p.substring(1, p.length() - 1) : p)
-                        .filter(applicationProtocols::contains)
-                        .findFirst();
-                if (match.isEmpty()) {
-                    statusCallback.accept(404, Map.of());
-                    return;
+                try {
+                    List<String> clientProtocols = StructuredFields.parseStringList(headers.allValues("WT-Available-Protocols"));
+                    Optional<String> match = clientProtocols.stream()
+                            .filter(applicationProtocols::contains)
+                            .findFirst();
+                    if (match.isEmpty()) {
+                        statusCallback.accept(404, Map.of());
+                        return;
+                    }
+                    negotiatedProtocol = match.get();
+                    responseHeaders = Map.of("WT-Protocol", List.of(StructuredFields.serializeString(negotiatedProtocol)));
                 }
-                negotiatedProtocol = match.get();
-                responseHeaders = Map.of("WT-Protocol", List.of("\"" + negotiatedProtocol + "\""));
+                catch (StructuredFieldsException e) {
+                    // https://www.rfc-editor.org/rfc/rfc9651#section-2.2
+                    // "When parsing fails, the entire field is ignored (see Section 4.2). "
+                }
             }
             sessionFactory.prepareServerSession();
             statusCallback.accept(200, responseHeaders);

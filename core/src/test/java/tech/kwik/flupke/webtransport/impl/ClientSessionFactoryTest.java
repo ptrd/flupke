@@ -37,8 +37,11 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URI;
+import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -75,7 +78,7 @@ class ClientSessionFactoryTest {
         Session session = factory.createSession(new URI("https://example.com:443/webtransport"));
 
         // Then
-        verify(http3connection).sendExtendedConnect(
+        verify(http3connection).sendExtendedConnectAndGetResponse(
                 any(HttpRequest.class),
                 argThat(s -> s.equals("webtransport")),
                 argThat(p -> p.equals("https")),
@@ -87,7 +90,7 @@ class ClientSessionFactoryTest {
     void whenExtendedConnectFailsWith404AnHttpErrorIsThrown() throws Exception {
         // Given
         Http3ClientConnection http3connection = createMockHttp3ConnectionForExtendedConnect(client, 10);
-        when(http3connection.sendExtendedConnect(any(), any(), any(), any())).thenThrow(new HttpError("", 404));
+        when(http3connection.sendExtendedConnectAndGetResponse(any(), any(), any(), any())).thenThrow(new HttpError("", 404));
         factory = new ClientSessionFactoryImpl(URI.create("https://example.com:443/"), client, null);
 
         assertThatThrownBy(() ->
@@ -274,7 +277,10 @@ class ClientSessionFactoryTest {
         when(httpStream.getStreamId()).thenReturn(4L);  // Control stream stream ID
         when(httpStream.getInputStream()).thenReturn(new WriteableByteArrayInputStream());  // Reading from this stream will block
         when(httpStream.getOutputStream()).thenReturn(mock(OutputStream.class));
-        when(http3connection.sendExtendedConnect(any(), any(), any(), any())).thenReturn(httpStream);
+        HttpResponse<HttpStream> connectResponse = mock(HttpResponse.class);
+        when(connectResponse.body()).thenReturn(httpStream);
+        when(connectResponse.headers()).thenReturn(HttpHeaders.of(Collections.emptyMap(), (k, v) -> true));
+        when(http3connection.sendExtendedConnectAndGetResponse(any(), any(), any(), any())).thenReturn(connectResponse);
         when(http3connection.getPeerSettingsParameter(SETTINGS_WT_MAX_SESSIONS_DRAFT_07_12)).thenReturn(Optional.of(maxWebTransportSessions));
         return http3connection;
     }
@@ -288,13 +294,16 @@ class ClientSessionFactoryTest {
         when(httpStream.getInputStream()).thenReturn(new WriteableByteArrayInputStream());  // Reading from this stream will block
         when(httpStream.getOutputStream()).thenReturn(mock(OutputStream.class));
 
-        when(http3connection.sendExtendedConnect(any(), any(), any(), any())).thenReturn(httpStream);
+        HttpHeaders emptyHeaders = HttpHeaders.of(Collections.emptyMap(), (k, v) -> true);
         when(http3connection.getPeerSettingsParameter(SETTINGS_WT_MAX_SESSIONS_DRAFT_07_12)).thenReturn(Optional.of(10L));
 
         // Simulate the server performing the action asynchronously before returning the response to the extended CONNECT request.
-        when(http3connection.sendExtendedConnect(any(), any(), any(), any())).thenAnswer(invocation -> {
+        when(http3connection.sendExtendedConnectAndGetResponse(any(), any(), any(), any())).thenAnswer(invocation -> {
             action.accept(http3connection);
-            return httpStream;
+            HttpResponse<HttpStream> connectResponse = mock(HttpResponse.class);
+            when(connectResponse.body()).thenReturn(httpStream);
+            when(connectResponse.headers()).thenReturn(emptyHeaders);
+            return connectResponse;
         });
         return http3connection;
     }
