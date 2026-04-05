@@ -46,12 +46,12 @@ public class StructuredFields {
     /**
      * Parses an sf-string item (RFC 9651 Section 4.2.5).
      *
-     * @throws IllegalArgumentException if the input is not a valid sf-string
+     * @throws StructuredFieldsException if the input is not a valid sf-string
      */
-    public static String parseString(String input) {
+    public static String parseString(String input) throws StructuredFieldsException {
         String s = input.strip();
         if (s.isEmpty() || s.charAt(0) != '"') {
-            throw new IllegalArgumentException("Not a valid sf-string: " + input);
+            throw new StructuredFieldsException("Not a valid sf-string: " + input);
         }
         StringBuilder sb = new StringBuilder();
         int i = 1;
@@ -60,11 +60,11 @@ public class StructuredFields {
             if (c == '\\') {
                 i++;
                 if (i >= s.length()) {
-                    throw new IllegalArgumentException("Unterminated escape sequence in sf-string");
+                    throw new StructuredFieldsException("Unterminated escape sequence in sf-string");
                 }
                 char escaped = s.charAt(i);
                 if (escaped != '"' && escaped != '\\') {
-                    throw new IllegalArgumentException("Invalid escape sequence in sf-string: \\" + escaped);
+                    throw new StructuredFieldsException("Invalid escape sequence in sf-string: \\" + escaped);
                 }
                 sb.append(escaped);
             }
@@ -76,7 +76,7 @@ public class StructuredFields {
             }
             i++;
         }
-        throw new IllegalArgumentException("Unterminated sf-string");
+        throw new StructuredFieldsException("Unterminated sf-string");
     }
 
     /**
@@ -97,9 +97,9 @@ public class StructuredFields {
      * Parses an sf-list of sf-strings from one or more header field values (RFC 9651 Section 4.2.1).
      * Multiple header field lines are treated as a comma-separated list per RFC 9110 Section 5.2.
      *
-     * @throws IllegalArgumentException if the input cannot be parsed as an sf-list of sf-strings
+     * @throws StructuredFieldsException if the input cannot be parsed as an sf-list of sf-strings
      */
-    public static List<String> parseStringList(List<String> headerValues) {
+    public static List<String> parseStringList(List<String> headerValues) throws StructuredFieldsException {
         String combined = String.join(", ", headerValues);
         List<String> result = new ArrayList<>();
         int i = 0;
@@ -112,7 +112,7 @@ public class StructuredFields {
                 break;
             }
             if (combined.charAt(i) != '"') {
-                throw new IllegalArgumentException("Expected sf-string at position " + i + " in: " + combined);
+                throw new StructuredFieldsException("Expected sf-string at position " + i + " in: " + combined);
             }
             // parse sf-string
             StringBuilder sb = new StringBuilder();
@@ -122,11 +122,11 @@ public class StructuredFields {
                 if (c == '\\') {
                     i++;
                     if (i >= combined.length()) {
-                        throw new IllegalArgumentException("Unterminated escape sequence in sf-string");
+                        throw new StructuredFieldsException("Unterminated escape sequence in sf-string");
                     }
                     char escaped = combined.charAt(i);
                     if (escaped != '"' && escaped != '\\') {
-                        throw new IllegalArgumentException("Invalid escape sequence in sf-string: \\" + escaped);
+                        throw new StructuredFieldsException("Invalid escape sequence in sf-string: \\" + escaped);
                     }
                     sb.append(escaped);
                 }
@@ -139,7 +139,7 @@ public class StructuredFields {
                 i++;
             }
             if (i >= combined.length() || combined.charAt(i) != '"') {
-                throw new IllegalArgumentException("Unterminated sf-string in: " + combined);
+                throw new StructuredFieldsException("Unterminated sf-string in: " + combined);
             }
             result.add(sb.toString());
             i++; // skip closing "
@@ -150,7 +150,7 @@ public class StructuredFields {
             // expect comma separator or end
             if (i < combined.length()) {
                 if (combined.charAt(i) != ',') {
-                    throw new IllegalArgumentException("Expected ',' at position " + i + " in: " + combined);
+                    throw new StructuredFieldsException("Expected ',' at position " + i + " in: " + combined);
                 }
                 i++; // skip comma
             }

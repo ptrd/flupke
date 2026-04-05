@@ -25,6 +25,7 @@ import tech.kwik.flupke.HttpStream;
 import tech.kwik.flupke.core.CapsuleProtocolStream;
 import tech.kwik.flupke.impl.CapsuleProtocolStreamImpl;
 import tech.kwik.flupke.impl.StructuredFields;
+import tech.kwik.flupke.impl.StructuredFieldsException;
 import tech.kwik.flupke.webtransport.ClientSessionFactory;
 import tech.kwik.flupke.webtransport.Session;
 import tech.kwik.flupke.webtransport.WebTransportStream;
@@ -169,9 +170,18 @@ public class ClientSessionFactoryImpl extends AbstractSessionFactoryImpl impleme
             HttpResponse<HttpStream> connectResponse = httpClientConnection.sendExtendedConnectAndGetResponse(request, protocol, schema, Duration.ofSeconds(5));
             // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-15.html#section-3.3
             // "If the server receives such a header, it MAY include a WT-Protocol field in a successful (2xx) response."
-            Optional<String> negotiatedProtocol = connectResponse.headers().firstValue("wt-protocol").map(StructuredFields::parseString);
+            String negotiatedProtocol = null;
+            Optional<String> wtProtocolHeader = connectResponse.headers().firstValue("wt-protocol");
+            if (wtProtocolHeader.isPresent()) {
+                try {
+                    negotiatedProtocol = StructuredFields.parseString(wtProtocolHeader.get());
+                }
+                catch (StructuredFieldsException e) {
+                    // Malformed WT-Protocol header; treat as if no protocol was negotiated.
+                }
+            }
             CapsuleProtocolStream connectStream = new CapsuleProtocolStreamImpl(connectResponse.body());
-            WebTransportContext context = new WebTransportContext(request.uri(), negotiatedProtocol.orElse(null));
+            WebTransportContext context = new WebTransportContext(request.uri(), negotiatedProtocol);
             SessionImpl session = new SessionImpl(httpClientConnection, context, connectStream, unidirectionalStreamHandler, bidirectionalStreamHandler, this);
             registerSession(session);
             return session;

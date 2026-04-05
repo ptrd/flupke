@@ -51,58 +51,58 @@ class StructuredFieldsTest {
 
     // region parseString
     @Test
-    void parseStringReturnsUnquotedValue() {
+    void parseStringReturnsUnquotedValue() throws Exception {
         assertThat(StructuredFields.parseString("\"hello\"")).isEqualTo("hello");
     }
 
     @Test
-    void parseStringHandlesEscapedDoubleQuote() {
+    void parseStringHandlesEscapedDoubleQuote() throws Exception {
         assertThat(StructuredFields.parseString("\"say \\\"hi\\\"\"")).isEqualTo("say \"hi\"");
     }
 
     @Test
-    void parseStringHandlesEscapedBackslash() {
+    void parseStringHandlesEscapedBackslash() throws Exception {
         assertThat(StructuredFields.parseString("\"a\\\\b\"")).isEqualTo("a\\b");
     }
 
     @Test
-    void parseStringStripsLeadingAndTrailingWhitespace() {
+    void parseStringStripsLeadingAndTrailingWhitespace() throws Exception {
         assertThat(StructuredFields.parseString("  \"hello\"  ")).isEqualTo("hello");
     }
 
     @Test
-    void parseEmptyQuotedStringReturnsEmptyString() {
+    void parseEmptyQuotedStringReturnsEmptyString() throws Exception {
         assertThat(StructuredFields.parseString("\"\"")).isEqualTo("");
     }
 
     @Test
     void parseStringThrowsWhenNotStartingWithQuote() {
         assertThatThrownBy(() -> StructuredFields.parseString("hello"))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(StructuredFieldsException.class);
     }
 
     @Test
     void parseStringThrowsWhenUnterminatedString() {
         assertThatThrownBy(() -> StructuredFields.parseString("\"hello"))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(StructuredFieldsException.class);
     }
 
     @Test
     void parseStringThrowsOnInvalidEscapeSequence() {
         assertThatThrownBy(() -> StructuredFields.parseString("\"\\n\""))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(StructuredFieldsException.class);
     }
 
     @Test
     void parseStringThrowsOnUnterminatedEscapeSequence() {
         assertThatThrownBy(() -> StructuredFields.parseString("\"\\"))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(StructuredFieldsException.class);
     }
     // endregion
 
     // region serializeString / parseString roundtrip
     @Test
-    void serializeAndParseRoundtrip() {
+    void serializeAndParseRoundtrip() throws Exception {
         String original = "proto/1.0 with \"quotes\" and \\backslash\\";
         assertThat(StructuredFields.parseString(StructuredFields.serializeString(original))).isEqualTo(original);
     }
@@ -129,50 +129,50 @@ class StructuredFieldsTest {
 
     // region parseStringList
     @Test
-    void parseStringListReturnsParsedItems() {
+    void parseStringListReturnsParsedItems() throws Exception {
         assertThat(StructuredFields.parseStringList(List.of("\"proto-a\", \"proto-b\"")))
                 .containsExactly("proto-a", "proto-b");
     }
 
     @Test
-    void parseStringListHandlesMultipleHeaderLines() {
+    void parseStringListHandlesMultipleHeaderLines() throws Exception {
         assertThat(StructuredFields.parseStringList(List.of("\"proto-a\"", "\"proto-b\"")))
                 .containsExactly("proto-a", "proto-b");
     }
 
     @Test
-    void parseStringListHandlesWhitespaceAroundItems() {
+    void parseStringListHandlesWhitespaceAroundItems() throws Exception {
         assertThat(StructuredFields.parseStringList(List.of("  \"proto-a\"  ,  \"proto-b\"  ")))
                 .containsExactly("proto-a", "proto-b");
     }
 
     @Test
-    void parseStringListReturnsSingleItem() {
+    void parseStringListReturnsSingleItem() throws Exception {
         assertThat(StructuredFields.parseStringList(List.of("\"only\"")))
                 .containsExactly("only");
     }
 
     @Test
-    void parseEmptyStringListReturnsEmptyList() {
+    void parseEmptyStringListReturnsEmptyList() throws Exception {
         assertThat(StructuredFields.parseStringList(List.of())).isEmpty();
     }
 
     @Test
     void parseStringListThrowsWhenItemNotQuoted() {
         assertThatThrownBy(() -> StructuredFields.parseStringList(List.of("proto-a")))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(StructuredFieldsException.class);
     }
 
     @Test
     void parseStringListThrowsWhenUnterminatedString() {
         assertThatThrownBy(() -> StructuredFields.parseStringList(List.of("\"proto-a")))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(StructuredFieldsException.class);
     }
     // endregion
 
     // region serializeStringList / parseStringList roundtrip
     @Test
-    void serializeAndParseListRoundtrip() {
+    void serializeAndParseListRoundtrip() throws Exception {
         List<String> original = List.of("proto-a", "proto/b", "proto with \"quotes\"");
         assertThat(StructuredFields.parseStringList(List.of(StructuredFields.serializeStringList(original))))
                 .isEqualTo(original);
