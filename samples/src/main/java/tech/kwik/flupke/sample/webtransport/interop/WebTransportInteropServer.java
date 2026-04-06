@@ -30,6 +30,7 @@ import tech.kwik.flupke.webtransport.WebTransportStream;
 import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.KeyStore;
 import java.util.Arrays;
 import java.util.List;
@@ -238,12 +239,15 @@ public class WebTransportInteropServer {
         System.out.println("Starting handler for WebTransport session: " + session.getSessionId());
         File sessionServingDir = determineSessionServingDir(session);
 
-        try {
-            Files.writeString(java.nio.file.Path.of("/downloads/negotiated_protocol.txt"), session.getNegotiatedProtocol().get() + "\n");
-        }
-        catch (java.io.IOException e) {
-            System.err.println("Failed to write negotiated protocol to file: " + e.getMessage());
-        }
+        session.getNegotiatedProtocol().ifPresent(protocol -> {
+            System.out.println("Negotiated protocol for session " + session.getSessionId() + ": " + protocol);
+            try {
+                Files.writeString(Path.of("/downloads/negotiated_protocol.txt"), protocol + "\n");
+            }
+            catch (java.io.IOException e) {
+                System.err.println("Failed to write negotiated protocol to file: " + e.getMessage());
+            }
+        });
 
         session.registerSessionTerminatedEventListener((errorCode, message) -> {
             System.out.println("Session " + session.getSessionId() + " closed with error code " + errorCode);
