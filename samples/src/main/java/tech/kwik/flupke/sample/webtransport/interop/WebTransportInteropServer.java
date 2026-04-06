@@ -53,6 +53,7 @@ public class WebTransportInteropServer {
     private final String keyPassword;
     private final int port;
     private final File wwwDir;
+    private List<File> endpoints;
 
     public WebTransportInteropServer(KeyStore keyStore, String certificateAlias, String keyPassword, int port, File wwwDir) {
         this.keyStore = keyStore;
@@ -128,12 +129,11 @@ public class WebTransportInteropServer {
                 .withLogger(log)
                 .build();
 
-        String webTransportPath = determineWebTransportEndpoints();
-        String extendedPath = webTransportPath + "(/.*)?";
+        determineWebTransportEndpoints();
         List<String> supportedApplicationProtocols = determineProtocols();
 
         HttpRequestHandler httpRequestHandler = (request, response) -> {
-            if (request.path().startsWith(webTransportPath)) {
+            if (endpoints.stream().anyMatch(e -> request.path().startsWith("/" + e.getName()))) {
                 if (!request.method().equals("CONNECT")) {
                     System.out.println("Received non-CONNECT request on WebTransport path: " + request.method() + " " + request.path());
                     response.setStatus(405);  // Method Not Allowed
@@ -156,7 +156,6 @@ public class WebTransportInteropServer {
 
         WebTransportHttp3ApplicationProtocolFactory webTransportProtocolFactory = new WebTransportHttp3ApplicationProtocolFactory(httpRequestHandler);
         webTransportProtocolFactory.setMaxUnidirectionalStreamReceiverBufferSize(1_000_000);
-        System.out.println("Starting WebTransport server on path " + extendedPath);
         webTransportProtocolFactory.setMaxStreamsQueued(10);
         Consumer<Session> webTransportHandler;
         if ("transfer-bidirectional-send".equals(testcase)) {
@@ -171,7 +170,15 @@ public class WebTransportInteropServer {
         else {
             webTransportHandler = this::startWebtransport;
         }
-        webTransportProtocolFactory.registerWebTransportServerByRegex(extendedPath, supportedApplicationProtocols, withExceptionLogging(webTransportHandler));
+        endpoints.stream()
+                .map(File::getName)
+                .map(name -> "/" + name + "(/.*)?")  // match the endpoint path and any subpaths, e.g. /webtransport1 and /webtransport1/foo/bar
+                .forEach(extendedPath -> {
+                    System.out.println("Starting WebTransport handler on path " + extendedPath);
+                    webTransportProtocolFactory.registerWebTransportServerByRegex(extendedPath,
+                            supportedApplicationProtocols, withExceptionLogging(webTransportHandler)); }
+                );
+
         serverConnector.registerApplicationProtocol(HTTP3_PROTOCOL_ID, webTransportProtocolFactory);
         serverConnector.start();
     }
@@ -182,13 +189,16 @@ public class WebTransportInteropServer {
         return protocols;
     }
 
-    private String determineWebTransportEndpoints() {
-        // The server MAY determine expected WebTransport endpoints by scanning the /www/ directory for top-level subdirectories at startup. Each such subdirectory name (e.g., webtransport1 in /www/webtransport1/) corresponds to an endpoint path (e.g., /webtransport1), including empty subdirectories for session-only tests like handshake. When a session is established on a path with a matching subdirectory, the server MUST serve requested files from the corresponding subpaths within /www/. Alternatively, implementations MAY accept sessions on any path without scanning or restricting, serving files relative to the session path if a matching structure exists in /www/.
-        // Scan /www/ for top-level subdirectories and log them as expected WebTransport endpoints.
-        File[] subdirs = wwwDir.listFiles(File::isDirectory);
-        if (subdirs != null) {
-            System.out.println("Expected WebTransport endpoints:");
-            for (File subdir : subdirs) {
+    private void determineWebTransportEndpoints() {
+        // https://github.com/quic-interop/quic-interop-runner/blob/master/webtransport.md
+        // "The server MAY determine expected WebTransport endpoints by scanning the /www/ directory for top-level
+        //  subdirectories at startup. Each such subdirectory name (e.g., webtransport1 in /www/webtransport1/)
+        //  corresponds to an endpoint path (e.g., /webtransport1), including empty subdirectories for session-only
+        //  tests like handshake."
+        endpoints = Arrays.asList(wwwDir.listFiles(File::isDirectory));
+        if (endpoints != null) {
+            System.out.println("Using WebTransport endpoints:");
+            for (File subdir : endpoints) {
                 // if subdir is empty, print it as well, as it can be used for session-only tests like handshake
                 if (subdir.listFiles() == null || subdir.listFiles().length == 0) {
                     System.out.println(" - " + subdir.getName() + " (empty, for session-only tests)");
@@ -198,25 +208,35 @@ public class WebTransportInteropServer {
                 }
             }
         }
-        return subdirs != null && subdirs.length > 0 ? "/" + subdirs[0].getName() : "/webtransport";
     }
 
-    private void startWebtransport(Session session) {
-        System.out.println("Starting handler for WebTransport session: " + session.getSessionId());
+    File determineSessionServingDir(Session session) {
         File sessionDir = new File(wwwDir, session.getPath());
         if (sessionDir.exists() && sessionDir.isDirectory() && sessionDir.canRead()) {
             System.out.println("Serving files for session " + session.getSessionId() + " from directory " + sessionDir.getPath());
+            return sessionDir;
         }
         else {
-            System.out.println("No directory found for session " + session.getSessionId() + ", not serving any files");
-            System.out.println("contents of www dir:");
-            File[] subdirs = wwwDir.listFiles(File::isDirectory);
-            if (subdirs != null) {
-                for (File subdir : subdirs) {
-                    System.out.println(" - " + subdir.getName());
+            // Non-conformant with the spec; let's check if the path has a base dir that matches an endpoint.
+            String[] pathElements = session.getPath().split("/");
+            if (pathElements.length > 2) {
+                // pathElements[0] is empty (path starts with '/'), pathElements[1] is the first segment
+                String firstElement = pathElements[1];
+                File endpointDir = new File(wwwDir, firstElement);
+                if (endpointDir.exists() && endpointDir.isDirectory() && endpointDir.canRead()
+                        && endpoints.stream().anyMatch(e -> e.getName().equals(firstElement))) {
+                    System.out.println("Path '" + session.getPath() + "' has multiple elements; using endpoint dir " + endpointDir.getPath() + " for session " + session.getSessionId());
+                    return endpointDir;
                 }
             }
+            System.out.println("No directory found for session " + session.getSessionId() + ", not serving any files");
+            return null;
         }
+    }
+    
+    private void startWebtransport(Session session) {
+        System.out.println("Starting handler for WebTransport session: " + session.getSessionId());
+        File sessionServingDir = determineSessionServingDir(session);
 
         try {
             Files.writeString(java.nio.file.Path.of("/downloads/negotiated_protocol.txt"), session.getNegotiatedProtocol().get() + "\n");
@@ -235,7 +255,7 @@ public class WebTransportInteropServer {
                 System.out.println("Received request " + request + " on stream " + stream.getStreamId() + " for session " + session.getSessionId() + " on thread " + Thread.currentThread().getName());
 
                 if (request.startsWith("GET ")) {
-                    copyFile(session, stream.getStreamId(), stream.getOutputStream(), request.substring(4).trim());
+                    copyFile(sessionServingDir, stream.getStreamId(), stream.getOutputStream(), request.substring(4).trim());
                 }
             }
             catch (IOException e) {
@@ -253,7 +273,7 @@ public class WebTransportInteropServer {
                     WebTransportStream unidirectionalStream = session.createUnidirectionalStream();
                     OutputStream outputStream = unidirectionalStream.getOutputStream();
                     outputStream.write(("PUSH " + fileName + "\n").getBytes());
-                    copyFile(session, stream.getStreamId(), outputStream, fileName);
+                    copyFile(sessionServingDir, stream.getStreamId(), outputStream, fileName);
                 }
             }
             catch (IOException e) {
@@ -266,7 +286,7 @@ public class WebTransportInteropServer {
             String message = new String(data);
             if (message.startsWith("GET ")) {
                 String fileName = message.substring(4).trim();
-                File requestedFile = new File(new File(wwwDir, session.getPath()), fileName);
+                File requestedFile = new File(sessionServingDir, fileName);
                 if (requestedFile.exists() && requestedFile.isFile() && requestedFile.canRead()) {
                     try {
                         ByteBuffer datagramBuffer = ByteBuffer.allocate(1500);
@@ -526,6 +546,18 @@ public class WebTransportInteropServer {
                 e.printStackTrace();
             }
         };
+    }
+
+    private void copyFile(File sessionServingDir, long streamId, OutputStream outputStream, String fileName) throws IOException {
+        File requestedFile = new File(sessionServingDir, fileName);
+        if (requestedFile.exists() && requestedFile.isFile() && requestedFile.canRead()) {
+            Files.copy(requestedFile.toPath(), outputStream);
+            outputStream.close();
+            System.out.println("Served file " + requestedFile.getPath() + " for request " + fileName + " on stream " + streamId + ".");
+        }
+        else {
+            System.out.println("Requested file not found: " + requestedFile.getPath());
+        }
     }
 
     private void copyFile(Session session, long streamId, OutputStream outputStream, String fileName) throws IOException {
