@@ -23,6 +23,7 @@ import tech.kwik.core.log.Logger;
 import tech.kwik.flupke.Http3Client;
 import tech.kwik.flupke.webtransport.ClientSessionFactory;
 import tech.kwik.flupke.webtransport.Session;
+import tech.kwik.flupke.webtransport.WebTransportStream;
 
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
@@ -45,7 +46,7 @@ import java.util.stream.Collectors;
 
 public class WebTransportInteropClient extends WebTransportInterop {
 
-    public static List TESTCASES = List.of("handshake", "transfer-datagram-receive", "transfer-unidirectional-receive");
+    public static List TESTCASES = List.of("handshake", "transfer-datagram-receive", "transfer-unidirectional-receive", "transfer-bidirectional-receive");
 
     private File outputDir;
     private Logger logger;
@@ -79,6 +80,9 @@ public class WebTransportInteropClient extends WebTransportInterop {
         }
         else if (testCase.equals("transfer-unidirectional-receive")) {
             testTransferUnidirectionalReceive(webtransportSession, downloadUrls);
+        }
+        else if (testCase.equals("transfer-bidirectional-receive")) {
+            testTransferBidirectionalReceive(webtransportSession, downloadUrls);
         }
     }
 
@@ -221,6 +225,51 @@ public class WebTransportInteropClient extends WebTransportInterop {
                 receivePush(stream.getInputStream(), String.valueOf(stream.getStreamId()), outputDir, allReceived, session));
 
         fileNames.forEach(file -> sendUnidirectionalGet(session, file));
+
+        boolean completed = allReceived.await(30, TimeUnit.SECONDS);
+        if (!completed) {
+            System.out.println("Timed out waiting for streams, received "
+                    + (fileNames.size() - allReceived.getCount()) + " of " + fileNames.size());
+        }
+    }
+
+    private void testTransferBidirectionalReceive(Session session, List<URL> downloadUrls) throws InterruptedException, IOException {
+        List<String> fileNames = downloadUrls.stream()
+                .map(url -> Paths.get(url.getPath()).getFileName().toString())
+                .collect(Collectors.toList());
+
+        CountDownLatch allReceived = new CountDownLatch(fileNames.size());
+
+        for (String file : fileNames) {
+            WebTransportStream stream = session.createBidirectionalStream();
+            stream.getOutputStream().write(("GET " + file).getBytes());
+            stream.getOutputStream().close();
+            System.out.println("Sent GET " + file + " on bidirectional stream " + stream.getStreamId() + " for session " + session.getSessionId());
+
+            new Thread(() -> {
+                try {
+                    byte[] data = stream.getInputStream().readAllBytes();
+                    File downloadFile = new File(outputDir, file);
+                    Files.write(downloadFile.toPath(), data);
+                    System.out.println("Downloaded " + file + " to " + downloadFile.getPath());
+                }
+                catch (IOException e) {
+                    System.err.println("Error downloading " + file + ": " + e.getMessage());
+                }
+                finally {
+                    allReceived.countDown();
+                    if (allReceived.getCount() == 0) {
+                        System.out.println("All expected files received, closing session");
+                        try {
+                            session.close();
+                        }
+                        catch (IOException e) {
+                            System.err.println("Error closing session: " + e.getMessage());
+                        }
+                    }
+                }
+            }).start();
+        }
 
         boolean completed = allReceived.await(30, TimeUnit.SECONDS);
         if (!completed) {
