@@ -27,10 +27,8 @@ import tech.kwik.flupke.webtransport.Session;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.net.URI;
 import java.net.URL;
 import java.nio.file.Files;
@@ -45,9 +43,9 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-public class WebTransportInteropClient {
+public class WebTransportInteropClient extends WebTransportInterop {
 
-    public static List TESTCASES = List.of("handshake", "transfer-datagram-receive");
+    public static List TESTCASES = List.of("handshake", "transfer-datagram-receive", "transfer-unidirectional-receive");
 
     private File outputDir;
     private Logger logger;
@@ -78,6 +76,9 @@ public class WebTransportInteropClient {
 
         if (testCase.equals("transfer-datagram-receive")) {
             testTransferDatagramReceive(webtransportSession, downloadUrls);
+        }
+        else if (testCase.equals("transfer-unidirectional-receive")) {
+            testTransferUnidirectionalReceive(webtransportSession, downloadUrls);
         }
     }
 
@@ -199,7 +200,7 @@ public class WebTransportInteropClient {
 
         CountDownLatch allReceived = new CountDownLatch(fileNames.size());
         session.setDatagramHandler(datagram ->
-                receivePush(new ByteArrayInputStream(datagram), outputDir, allReceived, session));
+                receivePush(new ByteArrayInputStream(datagram), "datagram", outputDir, allReceived, session));
 
         fileNames.forEach(file -> sendDatagramGet(session, file));
 
@@ -210,63 +211,21 @@ public class WebTransportInteropClient {
         }
     }
 
-    private void sendDatagramGet(Session session, String file) {
-        try {
-            byte[] data = ("GET " + file).getBytes();
-            session.sendDatagram(data);
-            System.out.println("Sent datagram GET " + file);
-        }
-        catch (IOException e) {
-            System.err.println("Error sending GET " + file + ": " + e.getMessage());
-        }
-    }
+    private void testTransferUnidirectionalReceive(Session session, List<URL> downloadUrls) throws InterruptedException, IOException {
+        List<String> fileNames = downloadUrls.stream()
+                .map(url -> Paths.get(url.getPath()).getFileName().toString())
+                .collect(Collectors.toList());
 
-    private void receivePush(ByteArrayInputStream inputStream, File downloadsDir, CountDownLatch allReceived, Session session) {
-        try {
-            ByteArrayOutputStream headerBytes = new ByteArrayOutputStream();
-            int b;
-            while ((b = inputStream.read()) != -1 && b != '\n') {
-                headerBytes.write(b);
-            }
-            if (b == -1) {
-                System.err.println("Received malformed PUSH datagram: no newline found");
-                return;
-            }
-            String header = headerBytes.toString();
-            if (!header.startsWith("PUSH ")) {
-                System.err.println("Received unexpected datagram header: " + header);
-                return;
-            }
-            String fileName = header.substring(5).trim();
-            System.out.println("Received PUSH " + fileName);
+        CountDownLatch allReceived = new CountDownLatch(fileNames.size());
+        session.setUnidirectionalStreamReceiveHandler(stream ->
+                receivePush(stream.getInputStream(), String.valueOf(stream.getStreamId()), outputDir, allReceived, session));
 
-            File downloadFile = new File(downloadsDir, fileName);
-            try (OutputStream outputStream = Files.newOutputStream(downloadFile.toPath())) {
-                byte[] buffer = new byte[8192];
-                int bytesRead;
-                while ((bytesRead = inputStream.read(buffer)) != -1) {
-                    outputStream.write(buffer, 0, bytesRead);
-                }
-            }
-            System.out.println("Written to " + downloadFile.getPath());
-        }
-        catch (IOException e) {
-            System.err.println("Error receiving PUSH datagram: " + e.getMessage());
-        }
-        finally {
-            allReceived.countDown();
-            if (allReceived.getCount() == 0) {
-                System.out.println("All expected datagrams received, closing session");
-                try {
-                    session.close();
-                }
-                catch (IOException e) {
-                    System.err.println("Error closing session: " + e.getMessage());
-                }
-            }
-            else {
-                System.out.println("Waiting for " + allReceived.getCount() + " more datagrams");
-            }
+        fileNames.forEach(file -> sendUnidirectionalGet(session, file));
+
+        boolean completed = allReceived.await(30, TimeUnit.SECONDS);
+        if (!completed) {
+            System.out.println("Timed out waiting for streams, received "
+                    + (fileNames.size() - allReceived.getCount()) + " of " + fileNames.size());
         }
     }
 
