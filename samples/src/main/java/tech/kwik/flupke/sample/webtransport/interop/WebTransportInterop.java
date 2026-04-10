@@ -21,12 +21,14 @@ package tech.kwik.flupke.sample.webtransport.interop;
 import tech.kwik.flupke.webtransport.Session;
 import tech.kwik.flupke.webtransport.WebTransportStream;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
 abstract class WebTransportInterop {
@@ -51,6 +53,29 @@ abstract class WebTransportInterop {
         catch (IOException e) {
             System.err.println("Error sending GET " + file + ": " + e.getMessage());
         }
+    }
+
+    protected void setupUnidirectionalReceive(Session session, List<String> fileNames, File downloadsDir, CountDownLatch latch) {
+        session.setUnidirectionalStreamReceiveHandler(stream ->
+                receivePush(stream.getInputStream(), String.valueOf(stream.getStreamId()), downloadsDir, latch, session));
+        fileNames.forEach(file -> sendUnidirectionalGet(session, file));
+    }
+
+    protected void setupDatagramReceive(Session session, List<String> fileNames, File downloadsDir, CountDownLatch latch) {
+        session.setDatagramHandler(datagram ->
+                receivePush(new ByteArrayInputStream(datagram), "datagram", downloadsDir, latch, session));
+        fileNames.forEach(file -> sendDatagramGet(session, file));
+    }
+
+    protected void downloadFileBidirectional(Session session, String file, File downloadsDir) throws IOException {
+        WebTransportStream stream = session.createBidirectionalStream();
+        stream.getOutputStream().write(("GET " + file).getBytes());
+        stream.getOutputStream().close();
+        System.out.println("Sent GET " + file + " on bidirectional stream " + stream.getStreamId() + " for session " + session.getSessionId());
+        byte[] data = stream.getInputStream().readAllBytes();
+        File downloadFile = new File(downloadsDir, file);
+        Files.write(downloadFile.toPath(), data);
+        System.out.println("Downloaded " + file + " to " + downloadFile.getPath());
     }
 
     protected void receivePush(InputStream inputStream, String streamId, File downloadsDir, CountDownLatch allReceived, Session session) {

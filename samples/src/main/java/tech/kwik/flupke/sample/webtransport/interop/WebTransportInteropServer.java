@@ -27,7 +27,10 @@ import tech.kwik.flupke.webtransport.Session;
 import tech.kwik.flupke.webtransport.WebTransportHttp3ApplicationProtocolFactory;
 import tech.kwik.flupke.webtransport.WebTransportStream;
 
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -369,11 +372,8 @@ public class WebTransportInteropServer extends WebTransportInterop {
         List<String> matchingFiles = extractMatchingFiles(requestsEnvVar, sessionPath);
 
         CountDownLatch allReceived = new CountDownLatch(matchingFiles.size());
-        session.setUnidirectionalStreamReceiveHandler(stream -> receivePush(stream.getInputStream(), String.valueOf(stream.getStreamId()), downloadsDir, allReceived, session));
-
         session.open();
-
-        matchingFiles.forEach(file -> sendUnidirectionalGet(session, file));
+        setupUnidirectionalReceive(session, matchingFiles, downloadsDir, allReceived);
     }
 
     private void startTransferDatagramSend(Session session) {
@@ -395,11 +395,8 @@ public class WebTransportInteropServer extends WebTransportInterop {
         List<String> matchingFiles = extractMatchingFiles(requestsEnvVar, sessionPath);
 
         CountDownLatch allReceived = new CountDownLatch(matchingFiles.size());
-        session.setDatagramHandler(datagram -> receivePush(new ByteArrayInputStream(datagram), "datagram", downloadsDir, allReceived, session));
-
         session.open();
-
-        matchingFiles.forEach(file -> sendDatagramGet(session, file));
+        setupDatagramReceive(session, matchingFiles, downloadsDir, allReceived);
     }
 
     private File resolveDownloadsDir(String sessionPath) {
@@ -429,14 +426,7 @@ public class WebTransportInteropServer extends WebTransportInterop {
 
     private void downloadFile(Session session, String file, File downloadsDir) {
         try {
-            WebTransportStream stream = session.createBidirectionalStream();
-            stream.getOutputStream().write(("GET " + file).getBytes());
-            stream.getOutputStream().close();
-            System.out.println("Sent GET " + file + " on stream " + stream.getStreamId() + " for session " + session.getSessionId() + " on thread " + Thread.currentThread().getName());
-            byte[] data = stream.getInputStream().readAllBytes();
-            File downloadFile = new File(downloadsDir, file);
-            Files.write(downloadFile.toPath(), data);
-            System.out.println("Downloaded " + file + " to " + downloadFile.getPath());
+            downloadFileBidirectional(session, file, downloadsDir);
         }
         catch (IOException e) {
             System.err.println("Error downloading " + file + ": " + e.getMessage());

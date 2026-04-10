@@ -23,11 +23,9 @@ import tech.kwik.core.log.Logger;
 import tech.kwik.flupke.Http3Client;
 import tech.kwik.flupke.webtransport.ClientSessionFactory;
 import tech.kwik.flupke.webtransport.Session;
-import tech.kwik.flupke.webtransport.WebTransportStream;
 
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
-import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
@@ -197,16 +195,13 @@ public class WebTransportInteropClient extends WebTransportInterop {
         }
     }
 
-    private void testTransferDatagramReceive(Session session, List<URL> downloadUrls) throws InterruptedException, IOException {
+    private void testTransferDatagramReceive(Session session, List<URL> downloadUrls) throws InterruptedException {
         List<String> fileNames = downloadUrls.stream()
                 .map(url -> Paths.get(url.getPath()).getFileName().toString())
                 .collect(Collectors.toList());
 
         CountDownLatch allReceived = new CountDownLatch(fileNames.size());
-        session.setDatagramHandler(datagram ->
-                receivePush(new ByteArrayInputStream(datagram), "datagram", outputDir, allReceived, session));
-
-        fileNames.forEach(file -> sendDatagramGet(session, file));
+        setupDatagramReceive(session, fileNames, outputDir, allReceived);
 
         boolean completed = allReceived.await(30, TimeUnit.SECONDS);
         if (!completed) {
@@ -215,16 +210,13 @@ public class WebTransportInteropClient extends WebTransportInterop {
         }
     }
 
-    private void testTransferUnidirectionalReceive(Session session, List<URL> downloadUrls) throws InterruptedException, IOException {
+    private void testTransferUnidirectionalReceive(Session session, List<URL> downloadUrls) throws InterruptedException {
         List<String> fileNames = downloadUrls.stream()
                 .map(url -> Paths.get(url.getPath()).getFileName().toString())
                 .collect(Collectors.toList());
 
         CountDownLatch allReceived = new CountDownLatch(fileNames.size());
-        session.setUnidirectionalStreamReceiveHandler(stream ->
-                receivePush(stream.getInputStream(), String.valueOf(stream.getStreamId()), outputDir, allReceived, session));
-
-        fileNames.forEach(file -> sendUnidirectionalGet(session, file));
+        setupUnidirectionalReceive(session, fileNames, outputDir, allReceived);
 
         boolean completed = allReceived.await(30, TimeUnit.SECONDS);
         if (!completed) {
@@ -233,7 +225,7 @@ public class WebTransportInteropClient extends WebTransportInterop {
         }
     }
 
-    private void testTransferBidirectionalReceive(Session session, List<URL> downloadUrls) throws InterruptedException, IOException {
+    private void testTransferBidirectionalReceive(Session session, List<URL> downloadUrls) throws InterruptedException {
         List<String> fileNames = downloadUrls.stream()
                 .map(url -> Paths.get(url.getPath()).getFileName().toString())
                 .collect(Collectors.toList());
@@ -241,17 +233,9 @@ public class WebTransportInteropClient extends WebTransportInterop {
         CountDownLatch allReceived = new CountDownLatch(fileNames.size());
 
         for (String file : fileNames) {
-            WebTransportStream stream = session.createBidirectionalStream();
-            stream.getOutputStream().write(("GET " + file).getBytes());
-            stream.getOutputStream().close();
-            System.out.println("Sent GET " + file + " on bidirectional stream " + stream.getStreamId() + " for session " + session.getSessionId());
-
             new Thread(() -> {
                 try {
-                    byte[] data = stream.getInputStream().readAllBytes();
-                    File downloadFile = new File(outputDir, file);
-                    Files.write(downloadFile.toPath(), data);
-                    System.out.println("Downloaded " + file + " to " + downloadFile.getPath());
+                    downloadFileBidirectional(session, file, outputDir);
                 }
                 catch (IOException e) {
                     System.err.println("Error downloading " + file + ": " + e.getMessage());
