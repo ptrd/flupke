@@ -66,18 +66,18 @@ public class WebTransportInteropServer extends WebTransportInterop {
 
     public static void main(String[] args) throws Exception {
         if (args.length < 5) {
-            System.out.println("Expected at least 5 arguments, but got " + args.length);
+            System.out.println(time() + "Expected at least 5 arguments, but got " + args.length);
             usageAndExit(Arrays.asList(args));
         }
         List<String> argList = List.of(args);
         if (argList.size() != 5 && argList.size() != 6) {
-            System.out.println("Expected 5 or 6 arguments, but got " + argList.size());
+            System.out.println(time() + "Expected 5 or 6 arguments, but got " + argList.size());
             usageAndExit(argList);
         }
 
         File keyStoreFile = new File(argList.get(0));
         if (!keyStoreFile.exists()) {
-            System.err.println("Cannot open keystore file " + argList.get(0));
+            System.err.println(time() + "Cannot open keystore file " + argList.get(0));
             System.exit(1);
         }
 
@@ -87,7 +87,7 @@ public class WebTransportInteropServer extends WebTransportInterop {
 
         KeyStore keyStore = KeyStore.getInstance(keyStoreFile, keyStorePassword.toCharArray());
         if (keyStore.getCertificateChain(certificateAlias) == null) {
-            System.err.println("Certificate alias '" + certificateAlias + "' not found in keystore");
+            System.err.println(time() + "Certificate alias '" + certificateAlias + "' not found in keystore");
             System.exit(1);
         }
 
@@ -97,7 +97,7 @@ public class WebTransportInteropServer extends WebTransportInterop {
         if (argList.size() > 5) {
             wwwDir = new File(argList.get(5));
             if (!wwwDir.exists() || !wwwDir.isDirectory() || !wwwDir.canRead()) {
-                System.err.println("Cannot read www dir '" + wwwDir + "'");
+                System.err.println(time() + "Cannot read www dir '" + wwwDir + "'");
                 System.exit(1);
             }
         }
@@ -105,8 +105,8 @@ public class WebTransportInteropServer extends WebTransportInterop {
     }
 
     private static void usageAndExit(List<String> actualArgs) {
-        System.err.println("Usage: keystore-file cert-alias keystore-password key-password port-number [www dir]");
-        System.out.println("Actual args: " + actualArgs);
+        System.err.println(time() + "Usage: keystore-file cert-alias keystore-password key-password port-number [www dir]");
+        System.out.println(time() + "Actual args: " + actualArgs);
         System.exit(1);
     }
 
@@ -136,24 +136,24 @@ public class WebTransportInteropServer extends WebTransportInterop {
         HttpRequestHandler httpRequestHandler = (request, response) -> {
             if (endpoints.stream().anyMatch(e -> request.path().startsWith("/" + e.getName()))) {
                 if (!request.method().equals("CONNECT")) {
-                    System.out.println("Received non-CONNECT request on WebTransport path: " + request.method() + " " + request.path());
+                    System.out.println(time() + "Received non-CONNECT request on WebTransport path: " + request.method() + " " + request.path());
                     response.setStatus(405);  // Method Not Allowed
                     response.getOutputStream().write(("Method " + request.method() + " not allowed. " +
                             "This is a WebTransport server. " +
                             "Use CONNECT method to establish a WebTransport session.\n").getBytes());
                 }
                 else {
-                    System.out.println("Received valid CONNECT request for WebTransport session on path " + request.path());
+                    System.out.println(time() + "Received valid CONNECT request for WebTransport session on path " + request.path());
                 }
             }
             else {
-                System.out.println("Received request for non-WebTransport path: " + request.method() + " " + request.path());
+                System.out.println(time() + "Received request for non-WebTransport path: " + request.method() + " " + request.path());
                 response.setStatus(404);  // Not Found
             }
         };
 
         String testcase = System.getenv("TESTCASE");
-        System.out.println("Testcase: " + testcase);
+        System.out.println(time() + "Testcase: " + testcase);
 
         WebTransportHttp3ApplicationProtocolFactory webTransportProtocolFactory = new WebTransportHttp3ApplicationProtocolFactory(httpRequestHandler);
         webTransportProtocolFactory.setMaxUnidirectionalStreamReceiverBufferSize(1_000_000);
@@ -175,7 +175,7 @@ public class WebTransportInteropServer extends WebTransportInterop {
                 .map(File::getName)
                 .map(name -> "/" + name + "(/.*)?")  // match the endpoint path and any subpaths, e.g. /webtransport1 and /webtransport1/foo/bar
                 .forEach(extendedPath -> {
-                    System.out.println("Starting WebTransport handler on path " + extendedPath);
+                    System.out.println(time() + "Starting WebTransport handler on path " + extendedPath);
                     webTransportProtocolFactory.registerWebTransportServerByRegex(extendedPath,
                             supportedApplicationProtocols, withExceptionLogging(webTransportHandler)); }
                 );
@@ -198,14 +198,14 @@ public class WebTransportInteropServer extends WebTransportInterop {
         //  tests like handshake."
         endpoints = Arrays.asList(wwwDir.listFiles(File::isDirectory));
         if (endpoints != null) {
-            System.out.println("Using WebTransport endpoints:");
+            System.out.println(time() + "Using WebTransport endpoints:");
             for (File subdir : endpoints) {
                 // if subdir is empty, print it as well, as it can be used for session-only tests like handshake
                 if (subdir.listFiles() == null || subdir.listFiles().length == 0) {
-                    System.out.println(" - " + subdir.getName() + " (empty, for session-only tests)");
+                    System.out.println(time() + " - " + subdir.getName() + " (empty, for session-only tests)");
                 }
                 else {
-                    System.out.println(" - " + subdir.getName());
+                    System.out.println(time() + " - " + subdir.getName());
                 }
             }
         }
@@ -214,7 +214,7 @@ public class WebTransportInteropServer extends WebTransportInterop {
     File determineSessionServingDir(Session session) {
         File sessionDir = new File(wwwDir, session.getPath());
         if (sessionDir.exists() && sessionDir.isDirectory() && sessionDir.canRead()) {
-            System.out.println("Serving files for session " + session.getSessionId() + " from directory " + sessionDir.getPath());
+            System.out.println(time() + "Serving files for session " + session.getSessionId() + " from directory " + sessionDir.getPath());
             return sessionDir;
         }
         else {
@@ -226,31 +226,31 @@ public class WebTransportInteropServer extends WebTransportInterop {
                 File endpointDir = new File(wwwDir, firstElement);
                 if (endpointDir.exists() && endpointDir.isDirectory() && endpointDir.canRead()
                         && endpoints.stream().anyMatch(e -> e.getName().equals(firstElement))) {
-                    System.out.println("Path '" + session.getPath() + "' has multiple elements; using endpoint dir " + endpointDir.getPath() + " for session " + session.getSessionId());
+                    System.out.println(time() + "Path '" + session.getPath() + "' has multiple elements; using endpoint dir " + endpointDir.getPath() + " for session " + session.getSessionId());
                     return endpointDir;
                 }
             }
-            System.out.println("No directory found for session " + session.getSessionId() + ", not serving any files");
+            System.out.println(time() + "No directory found for session " + session.getSessionId() + ", not serving any files");
             return null;
         }
     }
     
     private void startWebtransport(Session session) {
-        System.out.println("Starting handler for WebTransport session: " + session.getSessionId());
+        System.out.println(time() + "Starting handler for WebTransport session: " + session.getSessionId());
         File sessionServingDir = determineSessionServingDir(session);
 
         session.getNegotiatedProtocol().ifPresent(protocol -> {
-            System.out.println("Negotiated protocol for session " + session.getSessionId() + ": " + protocol);
+            System.out.println(time() + "Negotiated protocol for session " + session.getSessionId() + ": " + protocol);
             try {
                 Files.writeString(Path.of("/downloads/negotiated_protocol.txt"), protocol + "\n");
             }
             catch (java.io.IOException e) {
-                System.err.println("Failed to write negotiated protocol to file: " + e.getMessage());
+                System.err.println(time() + "Failed to write negotiated protocol to file: " + e.getMessage());
             }
         });
 
         session.registerSessionTerminatedEventListener((errorCode, message) -> {
-            System.out.println("Session " + session.getSessionId() + " closed with error code " + errorCode);
+            System.out.println(time() + "Session " + session.getSessionId() + " closed with error code " + errorCode);
         });
 
         session.setBidirectionalStreamReceiveHandler(stream -> handleBidirectionalStream(sessionServingDir, stream));
@@ -270,7 +270,7 @@ public class WebTransportInteropServer extends WebTransportInterop {
     private Optional<TransferContext> prepareTransfer(Session session) {
         String requestsEnvVar = System.getenv("REQUESTS");
         if (requestsEnvVar == null || requestsEnvVar.isEmpty()) {
-            System.out.println("REQUESTS env var not set, nothing to do");
+            System.out.println(time() + "REQUESTS env var not set, nothing to do");
             return Optional.empty();
         }
         String sessionPath = session.getPath();
@@ -282,13 +282,13 @@ public class WebTransportInteropServer extends WebTransportInterop {
     }
 
     private void startTransferBidirectionalSend(Session session) {
-        System.out.println("Starting transfer-bidirectional-send handler for session: " + session.getSessionId());
+        System.out.println(time() + "Starting transfer-bidirectional-send handler for session: " + session.getSessionId());
 
         Optional<TransferContext> ctx = prepareTransfer(session);
         if (ctx.isEmpty()) return;
 
         if (ctx.get().files.isEmpty()) {
-            System.out.println("No matching files found for session path " + session.getPath() + " in REQUESTS env var, nothing to do");
+            System.out.println(time() + "No matching files found for session path " + session.getPath() + " in REQUESTS env var, nothing to do");
             return;
         }
 
@@ -303,12 +303,12 @@ public class WebTransportInteropServer extends WebTransportInterop {
             session.close();
         }
         catch (IOException e) {
-            System.err.println("Error closing session: " + e.getMessage());
+            System.err.println(time() + "Error closing session: " + e.getMessage());
         }
     }
 
     private void startTransferUnidirectionalSend(Session session) {
-        System.out.println("Starting transfer-unidirectional-send handler for session: " + session.getSessionId());
+        System.out.println(time() + "Starting transfer-unidirectional-send handler for session: " + session.getSessionId());
 
         Optional<TransferContext> ctx = prepareTransfer(session);
         if (ctx.isEmpty()) return;
@@ -319,7 +319,7 @@ public class WebTransportInteropServer extends WebTransportInterop {
     }
 
     private void startTransferDatagramSend(Session session) {
-        System.out.println("Starting transfer-datagram-send handler for session: " + session.getSessionId());
+        System.out.println(time() + "Starting transfer-datagram-send handler for session: " + session.getSessionId());
 
         Optional<TransferContext> ctx = prepareTransfer(session);
         if (ctx.isEmpty()) return;
@@ -333,10 +333,10 @@ public class WebTransportInteropServer extends WebTransportInterop {
         File downloadsDir = new File("/downloads", sessionPath);
         downloadsDir.mkdirs();
         if (!downloadsDir.exists() || !downloadsDir.isDirectory() || !downloadsDir.canWrite()) {
-            System.out.println("Downloads dir '" + downloadsDir + "' does not exist, is not a directory, or is not writable");
+            System.out.println(time() + "Downloads dir '" + downloadsDir + "' does not exist, is not a directory, or is not writable");
             return null;
         }
-        System.out.println("Saving downloaded files to directory " + downloadsDir.getPath());
+        System.out.println(time() + "Saving downloaded files to directory " + downloadsDir.getPath());
         return downloadsDir;
     }
 
@@ -359,7 +359,7 @@ public class WebTransportInteropServer extends WebTransportInterop {
             downloadFileBidirectional(session, file, downloadsDir);
         }
         catch (IOException e) {
-            System.err.println("Error downloading " + file + ": " + e.getMessage());
+            System.err.println(time() + "Error downloading " + file + ": " + e.getMessage());
         }
     }
 
@@ -369,12 +369,12 @@ public class WebTransportInteropServer extends WebTransportInterop {
             try {
                 long remaining = deadline - System.currentTimeMillis();
                 if (remaining <= 0) {
-                    System.err.println("Timed out waiting for downloads to complete");
+                    System.err.println(time() + "Timed out waiting for downloads to complete");
                     break;
                 }
                 thread.join(remaining);
                 if (thread.isAlive()) {
-                    System.err.println("Timed out waiting for downloads to complete");
+                    System.err.println(time() + "Timed out waiting for downloads to complete");
                     break;
                 }
             }
@@ -390,7 +390,7 @@ public class WebTransportInteropServer extends WebTransportInterop {
                 handler.accept(session);
             }
             catch (Exception e) {
-                System.err.println("Unhandled exception in session handler for session " + session.getSessionId() + ": " + e.getMessage());
+                System.err.println(time() + "Unhandled exception in session handler for session " + session.getSessionId() + ": " + e.getMessage());
                 e.printStackTrace();
             }
         };

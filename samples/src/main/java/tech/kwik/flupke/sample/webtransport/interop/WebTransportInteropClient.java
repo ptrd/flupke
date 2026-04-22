@@ -92,7 +92,7 @@ public class WebTransportInteropClient extends WebTransportInterop {
 
     String processArgs(String[] args) throws Exception {
         if (args.length < 5) {
-            System.out.println("Expected 5 arguments: <downloadDir> <trustStore> <trustStorePassword> <testcase> <URL>");
+            System.out.println(time() + "Expected 5 arguments: <downloadDir> <trustStore> <trustStorePassword> <testcase> <URL>");
             System.exit(1);
         }
 
@@ -100,15 +100,15 @@ public class WebTransportInteropClient extends WebTransportInterop {
         outputDir = new File(args[currentArg++]);
         if (! outputDir.isDirectory()) {
             outputDir.mkdir();
-            System.out.println("Created output directory " + outputDir.getAbsolutePath());
+            System.out.println(time() + "Created output directory " + outputDir.getAbsolutePath());
         }
         else {
-            System.out.println("Using output directory " + outputDir.getAbsolutePath());
+            System.out.println(time() + "Using output directory " + outputDir.getAbsolutePath());
         }
 
         File trustStoreFile = new File(args[currentArg++]);
         if (! trustStoreFile.exists() || ! trustStoreFile.canRead()) {
-            System.out.println("Can't read trust store file " + trustStoreFile);
+            System.out.println(time() + "Can't read trust store file " + trustStoreFile);
             System.exit(1);
         }
         String trustStorePassword = args[currentArg++];
@@ -119,8 +119,8 @@ public class WebTransportInteropClient extends WebTransportInterop {
 
         String testCase = args[currentArg++];
         if (! TESTCASES.contains(testCase)) {
-            System.out.println("Invalid argument; test case '" + testCase + "' not known.");
-            System.out.println("Available test cases: " + TESTCASES);
+            System.out.println(time() + "Invalid argument; test case '" + testCase + "' not known.");
+            System.out.println(time() + "Available test cases: " + TESTCASES);
         }
 
         downloadUrls = new ArrayList<>();
@@ -138,20 +138,20 @@ public class WebTransportInteropClient extends WebTransportInterop {
                 .httpClient(client)
                 .build();
 
-        System.out.println("Starting session on " + serverUrl);
+        System.out.println(time() + "Starting session on " + serverUrl);
         Session session = clientSessionFactory.createSession(serverUrl, protocols);
-        System.out.println("Negotiated: " +  session.getNegotiatedProtocol());
+        System.out.println(time() + "Negotiated: " +  session.getNegotiatedProtocol());
         session.getNegotiatedProtocol().ifPresent(protocol -> {
             try {
                 Files.writeString(Path.of("/downloads/negotiated_protocol.txt"), session.getNegotiatedProtocol().get() + "\n");
             }
             catch (IOException e) {
-                System.err.println("Failed to write negotiated protocol to file: " + e.getMessage());
+                System.err.println(time() + "Failed to write negotiated protocol to file: " + e.getMessage());
             }
         });
 
         session.registerSessionTerminatedEventListener((code, msg) -> {
-            System.out.println("Session terminated with code " + code + " and message: " + msg);
+            System.out.println(time() + "Session terminated with code " + code + " and message: " + msg);
         });
 
         return session;
@@ -163,7 +163,7 @@ public class WebTransportInteropClient extends WebTransportInterop {
 
         if (! outputDir.exists()) {
             outputDir.mkdir();
-            System.out.println("Created output directory " + outputDir.getAbsolutePath());
+            System.out.println(time() + "Created output directory " + outputDir.getAbsolutePath());
         }
     }
 
@@ -171,7 +171,7 @@ public class WebTransportInteropClient extends WebTransportInterop {
         URI serverUrl = downloadUrls.get(0).toURI();
         String path = serverUrl.getPath();
         if (path == null || path.isEmpty() || path.equals("/"))  {
-            System.out.println("Invalid argument: URL '" + downloadUrls.get(0) + "' must have a path with at least one directory");
+            System.out.println(time() + "Invalid argument: URL '" + downloadUrls.get(0) + "' must have a path with at least one directory");
             System.exit(1);
         }
         Path dir = Paths.get(path).getName(0);// validate that path has at least one directory
@@ -186,7 +186,7 @@ public class WebTransportInteropClient extends WebTransportInterop {
         }
         else {
             logDir = new File(".");
-            System.out.println("Log directory /logs does not exist; logs will be written to ./flupke_client.log");
+            System.out.println(time() + "Log directory /logs does not exist; logs will be written to ./flupke_client.log");
         }
         String logFile =  "flupke_client.log";
         try {
@@ -195,14 +195,14 @@ public class WebTransportInteropClient extends WebTransportInterop {
             logger.logWarning(true);
         }
         catch (IOException e) {
-            System.out.println("Cannot open log file " + logFile);
+            System.out.println(time() + "Cannot open log file " + logFile);
             System.exit(1);
         }
     }
 
     private void testTransfer(Session session) throws InterruptedException {
         File sessionServingDir = new File("/www", session.getPath());
-        System.out.println("Serving files from " + sessionServingDir.getPath());
+        System.out.println(time() + "Serving files from " + sessionServingDir.getPath());
 
         CountDownLatch sessionClosed = new CountDownLatch(1);
         session.registerSessionTerminatedEventListener((code, msg) -> sessionClosed.countDown());
@@ -215,10 +215,10 @@ public class WebTransportInteropClient extends WebTransportInterop {
 
         boolean completed = sessionClosed.await(30, TimeUnit.SECONDS);
         if (!completed) {
-            System.out.println("Timed out waiting for session to close");
+            System.out.println(time() + "Timed out waiting for session to close");
         }
         else {
-            System.out.println("Session closed");
+            System.out.println(time() + "Session closed");
         }
     }
 
@@ -233,7 +233,7 @@ public class WebTransportInteropClient extends WebTransportInterop {
 
         boolean completed = allReceived.await(30, TimeUnit.SECONDS);
         if (!completed) {
-            System.out.println("Timed out waiting for datagrams, received "
+            System.out.println(time() + "Timed out waiting for datagrams, received "
                     + (fileNames.size() - allReceived.getCount()) + " of " + fileNames.size());
         }
     }
@@ -249,7 +249,7 @@ public class WebTransportInteropClient extends WebTransportInterop {
 
         boolean completed = allReceived.await(30, TimeUnit.SECONDS);
         if (!completed) {
-            System.out.println("Timed out waiting for streams, received "
+            System.out.println(time() + "Timed out waiting for streams, received "
                     + (fileNames.size() - allReceived.getCount()) + " of " + fileNames.size());
         }
     }
@@ -268,17 +268,17 @@ public class WebTransportInteropClient extends WebTransportInterop {
                     downloadFileBidirectional(session, file, outputDir);
                 }
                 catch (IOException e) {
-                    System.err.println("Error downloading " + file + ": " + e.getMessage());
+                    System.err.println(time() + "Error downloading " + file + ": " + e.getMessage());
                 }
                 finally {
                     allReceived.countDown();
                     if (allReceived.getCount() == 0) {
-                        System.out.println("All expected files received, closing session");
+                        System.out.println(time() + "All expected files received, closing session");
                         try {
                             session.close();
                         }
                         catch (IOException e) {
-                            System.err.println("Error closing session: " + e.getMessage());
+                            System.err.println(time() + "Error closing session: " + e.getMessage());
                         }
                     }
                 }
@@ -287,13 +287,13 @@ public class WebTransportInteropClient extends WebTransportInterop {
 
         boolean completed = allReceived.await(30, TimeUnit.SECONDS);
         if (!completed) {
-            System.out.println("Timed out waiting for streams, received "
+            System.out.println(time() + "Timed out waiting for streams, received "
                     + (fileNames.size() - allReceived.getCount()) + " of " + fileNames.size());
         }
     }
 
     public static void main(String[] args) throws Exception {
-        System.out.println("Starting WebTransport interop client, args: " + String.join(" ", args));
+        System.out.println(time() + "Starting WebTransport interop client, args: " + String.join(" ", args));
 
         new WebTransportInteropClient(args);
     }

@@ -21,38 +21,41 @@ package tech.kwik.flupke.sample.webtransport.interop;
 import tech.kwik.flupke.webtransport.Session;
 import tech.kwik.flupke.webtransport.WebTransportStream;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
 abstract class WebTransportInterop {
+
+    private static final DateTimeFormatter TS_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss.SSS");
+
+    protected static String time() {
+        return "[" + LocalTime.now().format(TS_FORMAT) + "] ";
+    }
 
     protected void sendUnidirectionalGet(Session session, String file) {
         try {
             WebTransportStream stream = session.createUnidirectionalStream();
             stream.getOutputStream().write(("GET " + file).getBytes());
             stream.getOutputStream().close();
-            System.out.println("Sent GET " + file + " on unidirectional stream " + stream.getStreamId() + " for session " + session.getSessionId());
+            System.out.println(time() + "Sent GET " + file + " on unidirectional stream " + stream.getStreamId() + " for session " + session.getSessionId());
         }
         catch (IOException e) {
-            System.err.println("Error sending GET " + file + ": " + e.getMessage());
+            System.err.println(time() + "Error sending GET " + file + ": " + e.getMessage());
         }
     }
 
     protected void sendDatagramGet(Session session, String file) {
         try {
             session.sendDatagram(("GET " + file).getBytes());
-            System.out.println("Sent datagram GET " + file);
+            System.out.println(time() + "Sent datagram GET " + file);
         }
         catch (IOException e) {
-            System.err.println("Error sending GET " + file + ": " + e.getMessage());
+            System.err.println(time() + "Error sending GET " + file + ": " + e.getMessage());
         }
     }
 
@@ -72,11 +75,11 @@ abstract class WebTransportInterop {
         WebTransportStream stream = session.createBidirectionalStream();
         stream.getOutputStream().write(("GET " + file).getBytes());
         stream.getOutputStream().close();
-        System.out.println("Sent GET " + file + " on bidirectional stream " + stream.getStreamId() + " for session " + session.getSessionId());
+        System.out.println(time() + "Sent GET " + file + " on bidirectional stream " + stream.getStreamId() + " for session " + session.getSessionId());
         byte[] data = stream.getInputStream().readAllBytes();
         File downloadFile = new File(downloadsDir, file);
         Files.write(downloadFile.toPath(), data);
-        System.out.println("Downloaded " + file + " to " + downloadFile.getPath());
+        System.out.println(time() + "Downloaded " + file + " to " + downloadFile.getPath());
     }
 
     protected void serveFile(File dir, String fileName, OutputStream outputStream) throws IOException {
@@ -84,10 +87,10 @@ abstract class WebTransportInterop {
         if (file.exists() && file.isFile() && file.canRead()) {
             Files.copy(file.toPath(), outputStream);
             outputStream.close();
-            System.out.println("Served file " + file.getPath());
+            System.out.println(time() + "Served file " + file.getPath());
         }
         else {
-            System.err.println("Requested file not found: " + file.getPath());
+            System.err.println(time() + "Requested file not found: " + file.getPath());
         }
     }
 
@@ -101,30 +104,30 @@ abstract class WebTransportInterop {
             byte[] datagramData = new byte[buf.limit()];
             buf.get(datagramData);
             session.sendDatagram(datagramData);
-            System.out.println("Sent datagram PUSH " + fileName);
+            System.out.println(time() + "Sent datagram PUSH " + fileName);
         }
         else {
-            System.err.println("Requested file not found for datagram: " + file.getPath());
+            System.err.println(time() + "Requested file not found for datagram: " + file.getPath());
         }
     }
 
     protected void handleBidirectionalStream(File servingDir, WebTransportStream stream) {
         try {
             String request = new String(stream.getInputStream().readAllBytes());
-            System.out.println("Received request on bidirectional stream " + stream.getStreamId() + ": " + request);
+            System.out.println(time() + "Received request on bidirectional stream " + stream.getStreamId() + ": " + request);
             if (request.startsWith("GET ")) {
                 serveFile(servingDir, request.substring(4).trim(), stream.getOutputStream());
             }
         }
         catch (IOException e) {
-            System.err.println("Error handling bidirectional stream: " + e.getMessage());
+            System.err.println(time() + "Error handling bidirectional stream: " + e.getMessage());
         }
     }
 
     protected void handleUnidirectionalStream(Session session, File servingDir, WebTransportStream stream) {
         try {
             String request = new String(stream.getInputStream().readAllBytes());
-            System.out.println("Received request on unidirectional stream " + stream.getStreamId() + ": " + request);
+            System.out.println(time() + "Received request on unidirectional stream " + stream.getStreamId() + ": " + request);
             if (request.startsWith("GET ")) {
                 String fileName = request.substring(4).trim();
                 WebTransportStream pushStream = session.createUnidirectionalStream();
@@ -134,7 +137,7 @@ abstract class WebTransportInterop {
             }
         }
         catch (IOException e) {
-            System.err.println("Error handling unidirectional stream: " + e.getMessage());
+            System.err.println(time() + "Error handling unidirectional stream: " + e.getMessage());
         }
     }
 
@@ -146,7 +149,7 @@ abstract class WebTransportInterop {
                 sendFileDatagram(session, servingDir, fileName);
             }
             catch (IOException e) {
-                System.err.println("Error sending datagram response: " + e.getMessage());
+                System.err.println(time() + "Error sending datagram response: " + e.getMessage());
             }
         }
     }
@@ -159,45 +162,45 @@ abstract class WebTransportInterop {
                 headerBytes.write(b);
             }
             if (b == -1) {
-                System.err.println("Received malformed PUSH on stream " + streamId + ": no newline found");
+                System.err.println(time() + "Received malformed PUSH on stream " + streamId + ": no newline found");
                 return;
             }
             String header = headerBytes.toString();
             if (!header.startsWith("PUSH ")) {
-                System.err.println("Received unexpected header on stream " + streamId + ": " + header);
+                System.err.println(time() + "Received unexpected header on stream " + streamId + ": " + header);
                 return;
             }
             String fileName = header.substring(5).trim();
-            System.out.println("Received PUSH " + fileName + " on thread " + Thread.currentThread().getName());
+            System.out.println(time() + "Received PUSH " + fileName + " on thread " + Thread.currentThread().getName());
 
             File downloadFile = new File(downloadsDir, fileName);
             try (OutputStream outputStream = Files.newOutputStream(downloadFile.toPath())) {
                 byte[] buffer = new byte[8192];
                 int bytesRead;
                 while ((bytesRead = inputStream.read(buffer)) != -1) {
-                    System.out.println("Read " + bytesRead + " bytes for file " + fileName + " on stream " + streamId);
+                    System.out.println(time() + "Read " + bytesRead + " bytes for file " + fileName + " on stream " + streamId);
                     outputStream.write(buffer, 0, bytesRead);
-                    System.out.println("Written " + bytesRead + " bytes to file " + downloadFile.getPath() + " for stream " + streamId);
+                    System.out.println(time() + "Written " + bytesRead + " bytes to file " + downloadFile.getPath() + " for stream " + streamId);
                 }
             }
-            System.out.println("Received PUSH " + fileName + ", written to " + downloadFile.getPath());
+            System.out.println(time() + "Received PUSH " + fileName + ", written to " + downloadFile.getPath());
         }
         catch (IOException e) {
-            System.err.println("Error receiving PUSH on stream " + streamId + ": " + e.getMessage());
+            System.err.println(time() + "Error receiving PUSH on stream " + streamId + ": " + e.getMessage());
         }
         finally {
             allReceived.countDown();
             if (allReceived.getCount() == 0) {
-                System.out.println("All expected files received, closing session");
+                System.out.println(time() + "All expected files received, closing session");
                 try {
                     session.close();
                 }
                 catch (IOException e) {
-                    System.err.println("Error closing session: " + e.getMessage());
+                    System.err.println(time() + "Error closing session: " + e.getMessage());
                 }
             }
             else {
-                System.out.println("Waiting for " + allReceived.getCount() + " more files to be received for session " + session.getSessionId());
+                System.out.println(time() + "Waiting for " + allReceived.getCount() + " more files to be received for session " + session.getSessionId());
             }
         }
     }
