@@ -25,18 +25,15 @@ import tech.kwik.core.server.ServerConnector;
 import tech.kwik.flupke.server.HttpRequestHandler;
 import tech.kwik.flupke.webtransport.Session;
 import tech.kwik.flupke.webtransport.WebTransportHttp3ApplicationProtocolFactory;
-import tech.kwik.flupke.webtransport.WebTransportStream;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.OutputStream;
-import java.io.UncheckedIOException;
-import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyStore;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -256,96 +253,49 @@ public class WebTransportInteropServer extends WebTransportInterop {
             System.out.println("Session " + session.getSessionId() + " closed with error code " + errorCode);
         });
 
-        session.setBidirectionalStreamReceiveHandler(stream -> {
-            try {
-                String request = new String(stream.getInputStream().readAllBytes());
-                System.out.println("Received request " + request + " on stream " + stream.getStreamId() + " for session " + session.getSessionId() + " on thread " + Thread.currentThread().getName());
-
-                if (request.startsWith("GET ")) {
-                    copyFile(sessionServingDir, stream.getStreamId(), stream.getOutputStream(), request.substring(4).trim());
-                }
-            }
-            catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
-        });
-
-        session.setUnidirectionalStreamReceiveHandler(stream -> {
-            try {
-                String request = new String(stream.getInputStream().readAllBytes());
-                System.out.println("Received unidirectional stream with request " + request + " for session " + session.getSessionId() + " on thread " + Thread.currentThread().getName());
-
-                if (request.startsWith("GET ")) {
-                    String fileName = request.substring(4).trim();
-                    WebTransportStream unidirectionalStream = session.createUnidirectionalStream();
-                    OutputStream outputStream = unidirectionalStream.getOutputStream();
-                    outputStream.write(("PUSH " + fileName + "\n").getBytes());
-                    copyFile(sessionServingDir, stream.getStreamId(), outputStream, fileName);
-                }
-            }
-            catch (IOException e) {
-                System.out.println("IO error while processing unidirectional stream: " + e.getMessage());
-                throw new UncheckedIOException(e);
-            }
-        });
-
-        session.setDatagramHandler(data -> {
-            String message = new String(data);
-            if (message.startsWith("GET ")) {
-                String fileName = message.substring(4).trim();
-                File requestedFile = new File(sessionServingDir, fileName);
-                if (requestedFile.exists() && requestedFile.isFile() && requestedFile.canRead()) {
-                    try {
-                        ByteBuffer datagramBuffer = ByteBuffer.allocate(1500);
-                        datagramBuffer.put(("PUSH " + fileName + "\n").getBytes());
-                        byte[] fileData = Files.readAllBytes(requestedFile.toPath());
-                        datagramBuffer.put(fileData);
-                        datagramBuffer.flip();
-                        byte[] datagramData = new byte[datagramBuffer.limit()];
-                        datagramBuffer.get(datagramData);
-                        session.sendDatagram(datagramData);
-                        System.out.println("Sent datagram with contents of file " + requestedFile.getPath() + " for request " + fileName + " on session " + session.getSessionId());
-                    }
-                    catch (IOException e) {
-                        System.err.println("Error reading file for datagram response: " + e.getMessage());
-                    }
-                }
-                else {
-                    System.out.println("Requested file not found for datagram response: " + requestedFile.getPath());
-                }
-            }
-        });
+        session.setBidirectionalStreamReceiveHandler(stream -> handleBidirectionalStream(sessionServingDir, stream));
+        session.setUnidirectionalStreamReceiveHandler(stream -> handleUnidirectionalStream(session, sessionServingDir, stream));
+        session.setDatagramHandler(data -> handleDatagramGet(session, sessionServingDir, data));
 
         // Make sure the session is opened _after_ setting the handlers, otherwise we might miss incoming streams.
         session.open();
     }
 
-    private void startTransferBidirectionalSend(Session session) {
-        System.out.println("Starting transfer-bidirectional-send handler for session: " + session.getSessionId());
+    private static class TransferContext {
+        final List<String> files;
+        final File downloadsDir;
+        TransferContext(List<String> files, File downloadsDir) { this.files = files; this.downloadsDir = downloadsDir; }
+    }
 
+    private Optional<TransferContext> prepareTransfer(Session session) {
         String requestsEnvVar = System.getenv("REQUESTS");
         if (requestsEnvVar == null || requestsEnvVar.isEmpty()) {
             System.out.println("REQUESTS env var not set, nothing to do");
-            return;
+            return Optional.empty();
         }
-
         String sessionPath = session.getPath();
-
         File downloadsDir = resolveDownloadsDir(sessionPath);
         if (downloadsDir == null) {
-            return;
+            return Optional.empty();
         }
+        return Optional.of(new TransferContext(extractMatchingFiles(requestsEnvVar, sessionPath), downloadsDir));
+    }
 
-        List<String> matchingFiles = extractMatchingFiles(requestsEnvVar, sessionPath);
-        if (matchingFiles.isEmpty()) {
-            System.out.println("No matching files found for session path " + sessionPath + " in REQUESTS env var, nothing to do");
+    private void startTransferBidirectionalSend(Session session) {
+        System.out.println("Starting transfer-bidirectional-send handler for session: " + session.getSessionId());
+
+        Optional<TransferContext> ctx = prepareTransfer(session);
+        if (ctx.isEmpty()) return;
+
+        if (ctx.get().files.isEmpty()) {
+            System.out.println("No matching files found for session path " + session.getPath() + " in REQUESTS env var, nothing to do");
             return;
         }
 
         session.open();
 
-        List<Thread> threads = matchingFiles.stream()
-                .map(file -> startDownloadThread(() -> downloadFile(session, file, downloadsDir)))
+        List<Thread> threads = ctx.get().files.stream()
+                .map(file -> startDownloadThread(() -> downloadFile(session, file, ctx.get().downloadsDir)))
                 .collect(Collectors.toList());
 
         waitForDownloads(threads);
@@ -360,47 +310,23 @@ public class WebTransportInteropServer extends WebTransportInterop {
     private void startTransferUnidirectionalSend(Session session) {
         System.out.println("Starting transfer-unidirectional-send handler for session: " + session.getSessionId());
 
-        String requestsEnvVar = System.getenv("REQUESTS");
-        if (requestsEnvVar == null || requestsEnvVar.isEmpty()) {
-            System.out.println("REQUESTS env var not set, nothing to do");
-            return;
-        }
+        Optional<TransferContext> ctx = prepareTransfer(session);
+        if (ctx.isEmpty()) return;
 
-        String sessionPath = session.getPath();
-
-        File downloadsDir = resolveDownloadsDir(sessionPath);
-        if (downloadsDir == null) {
-            return;
-        }
-
-        List<String> matchingFiles = extractMatchingFiles(requestsEnvVar, sessionPath);
-
-        CountDownLatch allReceived = new CountDownLatch(matchingFiles.size());
+        CountDownLatch allReceived = new CountDownLatch(ctx.get().files.size());
         session.open();
-        setupUnidirectionalReceive(session, matchingFiles, downloadsDir, allReceived);
+        setupUnidirectionalReceive(session, ctx.get().files, ctx.get().downloadsDir, allReceived);
     }
 
     private void startTransferDatagramSend(Session session) {
         System.out.println("Starting transfer-datagram-send handler for session: " + session.getSessionId());
 
-        String requestsEnvVar = System.getenv("REQUESTS");
-        if (requestsEnvVar == null || requestsEnvVar.isEmpty()) {
-            System.out.println("REQUESTS env var not set, nothing to do");
-            return;
-        }
+        Optional<TransferContext> ctx = prepareTransfer(session);
+        if (ctx.isEmpty()) return;
 
-        String sessionPath = session.getPath();
-
-        File downloadsDir = resolveDownloadsDir(sessionPath);
-        if (downloadsDir == null) {
-            return;
-        }
-
-        List<String> matchingFiles = extractMatchingFiles(requestsEnvVar, sessionPath);
-
-        CountDownLatch allReceived = new CountDownLatch(matchingFiles.size());
+        CountDownLatch allReceived = new CountDownLatch(ctx.get().files.size());
         session.open();
-        setupDatagramReceive(session, matchingFiles, downloadsDir, allReceived);
+        setupDatagramReceive(session, ctx.get().files, ctx.get().downloadsDir, allReceived);
     }
 
     private File resolveDownloadsDir(String sessionPath) {
@@ -470,27 +396,4 @@ public class WebTransportInteropServer extends WebTransportInterop {
         };
     }
 
-    private void copyFile(File sessionServingDir, long streamId, OutputStream outputStream, String fileName) throws IOException {
-        File requestedFile = new File(sessionServingDir, fileName);
-        if (requestedFile.exists() && requestedFile.isFile() && requestedFile.canRead()) {
-            Files.copy(requestedFile.toPath(), outputStream);
-            outputStream.close();
-            System.out.println("Served file " + requestedFile.getPath() + " for request " + fileName + " on stream " + streamId + ".");
-        }
-        else {
-            System.out.println("Requested file not found: " + requestedFile.getPath());
-        }
-    }
-
-    private void copyFile(Session session, long streamId, OutputStream outputStream, String fileName) throws IOException {
-        File requestedFile = new File(new File(wwwDir, session.getPath()), fileName);
-        if (requestedFile.exists() && requestedFile.isFile() && requestedFile.canRead()) {
-            Files.copy(requestedFile.toPath(), outputStream);
-            outputStream.close();
-            System.out.println("Served file " + requestedFile.getPath() + " for request " + fileName + " on stream " + streamId + " for session " + session.getSessionId());
-        }
-        else {
-            System.out.println("Requested file not found: " + requestedFile.getPath());
-        }
-    }
 }

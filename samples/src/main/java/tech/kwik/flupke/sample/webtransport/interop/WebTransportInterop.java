@@ -27,6 +27,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -76,6 +77,78 @@ abstract class WebTransportInterop {
         File downloadFile = new File(downloadsDir, file);
         Files.write(downloadFile.toPath(), data);
         System.out.println("Downloaded " + file + " to " + downloadFile.getPath());
+    }
+
+    protected void serveFile(File dir, String fileName, OutputStream outputStream) throws IOException {
+        File file = new File(dir, fileName);
+        if (file.exists() && file.isFile() && file.canRead()) {
+            Files.copy(file.toPath(), outputStream);
+            outputStream.close();
+            System.out.println("Served file " + file.getPath());
+        }
+        else {
+            System.err.println("Requested file not found: " + file.getPath());
+        }
+    }
+
+    protected void sendFileDatagram(Session session, File dir, String fileName) throws IOException {
+        File file = new File(dir, fileName);
+        if (file.exists() && file.isFile() && file.canRead()) {
+            ByteBuffer buf = ByteBuffer.allocate(1500);
+            buf.put(("PUSH " + fileName + "\n").getBytes());
+            buf.put(Files.readAllBytes(file.toPath()));
+            buf.flip();
+            byte[] datagramData = new byte[buf.limit()];
+            buf.get(datagramData);
+            session.sendDatagram(datagramData);
+            System.out.println("Sent datagram PUSH " + fileName);
+        }
+        else {
+            System.err.println("Requested file not found for datagram: " + file.getPath());
+        }
+    }
+
+    protected void handleBidirectionalStream(File servingDir, WebTransportStream stream) {
+        try {
+            String request = new String(stream.getInputStream().readAllBytes());
+            System.out.println("Received request on bidirectional stream " + stream.getStreamId() + ": " + request);
+            if (request.startsWith("GET ")) {
+                serveFile(servingDir, request.substring(4).trim(), stream.getOutputStream());
+            }
+        }
+        catch (IOException e) {
+            System.err.println("Error handling bidirectional stream: " + e.getMessage());
+        }
+    }
+
+    protected void handleUnidirectionalStream(Session session, File servingDir, WebTransportStream stream) {
+        try {
+            String request = new String(stream.getInputStream().readAllBytes());
+            System.out.println("Received request on unidirectional stream " + stream.getStreamId() + ": " + request);
+            if (request.startsWith("GET ")) {
+                String fileName = request.substring(4).trim();
+                WebTransportStream pushStream = session.createUnidirectionalStream();
+                OutputStream outputStream = pushStream.getOutputStream();
+                outputStream.write(("PUSH " + fileName + "\n").getBytes());
+                serveFile(servingDir, fileName, outputStream);
+            }
+        }
+        catch (IOException e) {
+            System.err.println("Error handling unidirectional stream: " + e.getMessage());
+        }
+    }
+
+    protected void handleDatagramGet(Session session, File servingDir, byte[] data) {
+        String message = new String(data);
+        if (message.startsWith("GET ")) {
+            String fileName = message.substring(4).trim();
+            try {
+                sendFileDatagram(session, servingDir, fileName);
+            }
+            catch (IOException e) {
+                System.err.println("Error sending datagram response: " + e.getMessage());
+            }
+        }
     }
 
     protected void receivePush(InputStream inputStream, String streamId, File downloadsDir, CountDownLatch allReceived, Session session) {
