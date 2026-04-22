@@ -23,13 +23,16 @@ import tech.kwik.core.log.Logger;
 import tech.kwik.flupke.Http3Client;
 import tech.kwik.flupke.webtransport.ClientSessionFactory;
 import tech.kwik.flupke.webtransport.Session;
+import tech.kwik.flupke.webtransport.WebTransportStream;
 
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
 import java.io.File;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.URI;
 import java.net.URL;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -44,7 +47,7 @@ import java.util.stream.Collectors;
 
 public class WebTransportInteropClient extends WebTransportInterop {
 
-    public static List TESTCASES = List.of("handshake", "transfer-datagram-receive", "transfer-unidirectional-receive", "transfer-bidirectional-receive");
+    public static List TESTCASES = List.of("handshake", "transfer", "transfer-datagram-receive", "transfer-unidirectional-receive", "transfer-bidirectional-receive");
 
     private File outputDir;
     private Logger logger;
@@ -62,6 +65,8 @@ public class WebTransportInteropClient extends WebTransportInterop {
         createOutputDir(serverUrl);
 
         Http3Client client = (Http3Client) Http3Client.newBuilder()
+                .maxAdditionalOpenPeerInitiatedBidirectionalStreams(100)
+                .maxAdditionalOpenPeerInitiatedUnidirectionalStreams(100)
                 .trustManager(trustManager)
                 .logger(logger)
                 .enableDatagram()
@@ -73,7 +78,11 @@ public class WebTransportInteropClient extends WebTransportInterop {
 
         Session webtransportSession = setupWebTransportSession(serverUrl, client, protocols);
 
-        if (testCase.equals("transfer-datagram-receive")) {
+        if (testCase.equals("transfer")) {
+            testTransfer(webtransportSession);
+            System.exit(0);  // TODO: should close the connection and client gracefully instead of just exiting
+        }
+        else if (testCase.equals("transfer-datagram-receive")) {
             testTransferDatagramReceive(webtransportSession, downloadUrls);
         }
         else if (testCase.equals("transfer-unidirectional-receive")) {
@@ -127,6 +136,7 @@ public class WebTransportInteropClient extends WebTransportInterop {
 
     private Session setupWebTransportSession(URI serverUrl, Http3Client client, List<String> protocols) throws Exception {
         ClientSessionFactory clientSessionFactory = ClientSessionFactory.newBuilder()
+                .maxStreamsQueued(10)
                 .serverUri(serverUrl)
                 .httpClient(client)
                 .build();
@@ -146,8 +156,6 @@ public class WebTransportInteropClient extends WebTransportInterop {
         session.registerSessionTerminatedEventListener((code, msg) -> {
             System.out.println("Session terminated with code " + code + " and message: " + msg);
         });
-        session.open();
-        System.out.println("Session " + session.getSessionId() + " opened to " + serverUrl);
 
         return session;
     }
@@ -195,7 +203,94 @@ public class WebTransportInteropClient extends WebTransportInterop {
         }
     }
 
+    private void testTransfer(Session session) throws InterruptedException {
+        File sessionServingDir = new File("/www", session.getPath());
+        System.out.println("Serving files from " + sessionServingDir.getPath());
+
+        CountDownLatch sessionClosed = new CountDownLatch(1);
+        session.registerSessionTerminatedEventListener((code, msg) -> sessionClosed.countDown());
+
+        session.setBidirectionalStreamReceiveHandler(stream -> {
+            try {
+                String request = new String(stream.getInputStream().readAllBytes());
+                System.out.println("Received request on bidirectional stream " + stream.getStreamId() + ": " + request);
+                if (request.startsWith("GET ")) {
+                    serveFile(sessionServingDir, request.substring(4).trim(), stream.getOutputStream());
+                }
+            }
+            catch (IOException e) {
+                System.err.println("Error handling bidirectional stream: " + e.getMessage());
+            }
+        });
+
+        session.setUnidirectionalStreamReceiveHandler(stream -> {
+            try {
+                String request = new String(stream.getInputStream().readAllBytes());
+                System.out.println("Received request on unidirectional stream " + stream.getStreamId() + ": " + request);
+                if (request.startsWith("GET ")) {
+                    String fileName = request.substring(4).trim();
+                    WebTransportStream pushStream = session.createUnidirectionalStream();
+                    OutputStream outputStream = pushStream.getOutputStream();
+                    outputStream.write(("PUSH " + fileName + "\n").getBytes());
+                    serveFile(sessionServingDir, fileName, outputStream);
+                }
+            }
+            catch (IOException e) {
+                System.err.println("Error handling unidirectional stream: " + e.getMessage());
+            }
+        });
+
+        session.setDatagramHandler(data -> {
+            String message = new String(data);
+            if (message.startsWith("GET ")) {
+                String fileName = message.substring(4).trim();
+                File requestedFile = new File(sessionServingDir, fileName);
+                if (requestedFile.exists() && requestedFile.isFile() && requestedFile.canRead()) {
+                    try {
+                        ByteBuffer buf = ByteBuffer.allocate(1500);
+                        buf.put(("PUSH " + fileName + "\n").getBytes());
+                        buf.put(Files.readAllBytes(requestedFile.toPath()));
+                        buf.flip();
+                        byte[] datagramData = new byte[buf.limit()];
+                        buf.get(datagramData);
+                        session.sendDatagram(datagramData);
+                        System.out.println("Sent datagram PUSH " + fileName);
+                    }
+                    catch (IOException e) {
+                        System.err.println("Error sending datagram response: " + e.getMessage());
+                    }
+                }
+                else {
+                    System.err.println("Requested file not found: " + requestedFile.getPath());
+                }
+            }
+        });
+
+        session.open();
+
+        boolean completed = sessionClosed.await(30, TimeUnit.SECONDS);
+        if (!completed) {
+            System.out.println("Timed out waiting for session to close");
+        }
+        else {
+            System.out.println("Session closed");
+        }
+    }
+
+    private void serveFile(File dir, String fileName, OutputStream outputStream) throws IOException {
+        File file = new File(dir, fileName);
+        if (file.exists() && file.isFile() && file.canRead()) {
+            Files.copy(file.toPath(), outputStream);
+            outputStream.close();
+            System.out.println("Served file " + file.getPath());
+        }
+        else {
+            System.err.println("Requested file not found: " + file.getPath());
+        }
+    }
+
     private void testTransferDatagramReceive(Session session, List<URL> downloadUrls) throws InterruptedException {
+        session.open();
         List<String> fileNames = downloadUrls.stream()
                 .map(url -> Paths.get(url.getPath()).getFileName().toString())
                 .collect(Collectors.toList());
@@ -211,6 +306,7 @@ public class WebTransportInteropClient extends WebTransportInterop {
     }
 
     private void testTransferUnidirectionalReceive(Session session, List<URL> downloadUrls) throws InterruptedException {
+        session.open();
         List<String> fileNames = downloadUrls.stream()
                 .map(url -> Paths.get(url.getPath()).getFileName().toString())
                 .collect(Collectors.toList());
@@ -226,6 +322,7 @@ public class WebTransportInteropClient extends WebTransportInterop {
     }
 
     private void testTransferBidirectionalReceive(Session session, List<URL> downloadUrls) throws InterruptedException {
+        session.open();
         List<String> fileNames = downloadUrls.stream()
                 .map(url -> Paths.get(url.getPath()).getFileName().toString())
                 .collect(Collectors.toList());

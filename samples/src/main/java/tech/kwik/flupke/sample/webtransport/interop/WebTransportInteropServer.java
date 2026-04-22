@@ -337,6 +337,10 @@ public class WebTransportInteropServer extends WebTransportInterop {
         }
 
         List<String> matchingFiles = extractMatchingFiles(requestsEnvVar, sessionPath);
+        if (matchingFiles.isEmpty()) {
+            System.out.println("No matching files found for session path " + sessionPath + " in REQUESTS env var, nothing to do");
+            return;
+        }
 
         session.open();
 
