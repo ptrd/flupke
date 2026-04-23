@@ -20,6 +20,7 @@ package tech.kwik.flupke;
 
 import java.io.IOException;
 import java.util.Optional;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
 public interface Http3Connection {
@@ -40,6 +41,13 @@ public interface Http3Connection {
      * @param handler
      */
     void registerDatagramHandler(Long streamId, Consumer<byte[]> handler);
+
+    /**
+     * Register a fallback handler for receiving HTTP Datagrams that have no handler registered yet for a particular stream ID.
+     * The handler receives the stream ID (full stream ID, not quarter stream ID) and the datagram payload.
+     * See https://www.rfc-editor.org/rfc/rfc9297
+     */
+    void registerDefaultDatagramHandler(BiFunction<Long, byte[], Boolean> handler);
 
     /**
      * HTTP/3 extension method: create a new unidirectional stream for the given stream type.
