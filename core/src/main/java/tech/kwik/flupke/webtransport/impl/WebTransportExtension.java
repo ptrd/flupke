@@ -44,8 +44,8 @@ public class WebTransportExtension implements Http3ServerExtension {
     private final ExecutorService executor;
 
     public WebTransportExtension(Http3ServerConnection http3ServerConnection, List<WebTransportHandlerRegistration> registrations,
-                                 ExecutorService executorService, int maxStreamsQueued) {
-        sessionFactory = new ServerSessionFactoryImpl(http3ServerConnection, executorService, maxStreamsQueued);
+                                 ExecutorService executorService, int maxStreamsQueued, int maxDatagramsQueued) {
+        sessionFactory = new ServerSessionFactoryImpl(http3ServerConnection, executorService, maxStreamsQueued, maxDatagramsQueued);
         // Preprocessing: split registrations into a map for static paths (O(1) lookup) and an ordered list for regexes.
         this.handlers = registrations.stream()
                 .filter(r -> !r.isRegexBased())

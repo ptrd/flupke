@@ -55,10 +55,11 @@ public class WebTransportExtensionFactory implements Http3ServerExtensionFactory
     private final List<WebTransportHandlerRegistration> handlers = new ArrayList<>();
     private ExecutorService executor = Executors.newCachedThreadPool(new DaemonThreadFactory("webtransport"));
     private int maxStreamsQueued;
+    private int maxDatagramsQueued;
 
     @Override
     public Http3ServerExtension createExtension(Http3ServerConnection http3ServerConnection) {
-        return new WebTransportExtension(http3ServerConnection, handlers, executor, maxStreamsQueued);
+        return new WebTransportExtension(http3ServerConnection, handlers, executor, maxStreamsQueued, maxDatagramsQueued);
     }
 
     @Override
@@ -139,5 +140,15 @@ public class WebTransportExtensionFactory implements Http3ServerExtensionFactory
      */
     public void setMaxStreamsQueued(int maxStreamsQueued) {
         this.maxStreamsQueued = maxStreamsQueued;
+    }
+
+    /**
+     * Sets the maximum number of datagrams that can be buffered before a session is established. When a datagram is
+     * received for a session that is not yet established, it is buffered until the session is established. If the number
+     * of buffered datagrams exceeds this limit, the datagram is dropped.
+     * @param maxDatagramsQueued
+     */
+    public void setMaxDatagramsQueued(int maxDatagramsQueued) {
+        this.maxDatagramsQueued = maxDatagramsQueued;
     }
 }

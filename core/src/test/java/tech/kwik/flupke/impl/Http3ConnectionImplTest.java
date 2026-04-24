@@ -34,6 +34,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -427,6 +428,69 @@ public class Http3ConnectionImplTest {
         ArgumentCaptor<Long> errorCaptor = ArgumentCaptor.forClass(Long.class);
         verify(quicConnection).close(errorCaptor.capture(), any());
         assertThat(errorCaptor.getValue()).isEqualTo(H3_DATAGRAM_ERROR);
+    }
+
+    @Test
+    public void registerDefaultDatagramHandlerShouldFailWhenDatagramNotEnabled() {
+        // Given
+        QuicConnection quicConnection = mock(QuicConnection.class);
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection, false);
+
+        // When
+        assertThatThrownBy(() -> connection.registerDefaultDatagramHandler((streamId, data) -> true))
+                // Then
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    public void defaultDatagramHandlerShouldBeCalledWhenNoSpecificHandlerMatches() {
+        // Given
+        QuicConnection quicConnection = mock(QuicConnection.class);
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection, true);
+
+        List<Long> receivedStreamIds = new ArrayList<>();
+        List<byte[]> receivedData = new ArrayList<>();
+        connection.registerDefaultDatagramHandler((streamId, data) -> {
+            receivedStreamIds.add(streamId);
+            receivedData.add(data);
+            return true;
+        });
+
+        ArgumentCaptor<Consumer<byte[]>> quicHandlerCaptor = ArgumentCaptor.forClass(Consumer.class);
+        verify(quicConnection).setDatagramHandler(quicHandlerCaptor.capture());
+
+        // When: datagram arrives with quarter stream id 3 (= stream id 12), no specific handler registered
+        byte[] datagram = new byte[] { 0x03, 0x0a, 0x0b };
+        quicHandlerCaptor.getValue().accept(datagram);
+
+        // Then
+        assertThat(receivedStreamIds).containsExactly(12L);
+        assertThat(receivedData).hasSize(1);
+        assertThat(receivedData.get(0)).containsExactly(0x0a, 0x0b);
+    }
+
+    @Test
+    public void defaultDatagramHandlerShouldNotBeCalledWhenSpecificHandlerMatches() {
+        // Given
+        QuicConnection quicConnection = mock(QuicConnection.class);
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection, true);
+
+        List<byte[]> specificReceived = new ArrayList<>();
+        connection.registerDatagramHandler(8L, specificReceived::add);
+
+        BiFunction<Long, byte[], Boolean> defaultHandler = mock(BiFunction.class);
+        connection.registerDefaultDatagramHandler(defaultHandler);
+
+        ArgumentCaptor<Consumer<byte[]>> quicConnectionHandlerCaptor = ArgumentCaptor.forClass(Consumer.class);
+        verify(quicConnection).setDatagramHandler(quicConnectionHandlerCaptor.capture());
+
+        // When: datagram arrives with quarter stream id 2 (= stream id 8), matching specific handler
+        byte[] datagram = new byte[] { 0x02, 0x01, 0x02, 0x03 };
+        quicConnectionHandlerCaptor.getValue().accept(datagram);
+
+        // Then
+        assertThat(specificReceived).hasSize(1);
+        verifyNoInteractions(defaultHandler);
     }
 
     @Test

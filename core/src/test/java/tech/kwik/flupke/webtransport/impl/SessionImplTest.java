@@ -28,6 +28,7 @@ import tech.kwik.flupke.HttpStream;
 import tech.kwik.flupke.core.CapsuleProtocolStream;
 import tech.kwik.flupke.impl.CapsuleProtocolStreamImpl;
 import tech.kwik.flupke.test.ByteUtils;
+import tech.kwik.flupke.test.TestExecutor;
 import tech.kwik.flupke.test.WriteableByteArrayInputStream;
 import tech.kwik.flupke.webtransport.Session;
 import tech.kwik.flupke.webtransport.WebTransportStream;
@@ -650,6 +651,30 @@ class SessionImplTest {
         verify(connectOutputStream, times(0)).close();
     }
 
+    @Test
+    void datagramsReceivedBeforeHandlerIsSetAreDeliveredOnceSessionIsOpened() throws Exception {
+        // Given
+        Http3Client client = builder.buildClient();
+        TestExecutor testExecutor = new TestExecutor();
+        var factory = new ClientSessionFactoryImpl(defaultWebtransportUri, client, testExecutor);
+        Session session = factory.createSession(defaultWebtransportUri);
+
+        // A datagram arrives before the user sets a datagram handler
+        byte[] datagram = new byte[] { 1, 2, 3 };
+        factory.handleEarlyDatagram(session.getSessionId(), datagram);
+
+        // When the user sets a datagram handler
+        AtomicReference<byte[]> received = new AtomicReference<>();
+        session.setDatagramHandler(received::set);
+
+        // And opens the session afterwards.
+        session.open();
+        testExecutor.executeAllPendingTasks();
+
+        // Then the buffered datagram is delivered to the handler
+        assertThat(received.get()).isEqualTo(datagram);
+    }
+
     /**
      * Returns an input stream that is open but empty, so any read will block forever.
      * @return
@@ -661,6 +686,14 @@ class SessionImplTest {
     private Session createSessionWith(Http3Client client) throws Exception {
         Session session = new ClientSessionFactoryImpl(defaultWebtransportUri, client, null).createSession(defaultWebtransportUri);
         session.open();
+        return session;
+    }
+
+    private Session createSessionWith(Http3Client client, boolean openImmediately) throws Exception {
+        Session session = new ClientSessionFactoryImpl(defaultWebtransportUri, client, null).createSession(defaultWebtransportUri);
+        if (openImmediately) {
+            session.open();
+        }
         return session;
     }
 

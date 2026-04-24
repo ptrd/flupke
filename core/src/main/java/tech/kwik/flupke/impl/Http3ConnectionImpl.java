@@ -38,8 +38,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
 import static tech.kwik.flupke.impl.SettingsFrame.*;
@@ -123,6 +125,7 @@ public class Http3ConnectionImpl implements Http3Connection {
     );
     protected Encoder qpackEncoder;
     private Map<Long, Consumer<byte[]>> datagramHandlers;
+    private BiFunction<Long, byte[], Boolean> defaultDatagramHandler;
     private final boolean datagramEnabled;
 
     /**
@@ -142,7 +145,7 @@ public class Http3ConnectionImpl implements Http3Connection {
             //  SETTINGS_H3_DATAGRAM (0x33) setting with a value of 1."
             settingsParameters.put((long) SETTINGS_H3_DATAGRAM, 1L);
             settingsParameters.put((long) SETTINGS_ENABLE_DATAGRAM_DEPRECATED, 1L);
-            datagramHandlers = new HashMap<>();
+            datagramHandlers = new ConcurrentHashMap<>();
             quicConnection.setDatagramHandler(this::handleDatagram);
         }
 
@@ -177,6 +180,14 @@ public class Http3ConnectionImpl implements Http3Connection {
         datagramHandlers.put(streamId, httpDatagramHandler);
     }
 
+    @Override
+    public void registerDefaultDatagramHandler(BiFunction<Long, byte[], Boolean> handler) {
+        if (!datagramEnabled) {
+            throw new IllegalStateException("Datagram extension is not enabled on this connection");
+        }
+        defaultDatagramHandler = handler;
+    }
+
     private void handleDatagram(byte[] data) {
         ByteBuffer buffer = ByteBuffer.wrap(data);
         try {
@@ -187,14 +198,15 @@ public class Http3ConnectionImpl implements Http3Connection {
             //      HTTP Datagram Payload (..),
             //    }"
             long quarterStreamId = VariableLengthInteger.parseLong(buffer);
+            long streamId = 4 * quarterStreamId;
             byte[] datagramData = new byte[buffer.remaining()];
             buffer.get(datagramData);
-            Consumer<byte[]> handler = datagramHandlers.get(4 * quarterStreamId);
-            // https://www.rfc-editor.org/rfc/rfc9297#section-2.1
-            // "f an HTTP/3 Datagram is received and its Quarter Stream ID field maps to a stream that has not yet been
-            //  created, the receiver SHALL either drop that datagram silently ..."
+            Consumer<byte[]> handler = datagramHandlers.get(streamId);
             if (handler != null) {
                 handler.accept(datagramData);
+            }
+            else if (defaultDatagramHandler != null) {
+                defaultDatagramHandler.apply(streamId, datagramData);
             }
         }
         catch (InvalidIntegerEncodingException e) {
