@@ -106,6 +106,7 @@ public class ClientSessionFactoryImpl extends AbstractSessionFactoryImpl impleme
 
             httpClientConnection.registerUnidirectionalStreamType(STREAM_TYPE_WEBTRANSPORT, this::handleUnidirectionalStream);
             httpClientConnection.registerBidirectionalStreamHandler(this::handleBidirectionalStream);
+            httpClientConnection.registerDefaultDatagramHandler((streamId, data) -> handleEarlyDatagram(streamId, data)); // TODO: moet dit ook niet voor server?
         }
         catch (URISyntaxException e) {
             throw new IOException("Invalid server URI: " + server);

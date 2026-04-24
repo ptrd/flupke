@@ -23,12 +23,16 @@ import org.junit.jupiter.api.Test;
 import tech.kwik.flupke.HttpStream;
 import tech.kwik.flupke.impl.CapsuleProtocolStreamImpl;
 import tech.kwik.flupke.impl.Http3ConnectionImpl;
+import tech.kwik.flupke.test.TestExecutor;
 import tech.kwik.flupke.test.WriteableByteArrayInputStream;
 import tech.kwik.flupke.webtransport.WebTransportStream;
 
 import java.io.ByteArrayInputStream;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Consumer;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
 class AbstractSessionFactoryImplTest {
@@ -103,6 +107,40 @@ class AbstractSessionFactoryImplTest {
         SessionImpl newSession = new SessionImpl(mock(Http3ConnectionImpl.class), mock(WebTransportContext.class),
                 new CapsuleProtocolStreamImpl(controlStream), unidirectionalStreamHandler, s -> {}, sessionFactory);
         return newSession;
+    }
+
+    private SessionImpl createSessionFor(AbstractSessionFactoryImpl factory, long sessionId) {
+        HttpStream controlStream = mock(HttpStream.class);
+        when(controlStream.getInputStream()).thenReturn(new WriteableByteArrayInputStream());
+        when(controlStream.getStreamId()).thenReturn(sessionId);
+        return new SessionImpl(mock(Http3ConnectionImpl.class), mock(WebTransportContext.class),
+                new CapsuleProtocolStreamImpl(controlStream), factory);
+    }
+
+    @Test
+    void datagramsReceivedBeforeSessionObjectIsCreatedAreDeliveredWhenHandlerIsSet() throws Exception {
+        // Given
+        TestExecutor testExecutor = new TestExecutor();
+        AbstractSessionFactoryImpl factoryWithExecutor = new AbstractSessionFactoryImpl(testExecutor, 3) {};
+        long sessionId = 4L;
+        byte[] datagram = new byte[] { 1, 2, 3 };
+
+        // A datagram arrives before the session object has been created
+        factoryWithExecutor.handleEarlyDatagram(sessionId, datagram);
+
+        // The session is then created, registered
+        SessionImpl session = createSessionFor(factoryWithExecutor, sessionId);
+        factoryWithExecutor.registerSession(session);
+
+        // When the user sets a datagram handler and opens the session
+        List<byte[]> received = new ArrayList<>();
+        session.setDatagramHandler(received::add);
+        session.open();
+        testExecutor.executeAllPendingTasks();
+
+        // Then the early datagram is delivered to the handler
+        assertThat(received).hasSize(1);
+        assertThat(received.get(0)).isEqualTo(datagram);
     }
 
 }

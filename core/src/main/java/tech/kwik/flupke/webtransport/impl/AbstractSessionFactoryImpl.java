@@ -26,7 +26,9 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -60,6 +62,7 @@ public abstract class AbstractSessionFactoryImpl implements SessionFactory {
     private final int maxStreamsQueued;
     private volatile long latestSessionId = -1;
     protected final ExecutorService executor;
+    private final Map<Long, Queue<byte[]>> earlyDatagrams = new ConcurrentHashMap<>();
 
     public AbstractSessionFactoryImpl(ExecutorService executor, int maxStreamsQueued) {
         this.executor = executor;
@@ -162,6 +165,18 @@ public abstract class AbstractSessionFactoryImpl implements SessionFactory {
         }
     }
 
+    protected boolean handleEarlyDatagram(long streamId, byte[] data) {
+        // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-15.html#name-buffering-incoming-streams-
+        // "To handle this case, WebTransport endpoints SHOULD buffer streams and datagrams until they can be associated
+        //  with an established session. To avoid resource exhaustion, endpoints MUST limit the number of buffered streams
+        //  and datagrams."
+        // "When the number of buffered datagrams is exceeded, a datagram SHALL be dropped. It is up to an implementation
+        //  to choose what stream or datagram to discard."
+        // TODO: implement a limit on buffered datagrams and drop datagrams when the limit is exceeded.
+        earlyDatagrams.computeIfAbsent(streamId, k -> new ConcurrentLinkedQueue<>()).add(data);
+        return true;
+    }
+
     @Override
     public void startSession(SessionImpl session) {
         List<HttpStream> bufferedStreams;
@@ -178,6 +193,11 @@ public abstract class AbstractSessionFactoryImpl implements SessionFactory {
         }
         if (bufferedStreams != null) {
             bufferedStreams.forEach(stream -> executor.submit(() -> session.handleStream(stream)));
+        }
+        // Flush any datagrams that arrived before the session-specific handler was registered in the SessionImpl constructor.
+        Queue<byte[]> bufferedDatagrams = earlyDatagrams.remove(session.getSessionId());
+        if (bufferedDatagrams != null) {
+            bufferedDatagrams.forEach(datagram -> executor.submit(() -> session.handleDatagram(datagram)));
         }
     }
 

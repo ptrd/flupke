@@ -63,6 +63,8 @@ public class SessionImpl implements Session {
     private BiConsumer<Long, String> sessionTerminatedEventListener;
     private Queue<HttpStream> sendingStreams = new ConcurrentLinkedQueue();
     private Queue<HttpStream> receivingStreams = new ConcurrentLinkedQueue();
+    private final Queue<byte[]> bufferedDatagrams = new ConcurrentLinkedQueue<>();
+    private volatile Consumer<byte[]> datagramHandler;
 
     SessionImpl(Http3Connection http3Connection, WebTransportContext context, CapsuleProtocolStream connectStream, SessionFactory sessionFactory) {
         this(http3Connection, context, connectStream, s -> {}, s -> {}, sessionFactory);
@@ -180,6 +182,7 @@ public class SessionImpl implements Session {
 
     @Override
     public void setDatagramHandler(Consumer<byte[]> handler) {
+        datagramHandler = handler;
         http3Connection.registerDatagramHandler(sessionId, Objects.requireNonNull(handler));
     }
 
@@ -225,6 +228,12 @@ public class SessionImpl implements Session {
     @Override
     public void registerSessionTerminatedEventListener(BiConsumer<Long, String> listener) {
         sessionTerminatedEventListener = Objects.requireNonNull(listener);
+    }
+
+    void handleDatagram(byte[] data) {
+        if (datagramHandler != null) {
+            datagramHandler.accept(data);
+        }
     }
 
     void handleStream(HttpStream httpStream) {
