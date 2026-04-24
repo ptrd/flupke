@@ -134,6 +134,7 @@ public class WebTransportInteropClient extends WebTransportInterop {
     private Session setupWebTransportSession(URI serverUrl, Http3Client client, List<String> protocols) throws Exception {
         ClientSessionFactory clientSessionFactory = ClientSessionFactory.newBuilder()
                 .maxStreamsQueued(10)
+                .maxDatagramsQueued(100)
                 .serverUri(serverUrl)
                 .httpClient(client)
                 .build();
