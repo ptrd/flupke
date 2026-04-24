@@ -60,13 +60,16 @@ public abstract class AbstractSessionFactoryImpl implements SessionFactory {
     private final Map<Long, List<HttpStream>> streamQueue = new ConcurrentHashMap<>();
     private volatile int streamsQueued;
     private final int maxStreamsQueued;
+    private volatile int datagramsQueued;
+    private final int maxDatagramsQueued;
     private volatile long latestSessionId = -1;
     protected final ExecutorService executor;
     private final Map<Long, Queue<byte[]>> earlyDatagrams = new ConcurrentHashMap<>();
 
-    public AbstractSessionFactoryImpl(ExecutorService executor, int maxStreamsQueued) {
+    public AbstractSessionFactoryImpl(ExecutorService executor, int maxStreamsQueued, int maxDatagramsQueued) {
         this.executor = executor;
         this.maxStreamsQueued = maxStreamsQueued;
+        this.maxDatagramsQueued = maxDatagramsQueued;
     }
 
     protected void handleUnidirectionalStream(HttpStream httpStream) {
@@ -172,8 +175,11 @@ public abstract class AbstractSessionFactoryImpl implements SessionFactory {
         //  and datagrams."
         // "When the number of buffered datagrams is exceeded, a datagram SHALL be dropped. It is up to an implementation
         //  to choose what stream or datagram to discard."
-        // TODO: implement a limit on buffered datagrams and drop datagrams when the limit is exceeded.
+        if (datagramsQueued >= maxDatagramsQueued) {
+            return false;
+        }
         earlyDatagrams.computeIfAbsent(streamId, k -> new ConcurrentLinkedQueue<>()).add(data);
+        datagramsQueued++;
         return true;
     }
 
@@ -197,6 +203,7 @@ public abstract class AbstractSessionFactoryImpl implements SessionFactory {
         // Flush any datagrams that arrived before the session-specific handler was registered in the SessionImpl constructor.
         Queue<byte[]> bufferedDatagrams = earlyDatagrams.remove(session.getSessionId());
         if (bufferedDatagrams != null) {
+            datagramsQueued -= bufferedDatagrams.size();
             bufferedDatagrams.forEach(datagram -> executor.submit(() -> session.handleDatagram(datagram)));
         }
     }

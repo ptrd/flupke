@@ -44,7 +44,7 @@ class WebTransportExtensionTest {
     void whenPathsMatchExtendedConnectReturns200() {
         // Given
         List<WebTransportHandlerRegistration> handlers = List.of(new WebTransportHandlerRegistration("/service", session -> {}, List.of()));
-        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers, executor, 3);
+        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers, executor, 3, 3);
 
         // When
         AtomicInteger httpStatus = new AtomicInteger();
@@ -58,7 +58,7 @@ class WebTransportExtensionTest {
     void whenPathsDoNotMatchExtendedConnectReturns404() {
         // Given
         List<WebTransportHandlerRegistration> handlers = List.of(new WebTransportHandlerRegistration("/service", session -> {}, List.of()));
-        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers, executor, 3);
+        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers, executor, 3, 3);
 
         // When
         AtomicInteger httpStatus = new AtomicInteger();
@@ -72,7 +72,7 @@ class WebTransportExtensionTest {
     void whenRequestPathPartlyMatchesExtendedConnectReturns404() {
         // Given
         List<WebTransportHandlerRegistration> handlers = List.of(new WebTransportHandlerRegistration("/service", session -> {}, List.of()));
-        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers, executor, 3);
+        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers, executor, 3, 3);
 
         // When
         AtomicInteger httpStatus = new AtomicInteger();
@@ -86,7 +86,7 @@ class WebTransportExtensionTest {
     void whenRequestPathIsPrefixOfRegisteredPathExtendedConnectReturns404() {
         // Given
         List<WebTransportHandlerRegistration> handlers = List.of(new WebTransportHandlerRegistration("/service", session -> {}, List.of()));
-        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers, executor, 3);
+        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers, executor, 3, 3);
 
         // When
         AtomicInteger httpStatus = new AtomicInteger();
@@ -100,7 +100,7 @@ class WebTransportExtensionTest {
     void whenRequestPathContainsQueryParamsExtendedConnectReturnsSuccess() {
         // Given
         List<WebTransportHandlerRegistration> handlers = List.of(new WebTransportHandlerRegistration("/service", session -> {}, List.of()));
-        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers, executor, 3);
+        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers, executor, 3, 3);
 
         // When
         AtomicInteger httpStatus = new AtomicInteger();
@@ -115,7 +115,7 @@ class WebTransportExtensionTest {
     void whenProtocolMatchesExtendedConnectReturns200() {
         // Given
         List<WebTransportHandlerRegistration> handlers = List.of(new WebTransportHandlerRegistration("/service", session -> {}, List.of("proto-a", "proto-b")));
-        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers, executor, 3);
+        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers, executor, 3, 3);
         HttpHeaders headers = HttpHeaders.of(Map.of("WT-Available-Protocols", List.of("\"proto-b\", \"proto-c\"")), (k, v) -> true);
 
         // When
@@ -130,7 +130,7 @@ class WebTransportExtensionTest {
     void whenProtocolMatchesResponseContainsWtProtocolHeader() {
         // Given
         List<WebTransportHandlerRegistration> handlers = List.of(new WebTransportHandlerRegistration("/service", session -> {}, List.of("proto-a", "proto-b")));
-        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers, executor, 3);
+        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers, executor, 3, 3);
         HttpHeaders headers = HttpHeaders.of(Map.of("WT-Available-Protocols", List.of("\"proto-b\", \"proto-c\"")), (k, v) -> true);
 
         // When
@@ -145,7 +145,7 @@ class WebTransportExtensionTest {
     void whenNoProtocolMatchesExtendedConnectReturns404() {
         // Given
         List<WebTransportHandlerRegistration> handlers = List.of(new WebTransportHandlerRegistration("/service", session -> {}, List.of("proto-a", "proto-b")));
-        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers, executor, 3);
+        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers, executor, 3, 3);
         HttpHeaders headers = HttpHeaders.of(Map.of("WT-Available-Protocols", List.of("\"proto-c\", \"proto-d\"")), (k, v) -> true);
 
         // When
@@ -160,7 +160,7 @@ class WebTransportExtensionTest {
     void whenNoWtAvailableProtocolsHeaderPresentConnectSucceeds() {
         // Given
         List<WebTransportHandlerRegistration> handlers = List.of(new WebTransportHandlerRegistration("/service", session -> {}, List.of("proto-a", "proto-b")));
-        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers, executor, 3);
+        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers, executor, 3, 3);
         HttpHeaders headers = HttpHeaders.of(Map.of(), (k, v) -> true);
 
         // When
@@ -175,7 +175,7 @@ class WebTransportExtensionTest {
     void whenWtAvailableProtocolsHeaderIsMalformedItIsIgnoredAndConnectSucceeds() {
         // Given
         List<WebTransportHandlerRegistration> handlers = List.of(new WebTransportHandlerRegistration("/service", session -> {}, List.of("proto-a")));
-        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers, executor, 3);
+        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers, executor, 3, 3);
         HttpHeaders headers = HttpHeaders.of(Map.of("WT-Available-Protocols", List.of("not-a-structured-field")), (k, v) -> true);
 
         // When
@@ -190,7 +190,7 @@ class WebTransportExtensionTest {
     void whenNoApplicationProtocolsRegisteredProtocolHeaderIsIgnored() {
         // Given
         List<WebTransportHandlerRegistration> handlers = List.of(new WebTransportHandlerRegistration("/service", session -> {}, List.of()));
-        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers, executor, 3);
+        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), handlers, executor, 3, 3);
         HttpHeaders headers = HttpHeaders.of(Map.of("WT-Available-Protocols", List.of("\"proto-x\"")), (k, v) -> true);
 
         // When
@@ -207,7 +207,7 @@ class WebTransportExtensionTest {
     void whenRegexMatchesExtendedConnectReturns200() {
         // Given
         var regexHandlers = List.of(new WebTransportHandlerRegistration(Pattern.compile("/service/\\d+"), session -> {}, List.of()));
-        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), regexHandlers, executor, 3);
+        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), regexHandlers, executor, 3, 3);
 
         // When
         AtomicInteger httpStatus = new AtomicInteger();
@@ -221,7 +221,7 @@ class WebTransportExtensionTest {
     void whenRegexDoesNotMatchExtendedConnectReturns404() {
         // Given
         var regexHandlers = List.of(new WebTransportHandlerRegistration(Pattern.compile("/service/\\d+"), session -> {}, List.of()));
-        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), regexHandlers, executor, 3);
+        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), regexHandlers, executor, 3, 3);
 
         // When
         AtomicInteger httpStatus = new AtomicInteger();
@@ -235,7 +235,7 @@ class WebTransportExtensionTest {
     void regexMustMatchEntirePath() {
         // Given
         var regexHandlers = List.of(new WebTransportHandlerRegistration(Pattern.compile("ervice/\\d+"), session -> {}, List.of()));
-        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), regexHandlers, executor, 3);
+        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), regexHandlers, executor, 3, 3);
 
         // When
         AtomicInteger httpStatus = new AtomicInteger();
@@ -251,7 +251,7 @@ class WebTransportExtensionTest {
         var registrations = List.of(
                 new WebTransportHandlerRegistration(Pattern.compile("/service/.*"), session -> { throw new RuntimeException("should not execute"); }, List.of()),
                 new WebTransportHandlerRegistration("/service/special", session -> {}, List.of()));
-        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), registrations, executor, 3);
+        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), registrations, executor, 3, 3);
 
         // When
         AtomicInteger httpStatus = new AtomicInteger();
@@ -271,7 +271,7 @@ class WebTransportExtensionTest {
         var regexHandlers = List.of(
                 new WebTransportHandlerRegistration(java.util.regex.Pattern.compile("/service/.*"), session -> firstHandlerCalled.set(true), List.of()),
                 new WebTransportHandlerRegistration(java.util.regex.Pattern.compile("/service/.*"), session -> secondHandlerCalled.set(true), List.of()));
-        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), regexHandlers, executor, 3);
+        WebTransportExtension webTransportExtension = new WebTransportExtension(mock(Http3ServerConnection.class), regexHandlers, executor, 3, 3);
 
         // When
         webTransportExtension.handleExtendedConnect(mock(HttpHeaders.class), "webtransport", "localhost", "/service/test", (s, h) -> {}, mockHttpStream());

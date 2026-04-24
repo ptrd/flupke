@@ -41,7 +41,7 @@ class AbstractSessionFactoryImplTest {
 
     @BeforeEach
     void setUp() {
-        sessionFactory = new AbstractSessionFactoryImpl(null, 3) {};
+        sessionFactory = new AbstractSessionFactoryImpl(null, 3, 3) {};
     }
 
     @Test
@@ -118,10 +118,36 @@ class AbstractSessionFactoryImplTest {
     }
 
     @Test
+    void earlyDatagramsShouldBeDroppedWhenLimitExceeded() throws Exception {
+        // Given
+        TestExecutor testExecutor = new TestExecutor();
+        int maxBuffered = 3;
+        AbstractSessionFactoryImpl factoryWithExecutor = new AbstractSessionFactoryImpl(testExecutor, maxBuffered, maxBuffered) {};
+        long sessionId = 4L;
+
+        // When more datagrams arrive than the buffer limit allows
+        for (int i = 0; i <= maxBuffered; i++) {
+            factoryWithExecutor.handleEarlyDatagram(sessionId, new byte[]{ (byte) i });
+        }
+
+        // The session is then created and registered
+        SessionImpl session = createSessionFor(factoryWithExecutor, sessionId);
+        factoryWithExecutor.registerSession(session);
+
+        List<byte[]> received = new ArrayList<>();
+        session.setDatagramHandler(received::add);
+        session.open();
+        testExecutor.executeAllPendingTasks();
+
+        // Then at most maxBuffered datagrams should be delivered (the overflow datagram is dropped)
+        assertThat(received).hasSize(maxBuffered);
+    }
+
+    @Test
     void datagramsReceivedBeforeSessionObjectIsCreatedAreDeliveredWhenHandlerIsSet() throws Exception {
         // Given
         TestExecutor testExecutor = new TestExecutor();
-        AbstractSessionFactoryImpl factoryWithExecutor = new AbstractSessionFactoryImpl(testExecutor, 3) {};
+        AbstractSessionFactoryImpl factoryWithExecutor = new AbstractSessionFactoryImpl(testExecutor, 3, 3) {};
         long sessionId = 4L;
         byte[] datagram = new byte[] { 1, 2, 3 };
 

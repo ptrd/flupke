@@ -146,5 +146,15 @@ public interface ClientSessionFactory {
          * @param maxStreamsQueued
          */
         Builder maxStreamsQueued(int maxStreamsQueued);
+
+        /**
+         * Sets the maximum number of datagrams that can be queued per session. When a new datagram is received for a
+         * session that is not yet created, it is queued until the session is created. If the number of queued datagrams
+         * exceeds this limit, the datagram is dropped.
+         *
+         * @param maxStreamsQueued
+         * @return
+         */
+        Builder maxDatagramsQueued(int maxStreamsQueued);
     }
 }
