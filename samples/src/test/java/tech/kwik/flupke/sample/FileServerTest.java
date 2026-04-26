@@ -76,6 +76,30 @@ public class FileServerTest {
         verify(response).setStatus(intThat(arg -> arg == 404));
     }
 
+    @Test
+    public void pathTraversalViaStartsWithBypassAllowsAccessToSiblingDirectory() throws IOException {
+        // Given: a parent containing wwwDir and a sibling directory sharing its name prefix
+        File parent = Files.createTempDirectory("traversal-test-root").toFile();
+        File localWwwDir = new File(parent, "www");
+        localWwwDir.mkdir();
+        File siblingDir = new File(parent, "www-outside");
+        siblingDir.mkdir();
+        File secretFile = new File(siblingDir, "secret.txt");
+        Files.write(secretFile.toPath(), "secret content!".getBytes());
+
+        FileServer server = new FileServer(localWwwDir);
+        HttpServerResponse response = mock(HttpServerResponse.class);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        when(response.getOutputStream()).thenReturn(out);
+
+        // When: request traverses sideways into the sibling directory
+        server.handleRequest(createGetRequest("../www-outside/secret.txt"), response);
+
+        // Then: access outside wwwDir must be denied
+        assertThat(out.toString()).isEmpty();
+        verify(response).setStatus(404);
+    }
+
     private HttpServerRequest createGetRequest(String filename) throws IOException {
         return new HttpServerRequestImpl("GET", filename, null, null, new InetSocketAddress(Inet4Address.getByAddress(new byte[] { 10, 0, 0, 58 }), 443), mock(InputStream.class));
     }

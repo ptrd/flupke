@@ -29,6 +29,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.http.HttpHeaders;
+import java.nio.file.Path;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -150,9 +151,11 @@ public class FileServer implements HttpRequestHandler {
      * @throws IOException
      */
     private File getFileInWwwDir(String fileName) throws IOException {
-        String requestedFilePath = new File(wwwDir, fileName).getCanonicalPath();
-        if (requestedFilePath.startsWith(wwwDir.getCanonicalPath())) {
-            return new File(requestedFilePath);
+        Path resolvedPath = new File(wwwDir, fileName).getCanonicalFile().toPath();
+        // Path.startsWith() compares path components, so it is not fooled by sibling directories that share a name prefix,
+        // and it handles edge cases like wwwDir == "/" where appending a separator would incorrectly produce "//".
+        if (resolvedPath.startsWith(wwwDir.getCanonicalFile().toPath())) {
+            return resolvedPath.toFile();
         }
         else {
             return null;
