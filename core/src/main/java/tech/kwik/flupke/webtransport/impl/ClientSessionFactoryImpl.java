@@ -240,7 +240,7 @@ public class ClientSessionFactoryImpl extends AbstractSessionFactoryImpl impleme
 
         @Override
         public Builder maxDatagramsQueued(int maxDatagramsQueued) {
-            this.maxDatagramsQueued = maxStreamsQueued;
+            this.maxDatagramsQueued = maxDatagramsQueued;
             return this;
         }
     }
