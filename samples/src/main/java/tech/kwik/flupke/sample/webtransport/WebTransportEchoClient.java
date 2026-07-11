@@ -45,6 +45,8 @@ public class WebTransportEchoClient {
         Logger stdoutLogger = new SysOutLogger();
 
         Http3Client client = (Http3Client) ((Http3ClientBuilder) Http3Client.newBuilder())
+                .enableDatagram()
+                .enableReliableStreamReset()
                 .disableCertificateCheck()
                 .logger(stdoutLogger)
                 .connectTimeout(Duration.ofSeconds(4))

@@ -71,9 +71,9 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     private long maxReceivedDataSize = MAX_RECEIVED_DATA_SIZE;
 
     public Http3ClientConnectionImpl(String host, int port, Duration connectTimeout, Http3ConnectionSettings connectionSettings,
-                                     DatagramSocketFactory datagramSocketFactory, boolean datagramEnabled, ExecutorService executorService,
-                                     Logger logger) throws IOException {
-        this(createQuicConnection(host, port, connectTimeout, connectionSettings, datagramSocketFactory, datagramEnabled, logger), datagramEnabled, executorService);
+                                     DatagramSocketFactory datagramSocketFactory, boolean datagramEnabled, boolean reliableStreamResetEnabled,
+                                     ExecutorService executorService, Logger logger) throws IOException {
+        this(createQuicConnection(host, port, connectTimeout, connectionSettings, datagramSocketFactory, datagramEnabled, reliableStreamResetEnabled, logger), datagramEnabled, executorService);
     }
 
     public Http3ClientConnectionImpl(QuicConnection quicConnection, boolean datagramEnabled, ExecutorService executorService) {
@@ -89,7 +89,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     }
 
     Http3ClientConnectionImpl(String host, int port) throws IOException {
-        this(host, port, DEFAULT_CONNECT_TIMEOUT, defaultConnectionSettings(), null, false, Executors.newCachedThreadPool(), null);
+        this(host, port, DEFAULT_CONNECT_TIMEOUT, defaultConnectionSettings(), null, false, false, Executors.newCachedThreadPool(), null);
     }
 
     @Override
@@ -166,7 +166,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         }
     }
 
-    private static QuicConnection createQuicConnection(String host, int port, Duration connectTimeout, Http3ConnectionSettings connectionSettings, DatagramSocketFactory datagramSocketFactory, boolean enableQuicDatagram, Logger logger) throws SocketException, UnknownHostException {
+    private static QuicConnection createQuicConnection(String host, int port, Duration connectTimeout, Http3ConnectionSettings connectionSettings, DatagramSocketFactory datagramSocketFactory, boolean enableQuicDatagram, boolean enableReliableStreamReset, Logger logger) throws SocketException, UnknownHostException {
         QuicClientConnection.Builder builder = QuicClientConnection.newBuilder();
         try {
             builder.uri(new URI("//" + host + ":" + port));
@@ -201,6 +201,9 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         builder.logger(logger != null? logger: new NullLogger());
         if (enableQuicDatagram) {
             builder.enableDatagramExtension();
+        }
+        if (enableReliableStreamReset) {
+            builder.enableReliableStreamReset();
         }
         return builder.build();
     }

@@ -228,6 +228,19 @@ public class ClientSessionFactoryImpl extends AbstractSessionFactoryImpl impleme
 
         @Override
         public Builder httpClient(Http3Client httpClient) {
+            // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-15.html#section-3.1
+            // "WebTransport over HTTP/3 requires support for HTTP/3 datagrams and the Capsule Protocol, and both the
+            //  client and the server indicate support for HTTP/3 datagrams by sending a SETTINGS_H3_DATAGRAM setting
+            //  value set to 1 in their SETTINGS frame"
+            if (! httpClient.enableDatagram()) {
+                throw new IllegalArgumentException("Http3Client must have datagram support enabled to be used with WebTransport");
+            }
+            // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-15.html#section-3.1
+            // "WebTransport over HTTP/3 relies on the RESET_STREAM_AT frame defined in [RESET-STREAM-AT]. To indicate
+            //  support, both the client and the server enable the extension "
+            if (! httpClient.enableReliableStreamReset()) {
+                throw new IllegalArgumentException("Http3Client must have reliable stream reset enabled to be used with WebTransport");
+            }
             this.httpClient = httpClient;
             return this;
         }

@@ -35,7 +35,7 @@ public class Http3SingleConnectionFactory extends Http3ConnectionFactory {
     private Http3ClientConnection http3Connection;
 
     public Http3SingleConnectionFactory(QuicConnection quicConnection) {
-        super(null, false, Executors.newCachedThreadPool(new DaemonThreadFactory("http3")));
+        super(null, false, false, Executors.newCachedThreadPool(new DaemonThreadFactory("http3")));
         this.quicConnection = quicConnection;
     }
 
