@@ -62,6 +62,8 @@ public class WebTransportInteropClient extends WebTransportInterop {
         createOutputDir(serverUrl);
 
         Http3Client client = (Http3Client) Http3Client.newBuilder()
+                .enableDatagram()
+                .enableReliableStreamReset()
                 .maxAdditionalOpenPeerInitiatedBidirectionalStreams(100)
                 .maxAdditionalOpenPeerInitiatedUnidirectionalStreams(100)
                 .trustManager(trustManager)
