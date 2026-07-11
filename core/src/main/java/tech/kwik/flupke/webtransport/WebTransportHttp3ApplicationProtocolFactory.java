@@ -166,4 +166,11 @@ public class WebTransportHttp3ApplicationProtocolFactory extends Http3Applicatio
         webTransportExtensionFactory.setMaxStreamsQueued(maxStreamsQueued);
     }
 
+    @Override
+    public boolean enableReliableStreamReset() {
+        // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-15.html#section-3.1
+        // "WebTransport over HTTP/3 relies on the RESET_STREAM_AT frame defined in [RESET-STREAM-AT]. To indicate support,
+        //  both the client and the server enable the extension (...)"
+        return true;
+    }
 }
