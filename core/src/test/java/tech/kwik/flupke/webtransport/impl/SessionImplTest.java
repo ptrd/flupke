@@ -28,6 +28,7 @@ import tech.kwik.flupke.HttpStream;
 import tech.kwik.flupke.core.CapsuleProtocolStream;
 import tech.kwik.flupke.impl.CapsuleProtocolStreamImpl;
 import tech.kwik.flupke.test.ByteUtils;
+import tech.kwik.flupke.test.FieldReader;
 import tech.kwik.flupke.test.TestExecutor;
 import tech.kwik.flupke.test.WriteableByteArrayInputStream;
 import tech.kwik.flupke.webtransport.Session;
@@ -40,6 +41,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.Queue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
@@ -484,6 +486,145 @@ class SessionImplTest {
     }
 
     @Test
+    void whenOutputStreamOfUnidirectionalStreamIsClosedItIsNotRetainedBySession() throws Exception {
+        // Given
+        Http3Client client = builder.buildClient();
+        Session session = createSessionWith(client);
+
+        WebTransportStream unidirectionalStream = session.createUnidirectionalStream();
+        assertThat(sendingStreamsOf(session).size()).isEqualTo(1);
+
+        // When
+        unidirectionalStream.getOutputStream().close();
+
+        // Then
+        assertThat(sendingStreamsOf(session).size()).isEqualTo(0);
+    }
+
+    @Test
+    void whenBothStreamsOfBidirectionalStreamAreClosedItIsNotRetainedBySession() throws Exception {
+        // Given
+        Http3Client client = builder.buildClient();
+        Session session = createSessionWith(client);
+
+        WebTransportStream bidirectionalStream = session.createBidirectionalStream();
+        assertThat(sendingStreamsOf(session).size()).isEqualTo(1);
+        assertThat(receivingStreamsOf(session).size()).isEqualTo(1);
+
+        // When
+        bidirectionalStream.getOutputStream().close();
+        bidirectionalStream.getInputStream().close();
+
+        // Then
+        assertThat(sendingStreamsOf(session).size()).isEqualTo(0);
+        assertThat(receivingStreamsOf(session).size()).isEqualTo(0);
+    }
+
+    @Test
+    void whenBidirectionalStreamIsReadUntilEndOfStreamItsReceiveSideIsNotRetainedBySession() throws Exception {
+        // Given
+        Http3Client client = builder
+                .withBidirectionalStreamInputOuput(new ByteArrayInputStream("Hello from peer!".getBytes(StandardCharsets.UTF_8)), new ByteArrayOutputStream())
+                .buildClient();
+        Session session = createSessionWith(client);
+
+        WebTransportStream bidirectionalStream = session.createBidirectionalStream();
+
+        // When the peer's data is read up to (and including) the end of the stream
+        bidirectionalStream.getInputStream().readAllBytes();
+
+        // Then
+        assertThat(receivingStreamsOf(session).size()).isEqualTo(0);
+        // And the send side is still retained, as it has not been closed
+        assertThat(sendingStreamsOf(session).size()).isEqualTo(1);
+    }
+
+    @Test
+    void whenPeerInitiatedUnidirectionalStreamIsReadUntilEndOfStreamItIsNotRetainedBySession() throws Exception {
+        // Given
+        Http3Client client = builder
+                .withExtendedConnectStream(createOpenInputStream())
+                .buildClient();
+
+        Consumer<WebTransportStream> unidirectionalStreamHandler = stream -> readStringFrom(stream.getInputStream());
+        Session session = createSessionWith(client, unidirectionalStreamHandler, null);
+        Consumer<HttpStream> handler = captureHttpConnectionUnidirectionalStreamHandler(builder.getHttp3connection());
+
+        // When the peer sends something on a (new) unidirectional stream and the handler reads it up to the end of the stream
+        String binarySessionId = "\u0004";  // (one byte, just 0x04)
+        handler.accept(unidirectionalHttpStreamWith(new ByteArrayInputStream((binarySessionId + "Hello from peer!").getBytes(StandardCharsets.UTF_8))));
+
+        // Then
+        assertThat(receivingStreamsOf(session).size()).isEqualTo(0);
+    }
+
+    @Test
+    void closingOutputStreamTwiceShouldRemoveStreamFromSendingStreamsOnlyOnce() throws Exception {
+        // Given
+        HttpStream firstHttpStream = mockHttpStream();
+        HttpStream secondHttpStream = mockHttpStream();
+        Http3Client client = builder.buildClient();
+        Session session = createSessionWith(client);
+        when(builder.getHttp3connection().createUnidirectionalStream(anyLong())).thenReturn(firstHttpStream, secondHttpStream);
+
+        WebTransportStream firstStream = session.createUnidirectionalStream();
+        session.createUnidirectionalStream();  // remains open
+        OutputStream outputStream = firstStream.getOutputStream();
+        outputStream.close();
+
+        // When
+        assertDoesNotThrow(() -> outputStream.close());
+
+        // Then only the stream that was closed has been removed
+        assertThat(sendingStreamsOf(session).size()).isEqualTo(1);
+        assertThat(sendingStreamsOf(session).contains(secondHttpStream)).isTrue();
+    }
+
+    @Test
+    void closingInputStreamAfterEndOfStreamShouldRemoveStreamFromReceivingStreamsOnlyOnce() throws Exception {
+        // Given
+        HttpStream firstHttpStream = mockBidirectionalHttpStream("Hello from peer!");
+        HttpStream secondHttpStream = mockBidirectionalHttpStream("Hello from peer!");
+        Http3Client client = builder.buildClient();
+        Session session = createSessionWith(client);
+        when(builder.getHttp3connection().createBidirectionalStream()).thenReturn(firstHttpStream, secondHttpStream);
+
+        WebTransportStream firstStream = session.createBidirectionalStream();
+        session.createBidirectionalStream();  // remains open
+        InputStream inputStream = firstStream.getInputStream();
+        inputStream.readAllBytes();
+
+        // When
+        assertDoesNotThrow(() -> inputStream.close());
+
+        // Then only the stream that was read until the end of the stream has been removed
+        assertThat(receivingStreamsOf(session).size()).isEqualTo(1);
+        assertThat(receivingStreamsOf(session).contains(secondHttpStream)).isTrue();
+    }
+
+    @Test
+    void whenSessionIsClosedStreamsThatAreAlreadyClosedAreNotReset() throws Exception {
+        // Given
+        HttpStream unidirectionalHttpStream = mockHttpStream();
+        InputStream connectStream = new WriteableByteArrayInputStream();
+        Http3Client client = builder
+                .withExtendedConnectStream(connectStream)
+                .with(unidirectionalHttpStream)
+                .buildClient();
+        Session session = createSessionWith(client);
+
+        session.createUnidirectionalStream().getOutputStream().close();
+
+        // When
+        connectStream.close();
+        // Processing connect stream happens async, so give other thread a chance to process
+        Thread.sleep(10);
+
+        // Then
+        verify(unidirectionalHttpStream, never()).resetStream(anyLong());
+    }
+
+    @Test
     void onSessionUnidirectionalStreamCanBeOpened() throws Exception {
         // Given
         Http3Client client = builder
@@ -701,6 +842,23 @@ class SessionImplTest {
         HttpStream bidirectionalHttpStream = mock(HttpStream.class);
         when(bidirectionalHttpStream.getOutputStream()).thenReturn(new ByteArrayOutputStream());
         return bidirectionalHttpStream;
+    }
+
+    private static HttpStream mockBidirectionalHttpStream(String dataFromPeer) {
+        HttpStream httpStream = mock(HttpStream.class);
+        when(httpStream.getOutputStream()).thenReturn(new ByteArrayOutputStream());
+        when(httpStream.getInputStream()).thenReturn(new ByteArrayInputStream(dataFromPeer.getBytes(StandardCharsets.UTF_8)));
+        when(httpStream.isUnidirectional()).thenReturn(false);
+        when(httpStream.isBidirectional()).thenReturn(true);
+        return httpStream;
+    }
+
+    private static Queue<HttpStream> sendingStreamsOf(Session session) throws Exception {
+        return (Queue<HttpStream>) new FieldReader(session, SessionImpl.class, "sendingStreams").read();
+    }
+
+    private static Queue<HttpStream> receivingStreamsOf(Session session) throws Exception {
+        return (Queue<HttpStream>) new FieldReader(session, SessionImpl.class, "receivingStreams").read();
     }
 
     private Session createSessionWith(Http3Client client, Consumer<WebTransportStream> unidirectionalStreamHandler, Consumer<WebTransportStream> bidirectionalStreamHandler) throws IOException, HttpError {
