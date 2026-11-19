@@ -383,6 +383,9 @@ public class Http3ConnectionImpl implements Http3Connection {
 
         long frameType = VariableLengthInteger.parseLong(inputStream);
         int payloadLength = VariableLengthInteger.parse(inputStream);
+        if (frameType > Integer.MAX_VALUE) {
+            return unknownFrame(inputStream, payloadLength);
+        }
 
         Http3Frame frame;
         switch ((int) frameType) {
@@ -407,13 +410,17 @@ public class Http3ConnectionImpl implements Http3Connection {
             case FRAME_TYPE_PUSH_PROMISE:
                 throw new NotYetImplementedException("Frame type " + frameType + " not yet implemented");
             default:
-                // https://www.rfc-editor.org/rfc/rfc9114.html#extensions
-                // "Extensions are permitted to use new frame types (Section 7.2), ...."
-                // "Implementations MUST ignore unknown or unsupported values in all extensible protocol elements."
-                inputStream.skip(payloadLength);
-                frame = new UnknownFrame();
+                frame = unknownFrame(inputStream, payloadLength);
         }
         return frame;
+    }
+
+    private Http3Frame unknownFrame(PushbackInputStream inputStream, int payloadLength) throws IOException {
+        // https://www.rfc-editor.org/rfc/rfc9114.html#section-9
+        // "Extensions are permitted to use new frame types (Section 7.2), ...."
+        // "Implementations MUST ignore unknown or unsupported values in all extensible protocol elements."
+        inputStream.skip(payloadLength);
+        return new UnknownFrame();
     }
 
     protected void connectionError(long http3ErrorCode) {

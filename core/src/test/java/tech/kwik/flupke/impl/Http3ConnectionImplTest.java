@@ -77,6 +77,25 @@ public class Http3ConnectionImplTest {
         assertThat(frame).isInstanceOf(UnknownFrame.class);
         assertThat(inputStream.available()).isEqualTo(89);
     }
+
+    @Test
+    public void unknownFrameWithLargeTypeWhoseLower32BitsMatchHeadersFrameTypeIsIgnored() throws IOException, HttpError {
+        // Given
+        QuicConnection quicConnection = mock(QuicConnection.class);
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection);
+        byte[] data = new byte[100];
+        // Type: 0x1_0000_0001, encoded as 8-byte variable length integer
+        System.arraycopy(new byte[] { (byte) 0xc0, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01 }, 0, data, 0, 8);
+        data[8] = 0x09; // Length: 9
+        ByteArrayInputStream inputStream = new ByteArrayInputStream(data);
+
+        // When
+        Http3Frame frame = connection.readFrame(inputStream, Long.MAX_VALUE, 4094);
+
+        // Then
+        assertThat(frame).isInstanceOf(UnknownFrame.class);
+        assertThat(inputStream.available()).isEqualTo(82);
+    }
     //endregion
 
     //region register stream type
