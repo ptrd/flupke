@@ -20,6 +20,8 @@ package tech.kwik.flupke.impl;
 
 import tech.kwik.core.generic.VariableLengthInteger;
 
+import java.io.ByteArrayInputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PushbackInputStream;
@@ -46,10 +48,21 @@ public class VariableLengthIntegerUtil {
      * @throws IOException
      */
     public static long peekLong(PushbackInputStream inputStream) throws IOException {
-        Long value = VariableLengthInteger.parseLong(inputStream);
-        ByteBuffer buffer = ByteBuffer.allocate(8);
-        int numberOfBytes = VariableLengthInteger.encode(value, buffer);
-        inputStream.unread(buffer.array(), 0, numberOfBytes);
-        return value;
+        int firstByte = inputStream.read();
+        if (firstByte == -1) {
+            throw new EOFException();
+        }
+        // Push back the bytes as read (instead of re-encoding the value), as the value may not be minimally encoded.
+        int numberOfBytes = 1 << ((firstByte & 0xc0) >> 6);
+        byte[] bytes = new byte[numberOfBytes];
+        bytes[0] = (byte) firstByte;
+        int read = inputStream.readNBytes(bytes, 1, numberOfBytes - 1);
+        if (read < numberOfBytes - 1) {
+            inputStream.unread(bytes, 0, 1 + read);
+            throw new EOFException();
+        }
+        inputStream.unread(bytes);
+
+        return VariableLengthInteger.parseLong(new ByteArrayInputStream(bytes));
     }
 }
