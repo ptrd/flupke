@@ -52,6 +52,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.*;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import static tech.kwik.flupke.impl.SettingsFrame.SETTINGS_ENABLE_CONNECT_PROTOCOL;
 
@@ -450,9 +451,14 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     private QuicStream createHttpStream(HeadersFrame headersFrame) throws IOException, HttpError {
         QuicStream httpStream = quicConnection.createStream(true);
         httpStream.getOutputStream().write(headersFrame.toBytes(qpackEncoder));
+        httpStream.getOutputStream().flush();
 
-        Http3Frame responseFrame = readFrame(httpStream.getInputStream());
-        if (responseFrame instanceof HeadersFrame) {
+        // PushbackInputStream only buffers the unread bytes, so it's safe to use it as a temporary wrapper for the
+        // input stream (as long as all unread bytes are re-read before returning from this method).
+        PushbackInputStream inputStream = new PushbackInputStream(httpStream.getInputStream(), 8);
+        long frameType = executing(() -> VariableLengthIntegerUtil.peekLong(inputStream)).convert(EOFException.class, () -> new ProtocolException());
+        if (frameType == FRAME_TYPE_HEADERS) {
+            HeadersFrame responseFrame = readHeadersFrame(inputStream, maxReceivedHeaderSize);
             HttpResponseInfo responseInfo;
             try {
                 responseInfo = new HttpResponseInfo((HeadersFrame) responseFrame);
@@ -469,11 +475,42 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
             }
         }
         else {
-            if (responseFrame != null) {
-                throw new ProtocolException("Expected headers frame, got " + responseFrame.getClass().getSimpleName());
+            throw new ProtocolException("Expected headers frame, got frame type " + frameType);
+        }
+    }
+
+    /**
+     * Usage: execute(action).convert(exceptionType, replacement)
+     * Executes the given action and, if it throws an exception of the given type, replaces it by the exception
+     * created by the given supplier (with the original exception as cause). Other exceptions are propagated as is.
+     */
+    private static <T> ExceptionConverter<T> executing(IOSupplier<T> action) {
+        return new ExceptionConverter<>(action);
+    }
+
+    @FunctionalInterface
+    private interface IOSupplier<T> {
+        T get() throws IOException;
+    }
+
+    private static class ExceptionConverter<T> {
+        private final IOSupplier<T> action;
+
+        ExceptionConverter(IOSupplier<T> action) {
+            this.action = action;
+        }
+
+        <X extends IOException> T convert(Class<? extends IOException> exceptionType, Supplier<X> replacement) throws IOException {
+            try {
+                return action.get();
             }
-            else {
-                throw new ProtocolException("Got empty response from server");
+            catch (IOException exception) {
+                if (exceptionType.isInstance(exception)) {
+                    X replacementException = replacement.get();
+                    replacementException.initCause(exception);
+                    throw replacementException;
+                }
+                throw exception;
             }
         }
     }
