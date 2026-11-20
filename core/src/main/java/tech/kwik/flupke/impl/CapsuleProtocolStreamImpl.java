@@ -22,27 +22,29 @@ import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.flupke.HttpStream;
 import tech.kwik.flupke.core.Capsule;
 import tech.kwik.flupke.core.CapsuleProtocolStream;
-import tech.kwik.flupke.core.GenericCapsule;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.PushbackInputStream;
 import java.io.UncheckedIOException;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 
 public class CapsuleProtocolStreamImpl implements CapsuleProtocolStream {
 
-    private HttpStream httpStream;
-    private Map<Long, Function<InputStream, Capsule>> capsuleParsers;
-    private PushbackInputStream inputStream;
+    private final OutputStream outputStream;
+    private final Map<Long, Function<InputStream, Capsule>> capsuleParsers;
+    private final PushbackInputStream inputStream;
+    private final long streamId;
 
-    public CapsuleProtocolStreamImpl(HttpStream stream) {
-        this.httpStream = stream;
-        capsuleParsers = new HashMap<>();
-        inputStream = new PushbackInputStream(stream.getInputStream(), 8);
+    public CapsuleProtocolStreamImpl(HttpStream httpStream) {
+        this.streamId = httpStream.getStreamId();
+        capsuleParsers = new ConcurrentHashMap<>();
+        inputStream = new PushbackInputStream(httpStream.getInputStream(), 8);
+        outputStream = httpStream.getOutputStream();
     }
 
     @Override
@@ -63,24 +65,24 @@ public class CapsuleProtocolStreamImpl implements CapsuleProtocolStream {
 
     @Override
     public void send(Capsule capsule) throws IOException {
-        capsule.write(httpStream.getOutputStream());
-        httpStream.getOutputStream().flush();
+        capsule.write(outputStream);
+        outputStream.flush();
     }
 
     @Override
     public void sendAndClose(Capsule capsule) throws IOException {
-        capsule.write(httpStream.getOutputStream());
-        httpStream.getOutputStream().close();
+        capsule.write(outputStream);
+        outputStream.close();
     }
 
     @Override
     public void close() throws IOException {
-        httpStream.getOutputStream().close();
+        outputStream.close();
     }
 
     @Override
     public long getStreamId() {
-        return httpStream.getStreamId();
+        return streamId;
     }
 
     @Override
@@ -91,8 +93,7 @@ public class CapsuleProtocolStreamImpl implements CapsuleProtocolStream {
     private Capsule parseGenericCapsule() throws IOException {
         long type = VariableLengthInteger.parseLong(inputStream);
         long length = VariableLengthInteger.parseLong(inputStream);
-        byte[] data = new byte[(int) length];
-        httpStream.getInputStream().read(data);
-        return new GenericCapsule(type, data);
+        inputStream.skip(length);
+        return new UnknownCapsule(type);
     }
 }

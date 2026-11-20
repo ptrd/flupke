@@ -21,6 +21,7 @@ package tech.kwik.flupke.impl;
 
 import org.junit.jupiter.api.Test;
 import tech.kwik.flupke.HttpStream;
+import tech.kwik.flupke.core.Capsule;
 import tech.kwik.flupke.core.CapsuleProtocolStream;
 import tech.kwik.flupke.core.GenericCapsule;
 
@@ -82,6 +83,23 @@ class CapsuleProtocolStreamImplTest {
         assertThatThrownBy(() -> capsuleProtocolStream.receive())
                 .isInstanceOf(IOException.class)
                 .hasMessage("missing data");
+    }
+
+    @Test
+    public void genericCapsuleWithHugeLengthShouldNotLeadToAllocatingBufferForThatLength() throws Exception {
+        // Given
+        ByteArrayInputStream quicInputStream = new ByteArrayInputStream(new byte[] {
+                0x22,  // capsule type (no parser registered, so parsed as generic capsule)
+                (byte) 0xc0, 0x00, 0x00, 0x00, 0x7f, (byte) 0xff, (byte) 0xff, (byte) 0xff,  // capsule length: 0x7fffffff (8-byte var int)
+                0x01, 0x02, 0x03  // only 3 bytes of capsule data
+        });
+        HttpStream httpStream = mock(HttpStream.class);
+        when(httpStream.getInputStream()).thenReturn(quicInputStream);
+        CapsuleProtocolStream capsuleProtocolStream = new CapsuleProtocolStreamImpl(httpStream);
+
+        // When
+        Capsule capsule = capsuleProtocolStream.receive();
+        assertThat(capsule).isNotNull();
     }
 
     @Test
