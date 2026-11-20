@@ -101,6 +101,9 @@ public class Http3ConnectionImpl implements Http3Connection {
     public static final int FRAME_TYPE_GOAWAY = 0x07;
     public static final int FRAME_TYPE_MAX_PUSH_ID = 0x0d;
 
+    // Maximum size of a SETTINGS frame payload a peer may send; RFC 9114 does not define a limit.
+    public static final int MAX_SETTINGS_FRAME_SIZE = 5 * 1024;
+
     protected final QuicConnection quicConnection;
     protected InputStream peerEncoderStream;
     protected int peerQpackBlockedStreams;
@@ -340,8 +343,15 @@ public class Http3ConnectionImpl implements Http3Connection {
             if (frameType != (long) FRAME_TYPE_SETTINGS) {
                 connectionError(H3_MISSING_SETTINGS);
             }
-            int frameLength = VariableLengthInteger.parse(controlStream);
-            byte[] payload = readExact(controlStream, frameLength);
+            long frameLength = VariableLengthInteger.parseLong(controlStream);
+            // https://www.rfc-editor.org/rfc/rfc9114.html#section-10.5
+            // "Implementations SHOULD track the use of these features and set limits on their use. An endpoint MAY treat
+            //  activity that is suspicious as a connection error of type H3_EXCESSIVE_LOAD"
+            if (frameLength > MAX_SETTINGS_FRAME_SIZE) {
+                connectionError(H3_EXCESSIVE_LOAD);
+                return;
+            }
+            byte[] payload = readExact(controlStream, (int) frameLength);
 
             SettingsFrame settingsFrame = new SettingsFrame().parsePayload(ByteBuffer.wrap(payload));
             peerQpackMaxTableCapacity = settingsFrame.getQpackMaxTableCapacity();

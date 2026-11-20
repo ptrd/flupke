@@ -170,6 +170,33 @@ public class Http3ConnectionImplTest {
     }
 
     @Test
+    public void settingsFrameLargerThan5KBShouldLeadToConnectionError() throws IOException {
+        // Given
+        QuicConnection quicConnection = mock(QuicConnection.class);
+        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection);
+
+        // Payload consists of (valid) unknown settings parameters, each with a unique 8-byte identifier and 8-byte value
+        // (values >= 2^30 are encoded as 8-byte variable length integers), so each parameter takes the maximum of 16 bytes
+        ByteArrayOutputStream payload = new ByteArrayOutputStream();
+        for (long identifier = 0x4000_0000L; payload.size() <= 5 * 1024; identifier++) {
+            VariableLengthIntegerUtil.write(identifier, payload);
+            VariableLengthIntegerUtil.write(0x4000_0000L, payload);
+        }
+        ByteArrayOutputStream controlStreamData = new ByteArrayOutputStream();
+        VariableLengthIntegerUtil.write(FRAME_TYPE_SETTINGS, controlStreamData);
+        VariableLengthIntegerUtil.write(payload.size(), controlStreamData);
+        payload.writeTo(controlStreamData);
+
+        // When
+        connection.processControlStream(new ByteArrayInputStream(controlStreamData.toByteArray()));
+
+        // Then
+        ArgumentCaptor<Long> errorCaptor = ArgumentCaptor.forClass(Long.class);
+        verify(quicConnection).close(errorCaptor.capture(), any());
+        assertThat(errorCaptor.getValue()).isEqualTo(H3_EXCESSIVE_LOAD);
+    }
+
+    @Test
     public void closingExtensionControlStreamShouldNotLeadToConnectionError() {
         // Given
         QuicConnection quicConnection = mock(QuicConnection.class);
