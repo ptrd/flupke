@@ -27,8 +27,10 @@ import tech.kwik.flupke.HttpError;
 import tech.kwik.flupke.HttpStream;
 import tech.kwik.flupke.core.CapsuleProtocolStream;
 import tech.kwik.flupke.impl.CapsuleProtocolStreamImpl;
+import tech.kwik.flupke.impl.Http3ConnectionImpl;
 import tech.kwik.flupke.test.ByteUtils;
 import tech.kwik.flupke.test.FieldReader;
+import tech.kwik.flupke.test.Http3ConnectionBuilder;
 import tech.kwik.flupke.test.TestExecutor;
 import tech.kwik.flupke.test.WriteableByteArrayInputStream;
 import tech.kwik.flupke.webtransport.Session;
@@ -41,6 +43,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -814,6 +817,54 @@ class SessionImplTest {
 
         // Then the buffered datagram is delivered to the handler
         assertThat(received.get()).isEqualTo(datagram);
+    }
+
+    @Test
+    void whenSessionIsClosedItsDatagramHandlerIsNotRetainedByConnection() throws Exception {
+        // Given
+        Http3ConnectionImpl http3Connection = new Http3ConnectionBuilder().withDatagramEnabled().build();
+        SessionImpl session = createSessionOn(http3Connection, 4L, createOpenInputStream());
+        session.open();
+        session.setDatagramHandler(data -> {});
+        assertThat(datagramHandlersOf(http3Connection).containsKey(4L)).isTrue();
+
+        // When
+        session.close();
+
+        // Then
+        assertThat(datagramHandlersOf(http3Connection).containsKey(4L)).isFalse();
+    }
+
+    @Test
+    void whenSessionIsClosedByPeerItsDatagramHandlerIsNotRetainedByConnection() throws Exception {
+        // Given
+        Http3ConnectionImpl http3Connection = new Http3ConnectionBuilder().withDatagramEnabled().build();
+        WriteableByteArrayInputStream connectStream = new WriteableByteArrayInputStream();
+        SessionImpl session = createSessionOn(http3Connection, 4L, connectStream);
+        session.open();
+        session.setDatagramHandler(data -> {});
+        assertThat(datagramHandlersOf(http3Connection).containsKey(4L)).isTrue();
+
+        // When
+        connectStream.close();
+        // Processing connect stream happens async, so give other thread a chance to process
+        Thread.sleep(10);
+
+        // Then
+        assertThat(datagramHandlersOf(http3Connection).containsKey(4L)).isFalse();
+    }
+
+    private SessionImpl createSessionOn(Http3ConnectionImpl http3Connection, long sessionId, InputStream connectStreamInput) {
+        HttpStream connectHttpStream = mock(HttpStream.class);
+        when(connectHttpStream.getStreamId()).thenReturn(sessionId);
+        when(connectHttpStream.getInputStream()).thenReturn(connectStreamInput);
+        when(connectHttpStream.getOutputStream()).thenReturn(new ByteArrayOutputStream());
+        return new SessionImpl(http3Connection, new WebTransportContext(defaultWebtransportUri),
+                new CapsuleProtocolStreamImpl(connectHttpStream), mock(SessionFactory.class));
+    }
+
+    private static Map<Long, Consumer<byte[]>> datagramHandlersOf(Http3ConnectionImpl http3Connection) throws Exception {
+        return (Map<Long, Consumer<byte[]>>) new FieldReader(http3Connection, Http3ConnectionImpl.class, "datagramHandlers").read();
     }
 
     /**

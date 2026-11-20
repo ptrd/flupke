@@ -181,6 +181,14 @@ public class Http3ConnectionImpl implements Http3Connection {
     }
 
     @Override
+    public void unregisterDatagramHandler(Long streamId) {
+        if (!datagramEnabled) {
+            throw new IllegalStateException("Datagram extension is not enabled on this connection");
+        }
+        datagramHandlers.remove(streamId);
+    }
+
+    @Override
     public void registerDefaultDatagramHandler(BiFunction<Long, byte[], Boolean> handler) {
         if (!datagramEnabled) {
             throw new IllegalStateException("Datagram extension is not enabled on this connection");

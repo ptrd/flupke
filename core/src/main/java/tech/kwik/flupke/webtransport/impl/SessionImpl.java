@@ -186,6 +186,16 @@ public class SessionImpl implements Session {
     public void setDatagramHandler(Consumer<byte[]> handler) {
         datagramHandler = handler;
         http3Connection.registerDatagramHandler(sessionId, Objects.requireNonNull(handler));
+        if (state == State.CLOSING || state == State.CLOSED) {
+            // Session was closed concurrently (or before), so the handler must not be retained by the connection.
+            unregisterDatagramHandler();
+        }
+    }
+
+    private void unregisterDatagramHandler() {
+        if (datagramHandler != null) {
+            http3Connection.unregisterDatagramHandler(sessionId);
+        }
     }
 
     @Override
@@ -210,6 +220,7 @@ public class SessionImpl implements Session {
         resetSenders();
         abortReading();
         stopReceivingCapsules();
+        unregisterDatagramHandler();
         sessionTerminatedEventListener.accept(applicationErrorCode, applicationErrorMessage);
         sessionFactory.removeSession(this);
     }
@@ -294,6 +305,7 @@ public class SessionImpl implements Session {
         }
         catch (IOException e) {}
 
+        unregisterDatagramHandler();
         sessionFactory.removeSession(this);
         sessionTerminatedEventListener.accept(applicationErrorCode, applicationErrorMessage);
     }

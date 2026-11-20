@@ -43,6 +43,13 @@ public interface Http3Connection {
     void registerDatagramHandler(Long streamId, Consumer<byte[]> handler);
 
     /**
+     * Remove the handler for receiving HTTP Datagrams that was registered for the given stream ID, if any.
+     * Datagrams subsequently received for this stream ID will be passed to the default handler (if set).
+     * @param streamId  the ID of the client-initiated bidirectional stream the handler was registered for.
+     */
+    void unregisterDatagramHandler(Long streamId);
+
+    /**
      * Register a fallback handler for receiving HTTP Datagrams that have no handler registered yet for a particular stream ID.
      * The handler receives the stream ID (full stream ID, not quarter stream ID) and the datagram payload.
      * See https://www.rfc-editor.org/rfc/rfc9297
