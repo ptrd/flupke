@@ -295,20 +295,27 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
 
     private HeadersFrame readHeadersFrame(InputStream responseStream, ResponseFramesSequenceChecker frameSequenceChecker) throws IOException, HttpError, ConnectionError {
         try {
-            Http3Frame frame = readFrame(responseStream, maxReceivedHeaderSize, maxReceivedDataSize);
-            if (frame == null) {
-                throw new EOFException("end of stream");
-            }
-            else if (frame instanceof HeadersFrame) {
+            // PushbackInputStream only buffers the unread bytes, so it's safe to use it as a temporary wrapper for the
+            // input stream (as long as all unread bytes are re-read before returning from this method).
+            PushbackInputStream inputStream = new PushbackInputStream(responseStream, 8);
+            long frameType = VariableLengthIntegerUtil.peekLong(inputStream);
+            if (frameType == FRAME_TYPE_HEADERS) {
+                HeadersFrame headersFrame = readHeadersFrame(inputStream, maxReceivedHeaderSize);
                 frameSequenceChecker.gotHeader();
-                return (HeadersFrame) frame;
+                return headersFrame;
             }
-            else if (frame instanceof DataFrame) {
+            else if (frameType == FRAME_TYPE_DATA) {
+                frameType = VariableLengthInteger.parseLong(inputStream);
+                long frameLength = VariableLengthInteger.parseLong(inputStream);
+                inputStream.skip(frameLength);
                 frameSequenceChecker.gotData();
                 return null;  // Will not happen, checker will throw exception
             }
             else {
-                frameSequenceChecker.gotOther(frame);
+                frameType = VariableLengthInteger.parseLong(inputStream);
+                long frameLength = VariableLengthInteger.parseLong(inputStream);
+                inputStream.skip(frameLength);
+                frameSequenceChecker.gotOther(frameType);
                 // If it gets here, the unknown frame is ignored, continue to (try to) read a headers frame
                 return readHeadersFrame(responseStream, frameSequenceChecker);
             }
@@ -316,6 +323,17 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         catch (EOFException e) {
             throw new ConnectionError(H3_FRAME_ERROR);
         }
+    }
+
+    private HeadersFrame readHeadersFrame(PushbackInputStream inputStream, long maxHeadersFrameSize) throws IOException, HttpError {
+        long frameType = VariableLengthInteger.parseLong(inputStream);
+        assert frameType == FRAME_TYPE_HEADERS;
+        int payloadLength = VariableLengthInteger.parse(inputStream);
+
+        if (payloadLength > maxHeadersFrameSize) {
+            throw new HttpError("max header size exceeded", 414);
+        }
+        return new HeadersFrame().parsePayload(readExact(inputStream, payloadLength), qpackDecoder);
     }
 
     void registerServerInitiatedStream(QuicStream stream) {
@@ -599,12 +617,6 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
             }
             else if (status == ResponseStatus.GOT_HEADER_AND_DATA_AND_TRAILING_HEADER) {
                 invalidFrameSequence("Data frame not allowed after trailing header frame.");
-            }
-        }
-
-        public void gotOther(Http3Frame frame) throws ConnectionError {
-            if (! (frame instanceof UnknownFrame)) {
-                invalidFrameSequence("Only header and body frames are allowed on response stream.");
             }
         }
 

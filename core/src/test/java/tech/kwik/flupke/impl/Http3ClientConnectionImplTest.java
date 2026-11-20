@@ -326,7 +326,10 @@ public class Http3ClientConnectionImplTest {
                 (byte) 0xFB,
                 0x3E,
                 0x38,
-                0x00, // Length 0
+                0x03, // Length 0
+                0x01,
+                0x02,
+                0x03,
                 // Partial response for Headers frame, the rest is covered by the mock decoder
                 0x01, // type Headers Frame
                 0x00, // payload length (payload omitted for the test, is covered by the mock decoder
