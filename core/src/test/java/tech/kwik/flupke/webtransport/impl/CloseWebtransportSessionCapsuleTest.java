@@ -59,6 +59,19 @@ class CloseWebtransportSessionCapsuleTest {
     }
 
     @Test
+    void readingCapsuleWithVeryLongErrorMessageFails() {
+        // Given
+        // capsule type = 0x2843, capsule length = 4 + 1025 = 1029 (0x4405 as 2-byte variable length integer)
+        InputStream data = new ByteArrayInputStream(ByteUtils.hexToBytes("6843" + "4405" + "87654321" + "2a".repeat(1025)));
+
+        assertThatThrownBy(() ->
+                // When
+                new CloseWebtransportSessionCapsule(data)
+                // Then
+        ).isInstanceOf(IOException.class);
+    }
+
+    @Test
     void creatingCapsuleWithVeryLongErrorMessageFails() {
         // Given
         String msg = "*".repeat(1025);

@@ -37,8 +37,15 @@ public class CloseWebtransportSessionCapsule implements Capsule {
     private final String applicationErrorMessage;
 
     protected CloseWebtransportSessionCapsule(InputStream inputStream) throws IOException {
-        int capsuleType = VariableLengthInteger.parse(inputStream);
-        int capsuleLength = VariableLengthInteger.parse(inputStream);
+        long capsuleType = VariableLengthInteger.parseLong(inputStream);
+        long rawCapsuleLength = VariableLengthInteger.parseLong(inputStream);
+        // https://datatracker.ietf.org/doc/html/draft-ietf-webtrans-http3-13#section-6
+        // "The message takes up the remainder of the capsule, and its length MUST NOT exceed 1024 bytes."
+        if (rawCapsuleLength > 4 + 1024) {
+            throw new IOException("WT_CLOSE_SESSION Capsule message length exceeds 1024 bytes");
+        }
+
+        int capsuleLength = (int) rawCapsuleLength;
         byte[] data = new byte[capsuleLength];
         int n = inputStream.readNBytes(data, 0, capsuleLength);
         if (n != capsuleLength) {
