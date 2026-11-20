@@ -126,6 +126,19 @@ public abstract class AbstractSessionFactoryImpl implements SessionFactory {
                 }
                 else {
                     sessionState = SessionState.NOT_CREATED;
+                    // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-buffering-incoming-streams-
+                    // "Similarly, a client may receive a server-initiated stream or a datagram before receiving the CONNECT
+                    //  response headers from the server. To handle this case, WebTransport endpoints SHOULD buffer streams
+                    //  and datagrams until those can be associated with an established session. To avoid resource exhaustion,
+                    //  the endpoints MUST limit the number of buffered streams and datagrams."
+                    // Checking the limit and queueing must be done while holding the lock, to ensure the limit is not
+                    // exceeded by concurrent streams and the stream is not queued after the session has been started.
+                    if (streamsQueued >= maxStreamsQueued) {
+                        throw new BufferedStreamsLimitExceededException();
+                    }
+                    // Session not yet created, queue the stream
+                    streamQueue.computeIfAbsent(sessionId, k -> new ArrayList<>()).add(httpStream);
+                    streamsQueued++;
                 }
             }
         }
@@ -141,19 +154,6 @@ public abstract class AbstractSessionFactoryImpl implements SessionFactory {
             if (httpStream.isBidirectional()) {
                 httpStream.resetStream(WEBTRANSPORT_SESSION_GONE);
             }
-        }
-        else if (sessionState == SessionState.NOT_CREATED) {
-            // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-buffering-incoming-streams-
-            // "Similarly, a client may receive a server-initiated stream or a datagram before receiving the CONNECT
-            //  response headers from the server. To handle this case, WebTransport endpoints SHOULD buffer streams
-            //  and datagrams until those can be associated with an established session. To avoid resource exhaustion,
-            //  the endpoints MUST limit the number of buffered streams and datagrams."
-            if (streamsQueued >= maxStreamsQueued) {
-                throw new BufferedStreamsLimitExceededException();
-            }
-            // Session not yet created, queue the stream
-            streamQueue.computeIfAbsent(sessionId, k -> new ArrayList<>()).add(httpStream);
-            streamsQueued++;
         }
     }
 
