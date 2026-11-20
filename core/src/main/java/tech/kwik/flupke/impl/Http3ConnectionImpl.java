@@ -536,7 +536,7 @@ public class Http3ConnectionImpl implements Http3Connection {
                 @Override
                 public int read() throws IOException {
                     if (checkData()) {
-                        return dataBuffer.get();
+                        return dataBuffer.get() & 0xff;
                     }
                     else {
                         return -1;
