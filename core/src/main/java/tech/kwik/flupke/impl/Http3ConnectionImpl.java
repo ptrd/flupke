@@ -370,10 +370,6 @@ public class Http3ConnectionImpl implements Http3Connection {
         peerEncoderStream = stream;
     }
 
-    protected Http3Frame readFrame(InputStream input) throws IOException, HttpError {
-        return readFrame(input, Long.MAX_VALUE, Long.MAX_VALUE);
-    }
-
     /**
      * Reads one HTTP3 frame from the given input stream (if any).
      * @param input the input stream to read from.
@@ -382,6 +378,7 @@ public class Http3ConnectionImpl implements Http3Connection {
      * @return the frame read, or null if no frame is available due to end of stream.
      * @throws IOException
      */
+    @Deprecated
     protected Http3Frame readFrame(InputStream input, long maxHeadersSize, long maxDataSize) throws IOException, HttpError {
         // PushbackInputStream only buffers the unread bytes, so it's safe to use it as a temporary wrapper for the input stream.
         PushbackInputStream inputStream = new PushbackInputStream(input, 1);
@@ -520,13 +517,14 @@ public class Http3ConnectionImpl implements Http3Connection {
             };
 
             inputStream = new InputStream() {
-
-                private ByteBuffer dataBuffer;
+                private PushbackInputStream sourceInputStream = new PushbackInputStream(quicStream.getInputStream(), 1);
+                private long dataFrameBytesRemaining = 0;
+                private boolean atEndOfStream = false;
 
                 @Override
                 public int available() throws IOException {
                     if (checkData()) {
-                        return dataBuffer.remaining();
+                        return dataFrameBytesRemaining < Integer.MAX_VALUE ? (int) dataFrameBytesRemaining : Integer.MAX_VALUE;
                     }
                     else {
                         return 0;
@@ -536,7 +534,8 @@ public class Http3ConnectionImpl implements Http3Connection {
                 @Override
                 public int read() throws IOException {
                     if (checkData()) {
-                        return dataBuffer.get() & 0xff;
+                        dataFrameBytesRemaining--;
+                        return sourceInputStream.read();
                     }
                     else {
                         return -1;
@@ -546,9 +545,11 @@ public class Http3ConnectionImpl implements Http3Connection {
                 @Override
                 public int read(byte[] b) throws IOException {
                     if (checkData()) {
-                        int count = Integer.min(dataBuffer.remaining(), b.length);
-                        dataBuffer.get(b, 0, count);
-                        return count;
+                        int canRead = dataFrameBytesRemaining > Integer.MAX_VALUE? b.length: Integer.min((int) dataFrameBytesRemaining, b.length);
+                        assert canRead > 0;
+                        int read = sourceInputStream.read(b, 0, canRead);
+                        dataFrameBytesRemaining -= read;
+                        return read;
                     }
                     else {
                         return -1;
@@ -557,43 +558,49 @@ public class Http3ConnectionImpl implements Http3Connection {
 
                 @Override
                 public int read(byte[] b, int off, int len) throws IOException {
+                    if (len <= 0) {
+                        return 0;
+                    }
+
                     if (checkData()) {
-                        int count = Integer.min(dataBuffer.remaining(), len);
-                        dataBuffer.get(b, off, count);
-                        return count;
+                        int canRead = dataFrameBytesRemaining > Integer.MAX_VALUE? len: Integer.min((int) dataFrameBytesRemaining, len);
+                        assert canRead > 0 && canRead <= len;
+                        int read = sourceInputStream.read(b, off, canRead);
+                        dataFrameBytesRemaining -= read;
+                        return read;
                     }
                     else {
                         return -1;
                     }
-
                 }
 
                 private boolean checkData() throws IOException {
-                    if (dataBuffer == null || dataBuffer.position() == dataBuffer.limit()) {
-                        return readData();
+                    if (dataFrameBytesRemaining == 0 && !atEndOfStream) {
+                        advanceToNextNonEmptyDataFrame();
                     }
-                    else {
-                        return dataBuffer.position() < dataBuffer.limit();
-                    }
+                    return dataFrameBytesRemaining > 0;
                 }
 
-                private boolean readData() throws IOException {
-                    Http3Frame frame = null;
-                    try {
-                        frame = readFrame(quicStream.getInputStream());
+                private void advanceToNextNonEmptyDataFrame() throws IOException {
+                    assert dataFrameBytesRemaining == 0;
+                    int firstByte = sourceInputStream.read();
+                    if (firstByte == -1) {
+                        atEndOfStream = true;
+                        return;
                     }
-                    catch (HttpError e) {
-                        throw new IOException(e);
+                    sourceInputStream.unread(firstByte);
+                    long frameType = VariableLengthInteger.parseLong(sourceInputStream);
+                    long frameLength = VariableLengthInteger.parseLong(sourceInputStream);
+                    if (frameType != FRAME_TYPE_DATA) {
+                        sourceInputStream.skip(frameLength);
+                        advanceToNextNonEmptyDataFrame();
                     }
-                    if (frame instanceof DataFrame) {
-                        dataBuffer = ByteBuffer.wrap(((DataFrame) frame).getPayload());
-                        return true;
+                    else if (frameLength == 0) {
+                        advanceToNextNonEmptyDataFrame();
                     }
-                    else if (frame == null) {
-                        // End of stream
-                        return false;
+                    else {
+                        dataFrameBytesRemaining = frameLength;
                     }
-                    return false;
                 }
             };
         }

@@ -26,13 +26,18 @@ import tech.kwik.flupke.HttpError;
 import tech.kwik.flupke.HttpStream;
 import tech.kwik.flupke.test.Http3ClientConnectionBuilder;
 import tech.kwik.flupke.test.Http3ConnectionBuilder;
+import tech.kwik.qpack.Encoder;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.http.HttpHeaders;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -425,6 +430,43 @@ public class Http3ConnectionImplTest {
     }
 
     @Test
+    void httpStreamShouldReturnPayloadOfSingleDataFrameWhenReadWithLargerBuffer() throws Exception {
+        // Given
+        byte[] payload = createPayload(10);
+        HttpStream httpStream = createHttpStreamWithInput(dataFrames(payload));
+        InputStream inputStream = httpStream.getInputStream();
+
+        // When
+        byte[] buffer = new byte[100];
+        int count = inputStream.read(buffer);
+
+        // Then
+        assertThat(count).isEqualTo(10);
+        assertThat(Arrays.copyOf(buffer, count)).isEqualTo(payload);
+        assertThat(inputStream.read(buffer)).isEqualTo(-1);
+    }
+
+    @Test
+    void httpStreamShouldReturnPayloadOfMultipleDataFramesWhenReadWithSmallBuffer() throws Exception {
+        // Given
+        byte[] payload1 = createPayload(10);
+        byte[] payload2 = createPayload(25);
+        HttpStream httpStream = createHttpStreamWithInput(dataFrames(payload1, payload2));
+        InputStream inputStream = httpStream.getInputStream();
+
+        // When
+        ByteArrayOutputStream received = new ByteArrayOutputStream();
+        byte[] buffer = new byte[7];
+        int count;
+        while ((count = inputStream.read(buffer)) >= 0) {
+            received.write(buffer, 0, count);
+        }
+
+        // Then
+        assertThat(received.toByteArray()).isEqualTo(concat(payload1, payload2));
+    }
+
+    @Test
     void httpStreamShouldReturnPayloadOfMultipleDataFramesWhenReadPerByte() throws Exception {
         // Given
         byte[] payload1 = createPayload(10);
@@ -453,6 +495,98 @@ public class Http3ConnectionImplTest {
 
         // Then
         assertThat(result).isEqualTo(-1);
+    }
+
+    @Test
+    void httpStreamShouldSkipEmptyDataFrameWhenReadingAllBytes() throws Exception {
+        // Given
+        byte[] payload1 = createPayload(10);
+        byte[] payload2 = createPayload(20);
+        HttpStream httpStream = createHttpStreamWithInput(dataFrames(payload1, new byte[0], payload2));
+
+        // When
+        byte[] received = httpStream.getInputStream().readAllBytes();
+
+        // Then
+        assertThat(received).isEqualTo(concat(payload1, payload2));
+    }
+
+    @Test
+    void httpStreamShouldSkipEmptyDataFrameWhenReadPerByte() throws Exception {
+        // Given
+        byte[] payload1 = createPayload(10);
+        byte[] payload2 = createPayload(20);
+        HttpStream httpStream = createHttpStreamWithInput(dataFrames(payload1, new byte[0], payload2));
+        InputStream inputStream = httpStream.getInputStream();
+
+        // When
+        ByteArrayOutputStream received = new ByteArrayOutputStream();
+        int b;
+        while ((b = inputStream.read()) != -1) {
+            received.write(b);
+        }
+
+        // Then
+        assertThat(received.toByteArray()).isEqualTo(concat(payload1, payload2));
+    }
+
+    @Test
+    void httpStreamShouldReturnEndOfStreamWhenOnlyFrameIsEmptyDataFrame() throws Exception {
+        // Given
+        HttpStream httpStream = createHttpStreamWithInput(dataFrames(new byte[0]));
+
+        // When
+        byte[] received = httpStream.getInputStream().readAllBytes();
+
+        // Then
+        assertThat(received).isEmpty();
+    }
+
+    @Test
+    void httpStreamShouldIgnoreUnknownFrameBetweenDataFrames() throws Exception {
+        // Given
+        byte[] payload1 = createPayload(10);
+        byte[] payload2 = createPayload(20);
+        byte[] unknownFrame = new byte[] { 0x21, 0x03, 0x01, 0x02, 0x03 };  // Type: reserved, length 3
+        HttpStream httpStream = createHttpStreamWithInput(concat(dataFrames(payload1), unknownFrame, dataFrames(payload2)));
+
+        // When
+        byte[] received = httpStream.getInputStream().readAllBytes();
+
+        // Then
+        assertThat(received).isEqualTo(concat(payload1, payload2));
+    }
+
+    @Test
+    void httpStreamShouldIgnoreUnknownFrameBeforeFirstDataFrame() throws Exception {
+        // Given
+        byte[] payload = createPayload(10);
+        byte[] unknownFrame = new byte[] { 0x21, 0x03, 0x01, 0x02, 0x03 };  // Type: reserved, length 3
+        HttpStream httpStream = createHttpStreamWithInput(concat(unknownFrame, dataFrames(payload)));
+
+        // When
+        byte[] received = httpStream.getInputStream().readAllBytes();
+
+        // Then
+        assertThat(received).isEqualTo(payload);
+    }
+
+    @Test
+    void httpStreamShouldReturnEndOfStreamWhenTrailersHeadersFrameFollowsData() throws Exception {
+        // Given
+        byte[] payload1 = createPayload(10);
+        byte[] payload2 = createPayload(20);
+        HttpHeaders trailers = HttpHeaders.of(Map.of("x-checksum", List.of("abc")), (a, b) -> true);
+        byte[] trailersFrame = new HeadersFrame(trailers, Map.of()).toBytes(Encoder.newBuilder().build());
+        HttpStream httpStream = createHttpStreamWithInput(concat(dataFrames(payload1, payload2), trailersFrame));
+        InputStream inputStream = httpStream.getInputStream();
+
+        // When
+        byte[] received = inputStream.readAllBytes();
+
+        // Then
+        assertThat(received).isEqualTo(concat(payload1, payload2));
+        assertThat(inputStream.read()).isEqualTo(-1);
     }
     //endregion
 

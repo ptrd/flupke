@@ -652,15 +652,6 @@ public class Http3ClientConnectionImplTest {
 
     //region test private/protected methods
     @Test
-    public void readFrameFromClosedStreamShouldReturnNull() throws Exception {
-        Http3ClientConnectionImpl http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
-        InputStream inputStream = new ByteArrayInputStream(new byte[]{ 0x01, 0x02, 0x03 });
-        inputStream.read(new byte[3]);
-        Http3Frame frame = http3Connection.readFrame(inputStream);
-        assertThat(frame).isNull();
-    }
-
-    @Test
     public void setupConnectOnlyOnce() throws Exception {
         Http3ClientConnection http3Connection = new Http3ClientConnectionImpl("localhost", 4433);
 
