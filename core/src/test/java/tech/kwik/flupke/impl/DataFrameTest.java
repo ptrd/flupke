@@ -122,19 +122,6 @@ public class DataFrameTest {
     }
 
     @Test
-    public void testParseFrame() throws Exception {
-        // Given
-        byte[] rawFrame = new byte[] { 0x00, 0x04, (byte) 0xca, (byte) 0xfe, (byte) 0xba, (byte) 0xbe };
-
-        // When
-        DataFrame dataFrame = new DataFrame().parse(rawFrame);
-
-        // Then
-        byte[] payload = dataFrame.getPayload();
-        assertThat(payload).isEqualTo(new byte[] { (byte) 0xca, (byte) 0xfe, (byte) 0xba, (byte) 0xbe });
-    }
-
-    @Test
     public void repeatedlyCallingToBytesShouldReturnSameResult() {
         // Given
         DataFrame dataFrame = new DataFrame("hello world".getBytes());

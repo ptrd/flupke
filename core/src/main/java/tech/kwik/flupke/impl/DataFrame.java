@@ -18,7 +18,6 @@
  */
 package tech.kwik.flupke.impl;
 
-import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
 
 import java.io.IOException;
@@ -62,23 +61,6 @@ public class DataFrame extends Http3Frame {
         int payloadLength = payload.limit() - payload.position();
         VariableLengthIntegerUtil.write(payloadLength, stream);
         stream.write(payload.array(), payload.position(), payloadLength);
-    }
-
-    public DataFrame parsePayload(byte[] payload) {
-        this.payload = ByteBuffer.wrap(payload);
-        return this;
-    }
-
-    public DataFrame parse(byte[] data) throws InvalidIntegerEncodingException {
-        ByteBuffer buffer = ByteBuffer.wrap(data);
-        if (buffer.get() != 0x00) {
-            throw new IllegalArgumentException("Type mismatch: not a data frame");
-        }
-        int payloadLength = VariableLengthInteger.parse(buffer);
-        if (buffer.remaining() <= payloadLength) {
-            payload = buffer.slice();
-        }
-        return this;
     }
 
     public byte[] getPayload() {

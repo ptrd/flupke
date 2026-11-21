@@ -22,7 +22,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.QuicStream;
-import tech.kwik.flupke.HttpError;
 import tech.kwik.flupke.HttpStream;
 import tech.kwik.flupke.test.Http3ClientConnectionBuilder;
 import tech.kwik.flupke.test.Http3ConnectionBuilder;
@@ -46,64 +45,7 @@ import static org.mockito.Mockito.*;
 import static tech.kwik.flupke.impl.Http3ConnectionImpl.*;
 
 public class Http3ConnectionImplTest {
-
-    //region read frame
-    @Test
-    public void readFrameShouldThrowErrorWhenDataFrameTooLarge() {
-        // Given
-        QuicConnection quicConnection = mock(QuicConnection.class);
-        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection);
-        byte[] data = new byte[10000];
-        data[0] = 0x00; // Type: Data frame
-        data[1] = 0x4f; // Length: 0x4fff = 4095
-        data[2] = (byte) 0xff;
-        ByteArrayInputStream inputStream = new ByteArrayInputStream(data);
-
-        // When
-        assertThatThrownBy(() ->
-                connection.readFrame(inputStream, Long.MAX_VALUE, 4094))
-                .isInstanceOf(HttpError.class)
-                .hasMessageContaining("max data");
-    }
-
-    @Test
-    public void unknownFrameIsIgnored() throws IOException, HttpError {
-        // Given
-        QuicConnection quicConnection = mock(QuicConnection.class);
-        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection);
-        byte[] data = new byte[100];
-        data[0] = 0x21; // Type: reserved
-        data[1] = 0x09; // Length: 9
-        ByteArrayInputStream inputStream = new ByteArrayInputStream(data);
-
-        // When
-        Http3Frame frame = connection.readFrame(inputStream, Long.MAX_VALUE, 4094);
-
-        // Then
-        assertThat(frame).isInstanceOf(UnknownFrame.class);
-        assertThat(inputStream.available()).isEqualTo(89);
-    }
-
-    @Test
-    public void unknownFrameWithLargeTypeWhoseLower32BitsMatchHeadersFrameTypeIsIgnored() throws IOException, HttpError {
-        // Given
-        QuicConnection quicConnection = mock(QuicConnection.class);
-        Http3ConnectionImpl connection = new Http3ConnectionImpl(quicConnection);
-        byte[] data = new byte[100];
-        // Type: 0x1_0000_0001, encoded as 8-byte variable length integer
-        System.arraycopy(new byte[] { (byte) 0xc0, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01 }, 0, data, 0, 8);
-        data[8] = 0x09; // Length: 9
-        ByteArrayInputStream inputStream = new ByteArrayInputStream(data);
-
-        // When
-        Http3Frame frame = connection.readFrame(inputStream, Long.MAX_VALUE, 4094);
-
-        // Then
-        assertThat(frame).isInstanceOf(UnknownFrame.class);
-        assertThat(inputStream.available()).isEqualTo(82);
-    }
-    //endregion
-
+    
     //region register stream type
     @Test
     public void attemptToRegisterDefaultStreamTypeShouldFail() {

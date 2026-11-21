@@ -28,7 +28,6 @@ import tech.kwik.core.QuicStream;
 import tech.kwik.core.server.ServerConnection;
 import tech.kwik.flupke.HttpStream;
 import tech.kwik.flupke.impl.ConnectionError;
-import tech.kwik.flupke.impl.DataFrame;
 import tech.kwik.flupke.impl.HeadersFrame;
 import tech.kwik.flupke.impl.SettingsFrame;
 import tech.kwik.flupke.server.*;
@@ -423,8 +422,10 @@ public class Http3ServerConnectionImplTest {
         int headerFrameLength = response.get(); // Skip headers frame length (dummy value because of no-op encoder)
         // Strip of header frame (two bytes: header type and header length (== 0), because of dummy encoder)
         byte[] dataBytes = Arrays.copyOfRange(output.toByteArray(), headerFrameLength + 2, output.toByteArray().length);
-        DataFrame dataFrame = new DataFrame().parse(dataBytes);
-        assertThat(dataFrame.getPayload()).isEqualTo("Hello World!".getBytes());
+        assertThat(dataBytes.length).isEqualTo(14); // DATA frame type + length + payload
+        assertThat(dataBytes).startsWith(0x00, 12); // DATA frame type and length
+        byte[] dataInDataFrame = Arrays.copyOfRange(dataBytes, 2, dataBytes.length);// DATA frame payload
+        assertThat(dataInDataFrame).isEqualTo("Hello World!".getBytes());
     }
 
     @Test

@@ -22,7 +22,6 @@ import tech.kwik.core.QuicConnection;
 import tech.kwik.core.QuicStream;
 import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.flupke.Http3Connection;
-import tech.kwik.flupke.HttpError;
 import tech.kwik.flupke.HttpStream;
 import tech.kwik.qpack.Decoder;
 import tech.kwik.qpack.Encoder;
@@ -368,66 +367,6 @@ public class Http3ConnectionImpl implements Http3Connection {
 
     void setPeerEncoderStream(InputStream stream) {
         peerEncoderStream = stream;
-    }
-
-    /**
-     * Reads one HTTP3 frame from the given input stream (if any).
-     * @param input the input stream to read from.
-     * @param maxHeadersSize the maximum allowed size for a headers frame; if a headers frame is read and its size exceeds this value, a HttpError is thrown
-     * @param maxDataSize the maximum allowed size for a data frame; if a data frame is read and its size exceeds this value, a HttpError is thrown
-     * @return the frame read, or null if no frame is available due to end of stream.
-     * @throws IOException
-     */
-    @Deprecated
-    protected Http3Frame readFrame(InputStream input, long maxHeadersSize, long maxDataSize) throws IOException, HttpError {
-        // PushbackInputStream only buffers the unread bytes, so it's safe to use it as a temporary wrapper for the input stream.
-        PushbackInputStream inputStream = new PushbackInputStream(input, 1);
-        int firstByte = inputStream.read();
-        if (firstByte == -1) {
-            return null;
-        }
-        inputStream.unread(firstByte);
-
-        long frameType = VariableLengthInteger.parseLong(inputStream);
-        int payloadLength = VariableLengthInteger.parse(inputStream);
-        if (frameType > Integer.MAX_VALUE) {
-            return unknownFrame(inputStream, payloadLength);
-        }
-
-        Http3Frame frame;
-        switch ((int) frameType) {
-            case FRAME_TYPE_HEADERS:
-                if (payloadLength > maxHeadersSize) {
-                    throw new HttpError("max header size exceeded", 414);
-                }
-                frame = new HeadersFrame().parsePayload(readExact(inputStream, payloadLength), qpackDecoder);
-                break;
-            case FRAME_TYPE_DATA:
-                if (payloadLength > maxDataSize) {
-                    throw new HttpError("max data size exceeded", 400);
-                }
-                frame = new DataFrame().parsePayload(readExact(inputStream, payloadLength));
-                break;
-            case FRAME_TYPE_SETTINGS:
-                frame = new SettingsFrame().parsePayload(ByteBuffer.wrap(readExact(inputStream, payloadLength)));
-                break;
-            case FRAME_TYPE_GOAWAY:
-            case FRAME_TYPE_CANCEL_PUSH:
-            case FRAME_TYPE_MAX_PUSH_ID:
-            case FRAME_TYPE_PUSH_PROMISE:
-                throw new NotYetImplementedException("Frame type " + frameType + " not yet implemented");
-            default:
-                frame = unknownFrame(inputStream, payloadLength);
-        }
-        return frame;
-    }
-
-    private Http3Frame unknownFrame(PushbackInputStream inputStream, int payloadLength) throws IOException {
-        // https://www.rfc-editor.org/rfc/rfc9114.html#section-9
-        // "Extensions are permitted to use new frame types (Section 7.2), ...."
-        // "Implementations MUST ignore unknown or unsupported values in all extensible protocol elements."
-        inputStream.skip(payloadLength);
-        return new UnknownFrame();
     }
 
     protected void connectionError(long http3ErrorCode) {
