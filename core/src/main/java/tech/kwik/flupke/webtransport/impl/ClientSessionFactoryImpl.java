@@ -55,7 +55,7 @@ public class ClientSessionFactoryImpl extends AbstractSessionFactoryImpl impleme
     private final String server;
     private final int serverPort;
     private final Http3ClientConnection httpClientConnection;
-    private final long maxSessions;
+    private final int maxSessions;
 
     /**
      * Creates a new WebTransport session factory for a given server.
@@ -99,11 +99,13 @@ public class ClientSessionFactoryImpl extends AbstractSessionFactoryImpl impleme
             httpClientConnection.connect();
 
             // Check all WT_MAX_SESSIONS variants the server might advertise.
-            // Default to unlimited (Long.MAX_VALUE) since many servers omit this setting.
-            maxSessions = httpClientConnection.getPeerSettingsParameter(SETTINGS_WT_MAX_SESSIONS_DRAFT_07_12)
+            // Default to unlimited since many servers omit this setting.
+            long advertisedMax = httpClientConnection.getPeerSettingsParameter(SETTINGS_WT_MAX_SESSIONS_DRAFT_07_12)
                 .or(() -> httpClientConnection.getPeerSettingsParameter(SETTINGS_WT_MAX_SESSIONS_DRAFT_13_14))
                 .or(() -> httpClientConnection.getPeerSettingsParameter(SETTINGS_WT_MAX_SESSIONS_DRAFT_04_05))
                 .orElse(Long.MAX_VALUE);
+
+            maxSessions = advertisedMax > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) advertisedMax;
 
             httpClientConnection.registerUnidirectionalStreamType(STREAM_TYPE_WEBTRANSPORT, this::handleUnidirectionalStream);
             httpClientConnection.registerBidirectionalStreamHandler(this::handleBidirectionalStream);
