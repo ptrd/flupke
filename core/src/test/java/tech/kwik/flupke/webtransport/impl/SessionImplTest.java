@@ -56,6 +56,8 @@ import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static tech.kwik.flupke.webtransport.Constants.WEBTRANSPORT_BUFFERED_STREAM_REJECTED;
+import static tech.kwik.flupke.webtransport.Constants.WEBTRANSPORT_SESSION_GONE;
 
 class SessionImplTest {
 
@@ -860,6 +862,37 @@ class SessionImplTest {
         // Then the buffer still has room for datagrams of a session that is not yet created
         long nextSessionId = session.getSessionId() + 4;
         assertThat(factory.handleEarlyDatagram(nextSessionId, new byte[] { 42 })).isTrue();
+    }
+
+    @Test
+    void streamsQueuedForSessionThatIsClosedBeforeBeingOpenedDoNotUseUpStreamBuffer() throws Exception {
+        // Given
+        WriteableByteArrayInputStream connectStream = new WriteableByteArrayInputStream();
+        Http3Client client = builder
+                .withExtendedConnectStream(connectStream)
+                .buildClient();
+        int maxStreamsQueued = 1;
+        var factory = new ClientSessionFactoryImpl(defaultWebtransportUri, client, new TestExecutor(), maxStreamsQueued, 3);
+        factory.createSession(defaultWebtransportUri);  // session id 4, not opened yet
+        Consumer<HttpStream> handler = captureHttpConnectionUnidirectionalStreamHandler(builder.getHttp3connection());
+
+        // A peer-initiated stream arrives before the session is opened, so it is queued
+        HttpStream streamForSession = unidirectionalHttpStreamWith(new ByteArrayInputStream(new byte[] { 0x04 }));
+        handler.accept(streamForSession);
+        verify(streamForSession, never()).abortReading(WEBTRANSPORT_BUFFERED_STREAM_REJECTED);
+
+        // When the session is closed by the peer before it was opened
+        connectStream.close();
+        // Processing connect stream happens async, so give other thread a chance to process
+        Thread.sleep(100);
+
+        // Then the queued stream is aborted, as the session is gone
+        verify(streamForSession).abortReading(WEBTRANSPORT_SESSION_GONE);
+
+        // And the buffer has room again for a stream of a session that is not yet created
+        HttpStream streamForNextSession = unidirectionalHttpStreamWith(new ByteArrayInputStream(new byte[] { 0x08 }));
+        handler.accept(streamForNextSession);
+        verify(streamForNextSession, never()).abortReading(WEBTRANSPORT_BUFFERED_STREAM_REJECTED);
     }
 
     @Test

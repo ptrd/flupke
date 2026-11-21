@@ -234,13 +234,33 @@ public abstract class AbstractSessionFactoryImpl implements SessionFactory {
 
     @Override
     public void removeSession(SessionImpl session) {
+        List<HttpStream> bufferedStreams;
         registrationLock.lock();
         try {
             sessionRegistry.remove(session.getSessionId());
-            streamQueue.remove(session.getSessionId());
+            bufferedStreams = streamQueue.remove(session.getSessionId());
+            if (bufferedStreams != null) {
+                streamsQueued -= bufferedStreams.size();
+            }
+            Queue<byte[]> bufferedDatagrams = earlyDatagrams.remove(session.getSessionId());
+            if (bufferedDatagrams != null) {
+                datagramsQueued -= bufferedDatagrams.size();
+            }
         }
         finally {
             registrationLock.unlock();
+        }
+        if (bufferedStreams != null) {
+            // https://datatracker.ietf.org/doc/html/draft-ietf-webtrans-http3-13#section-6
+            // "Upon learning that the session has been terminated, the endpoint MUST reset the send side and abort
+            //  reading on the receive side of all unidirectional and bidirectional streams associated with the session
+            //  (see Section 2.4 of [RFC9000]) using the WT_SESSION_GONE error code; "
+            bufferedStreams.forEach(httpStream -> {
+                httpStream.abortReading(WEBTRANSPORT_SESSION_GONE);
+                if (httpStream.isBidirectional()) {
+                    httpStream.resetStream(WEBTRANSPORT_SESSION_GONE);
+                }
+            });
         }
     }
 }
