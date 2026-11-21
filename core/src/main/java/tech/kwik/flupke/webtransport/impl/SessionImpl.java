@@ -65,7 +65,6 @@ public class SessionImpl implements Session {
     private BiConsumer<Long, String> sessionTerminatedEventListener;
     private Queue<HttpStream> sendingStreams = new ConcurrentLinkedQueue();
     private Queue<HttpStream> receivingStreams = new ConcurrentLinkedQueue();
-    private final Queue<byte[]> bufferedDatagrams = new ConcurrentLinkedQueue<>();
     private volatile Consumer<byte[]> datagramHandler;
 
     SessionImpl(Http3Connection http3Connection, WebTransportContext context, CapsuleProtocolStream connectStream, SessionFactory sessionFactory) {

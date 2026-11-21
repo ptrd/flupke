@@ -125,7 +125,7 @@ public class Http3ConnectionImpl implements Http3Connection {
     );
     protected Encoder qpackEncoder;
     private Map<Long, Consumer<byte[]>> datagramHandlers;
-    private BiFunction<Long, byte[], Boolean> defaultDatagramHandler;
+    private volatile BiFunction<Long, byte[], Boolean> defaultDatagramHandler;
     private final boolean datagramEnabled;
 
     /**
