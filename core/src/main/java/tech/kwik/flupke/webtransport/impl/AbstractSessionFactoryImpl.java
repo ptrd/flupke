@@ -183,6 +183,10 @@ public abstract class AbstractSessionFactoryImpl implements SessionFactory {
                 // Session is already started, so the datagram is not "early" and should be passed to the session immediately.
                 openSession = session;
             }
+            else if (session == null && streamId <= latestSessionId) {
+                // Session already closed, so the datagram can never be delivered; drop it.
+                return false;
+            }
             else {
                 if (datagramsQueued >= maxDatagramsQueued) {
                     return false;
