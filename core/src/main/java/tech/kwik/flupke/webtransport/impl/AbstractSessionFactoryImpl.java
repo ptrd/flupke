@@ -62,7 +62,7 @@ public abstract class AbstractSessionFactoryImpl implements SessionFactory {
     private final int maxStreamsQueued;
     private volatile int datagramsQueued;
     private final int maxDatagramsQueued;
-    private volatile long latestSessionId = -1;
+    private volatile long lastRegisteredSessionId = -1;
     protected final ExecutorService executor;
     private final Map<Long, Queue<byte[]>> earlyDatagrams = new ConcurrentHashMap<>();
 
@@ -121,7 +121,7 @@ public abstract class AbstractSessionFactoryImpl implements SessionFactory {
                 sessionState = SessionState.OPEN;
             }
             else {
-                if (session == null && sessionId <= latestSessionId) {
+                if (session == null && sessionId <= lastRegisteredSessionId) {
                     sessionState = SessionState.CLOSED;
                 }
                 else {
@@ -160,7 +160,7 @@ public abstract class AbstractSessionFactoryImpl implements SessionFactory {
     protected void registerSession(SessionImpl session) {
         registrationLock.lock();
         try {
-            latestSessionId = session.getSessionId();
+            lastRegisteredSessionId = session.getSessionId();
             sessionRegistry.put(session.getSessionId(), session);
         }
         finally {
@@ -183,7 +183,7 @@ public abstract class AbstractSessionFactoryImpl implements SessionFactory {
                 // Session is already started, so the datagram is not "early" and should be passed to the session immediately.
                 openSession = session;
             }
-            else if (session == null && streamId <= latestSessionId) {
+            else if (session == null && streamId <= lastRegisteredSessionId) {
                 // Session already closed, so the datagram can never be delivered; drop it.
                 return false;
             }
