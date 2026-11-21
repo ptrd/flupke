@@ -820,6 +820,27 @@ class SessionImplTest {
     }
 
     @Test
+    void datagramsReceivedForOpenSessionWithoutHandlerDoNotUseUpEarlyDatagramBuffer() throws Exception {
+        // Given
+        Http3Client client = builder.buildClient();
+        TestExecutor testExecutor = new TestExecutor();
+        int maxDatagramsQueued = 3;
+        var factory = new ClientSessionFactoryImpl(defaultWebtransportUri, client, testExecutor, 3, maxDatagramsQueued);
+        Session session = factory.createSession(defaultWebtransportUri);
+        session.open();
+        testExecutor.executeAllPendingTasks();
+
+        // When datagrams arrive for the already opened session before the user sets a datagram handler
+        for (int i = 0; i < maxDatagramsQueued; i++) {
+            factory.handleEarlyDatagram(session.getSessionId(), new byte[] { (byte) i });
+        }
+
+        // Then the buffer still has room for datagrams of a session that is not yet created
+        long nextSessionId = session.getSessionId() + 4;
+        assertThat(factory.handleEarlyDatagram(nextSessionId, new byte[] { 42 })).isTrue();
+    }
+
+    @Test
     void whenSessionIsClosedItsDatagramHandlerIsNotRetainedByConnection() throws Exception {
         // Given
         Http3ConnectionImpl http3Connection = new Http3ConnectionBuilder().withDatagramEnabled().build();

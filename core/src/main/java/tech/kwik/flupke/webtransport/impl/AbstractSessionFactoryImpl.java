@@ -175,23 +175,46 @@ public abstract class AbstractSessionFactoryImpl implements SessionFactory {
         //  and datagrams."
         // "When the number of buffered datagrams is exceeded, a datagram SHALL be dropped. It is up to an implementation
         //  to choose what stream or datagram to discard."
-        if (datagramsQueued >= maxDatagramsQueued) {
-            return false;
+        SessionImpl openSession = null;
+        registrationLock.lock();
+        try {
+            SessionImpl session = sessionRegistry.get(streamId);
+            if (session != null && session.isOpen()) {
+                // Session is already started, so the datagram is not "early" and should be passed to the session immediately.
+                openSession = session;
+            }
+            else {
+                if (datagramsQueued >= maxDatagramsQueued) {
+                    return false;
+                }
+                earlyDatagrams.computeIfAbsent(streamId, k -> new ConcurrentLinkedQueue<>()).add(data);
+                datagramsQueued++;
+            }
         }
-        earlyDatagrams.computeIfAbsent(streamId, k -> new ConcurrentLinkedQueue<>()).add(data);
-        datagramsQueued++;
+        finally {
+            registrationLock.unlock();
+        }
+        if (openSession != null) {
+            openSession.handleDatagram(data);
+        }
         return true;
     }
 
     @Override
     public void startSession(SessionImpl session) {
         List<HttpStream> bufferedStreams;
+        Queue<byte[]> bufferedDatagrams;
         registrationLock.lock();
         try {
             // Check queue for streams that are waiting for this session
             bufferedStreams = streamQueue.remove(session.getSessionId());
             if (bufferedStreams != null) {
                 streamsQueued -= bufferedStreams.size();
+            }
+            // Check queue for datagrams that arrived before the session was started
+            bufferedDatagrams = earlyDatagrams.remove(session.getSessionId());
+            if (bufferedDatagrams != null) {
+                datagramsQueued -= bufferedDatagrams.size();
             }
         }
         finally {
@@ -200,10 +223,7 @@ public abstract class AbstractSessionFactoryImpl implements SessionFactory {
         if (bufferedStreams != null) {
             bufferedStreams.forEach(stream -> executor.submit(() -> session.handleStream(stream)));
         }
-        // Flush any datagrams that arrived before the session-specific handler was registered in the SessionImpl constructor.
-        Queue<byte[]> bufferedDatagrams = earlyDatagrams.remove(session.getSessionId());
         if (bufferedDatagrams != null) {
-            datagramsQueued -= bufferedDatagrams.size();
             bufferedDatagrams.forEach(datagram -> executor.submit(() -> session.handleDatagram(datagram)));
         }
     }
