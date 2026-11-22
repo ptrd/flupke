@@ -67,6 +67,19 @@ public class HeadersFrameTest {
     }
 
     @Test
+    public void duplicateHeadersAreMergedInOrder() throws Exception {
+        Decoder qpackDecoder = mock(Decoder.class);
+        when(qpackDecoder.decodeStream(any(InputStream.class))).thenReturn(List.of(
+                new AbstractMap.SimpleEntry<>("accept", "text/plain"),
+                new AbstractMap.SimpleEntry<>("content-type", "text/html"),
+                new AbstractMap.SimpleEntry<>("accept", "text/html")
+        ));
+        HeadersFrame headersFrame = new HeadersFrame().parsePayload(new byte[0], qpackDecoder);
+
+        assertThat(headersFrame.headers().allValues("accept")).containsExactly("text/plain", "text/html");
+    }
+
+    @Test
     public void headersFrameBytesShouldStartWithHeadersFrameType() {
         Encoder qpackEncoder = mock(Encoder.class);
         when(qpackEncoder.compressHeaders(anyList())).thenReturn(ByteBuffer.wrap(new byte[0]));

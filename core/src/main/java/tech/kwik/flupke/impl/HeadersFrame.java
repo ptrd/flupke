@@ -107,8 +107,11 @@ public class HeadersFrame extends Http3Frame {
 
     public HeadersFrame parsePayload(byte[] headerBlock, Decoder decoder) throws IOException {
         List<Map.Entry<String, String>> headersList = decoder.decodeStream(new ByteArrayInputStream(headerBlock));
-        Map<String, List<String>> headersMap = headersList.stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, this::mapValue, this::mergeValues));
+        // Append to a mutable list per name; merging immutable lists would be quadratic in the number of duplicate fields.
+        Map<String, List<String>> headersMap = new HashMap<>();
+        for (Map.Entry<String, String> entry : headersList) {
+            headersMap.computeIfAbsent(entry.getKey(), key -> new ArrayList<>()).add(entry.getValue());
+        }
         // https://www.rfc-editor.org/rfc/rfc9114#name-http-control-data
         // "Pseudo-header fields are not HTTP fields."
         extractPseudoHeaders(headersMap);
@@ -133,17 +136,6 @@ public class HeadersFrame extends Http3Frame {
             // "As in HTTP/2, characters in field names MUST be converted to lowercase prior to their encoding."
             qpackHeaders.add(new AbstractMap.SimpleEntry<>(entry.getKey().toLowerCase(), value));
         });
-    }
-
-    private List<String> mapValue(Map.Entry<String, String> entry) {
-        return List.of(entry.getValue());
-    }
-
-    private List<String> mergeValues(List<String> value1, List<String> value2) {
-        List<String> result = new ArrayList<>();
-        result.addAll(value1);
-        result.addAll(value2);
-        return result;
     }
 
     public String getPseudoHeader(String header) {
