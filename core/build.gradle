@@ -17,21 +17,7 @@ task includeVersion {
     }
 }
 
-compileJava.dependsOn (determineVersion, includeVersion, processResources)
-
-publishing {
-    publications {
-        flupke(MavenPublication) {
-            artifactId = 'flupke'
-            from components.java
-            pom pomContent
-        }
-    }
-}
-
-signing {
-    sign publishing.publications.flupke
-}
+compileJava.dependsOn (includeVersion, processResources)
 
 task uberJar(type: Jar) {
     archiveClassifier.set('uber')

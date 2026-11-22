@@ -11,18 +11,9 @@ dependencies {
     testImplementation("net.javacrumbs.json-unit:json-unit-assertj:4.1.0")
 }
 
-publishing {
-    publications {
-        flupke(MavenPublication) {
-            artifactId = 'flupke-httpbin'
-            from components.java
-            pom pomContent
-            pom.name = 'Flupke HttpBin'
-            pom.description = 'HttpBin sample for Flupke, the HTTP/3 implementation in Java'
-        }
+mavenPublishing {
+    pom {
+        name = 'Flupke HttpBin'
+        description = 'HttpBin sample for Flupke, the HTTP/3 implementation in Java'
     }
-}
-
-signing {
-    sign publishing.publications.flupke
 }

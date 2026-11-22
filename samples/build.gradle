@@ -7,18 +7,9 @@ dependencies {
     implementation group: 'tech.kwik', name: 'kwik', version: '0.10.4'
 }
 
-publishing {
-    publications {
-        flupke(MavenPublication) {
-            artifactId = 'flupke-samples'
-            from components.java
-            pom pomContent
-            pom.name = 'Flupke Samples'
-            pom.description = 'Samples for Flupke, the HTTP/3 implementation in Java'
-        }
+mavenPublishing {
+    pom {
+        name = 'Flupke Samples'
+        description = 'Samples for Flupke, the HTTP/3 implementation in Java'
     }
-}
-
-signing {
-    sign publishing.publications.flupke
 }
