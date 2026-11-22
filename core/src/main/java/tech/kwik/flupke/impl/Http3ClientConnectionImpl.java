@@ -124,7 +124,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
                 throw (IOException) cause;
             }
             else {
-                throw new IOException("Error while getting response", cause);
+                throw new IOException("Error while getting response: " + cause, cause);
             }
         }
         catch (ConnectionError e) {
@@ -712,7 +712,15 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
 
         @Override
         public void request(long n) {
-            executor.submit(() -> sendData(n));
+            executor.submit(() -> {
+                try {
+                    sendData(n);
+                }
+                catch (Throwable e) {
+                    bodySubscriber.onError(e);
+                    dispose();
+                }
+            });
         }
 
         private void sendData(long n) {
