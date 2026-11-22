@@ -45,7 +45,6 @@ import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
-import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
@@ -179,10 +178,6 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         builder.version(determinePreferredQuicVersion());
         builder.connectTimeout(connectTimeout);
         builder.applicationProtocol("h3");
-        if (System.getenv("SSLKEYLOGFILE") != null) {
-            System.out.println("QUIC secrets will be logged to " + System.getenv("SSLKEYLOGFILE"));
-            builder.secrets(Paths.get(System.getenv("SSLKEYLOGFILE")));
-        }
         // https://www.rfc-editor.org/rfc/rfc9114.html#name-unidirectional-streams
         // "Therefore, the transport parameters sent by both clients and servers MUST allow the peer to create at least
         //  three unidirectional streams. These transport parameters SHOULD also provide at least 1,024 bytes of
