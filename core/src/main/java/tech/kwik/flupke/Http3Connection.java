@@ -20,6 +20,7 @@ package tech.kwik.flupke;
 
 import java.io.IOException;
 import java.util.Optional;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
 public interface Http3Connection {
@@ -32,6 +33,28 @@ public interface Http3Connection {
      * @param handler
      */
     void registerUnidirectionalStreamType(long streamType, Consumer<HttpStream> handler);
+
+    /**
+     * Register handler for receiving HTTP Datagrams.
+     * See https://www.rfc-editor.org/rfc/rfc9297
+     * @param streamId  the ID of the client-initiated bidirectional stream that the received datagrams are associated with.
+     * @param handler
+     */
+    void registerDatagramHandler(Long streamId, Consumer<byte[]> handler);
+
+    /**
+     * Remove the handler for receiving HTTP Datagrams that was registered for the given stream ID, if any.
+     * Datagrams subsequently received for this stream ID will be passed to the default handler (if set).
+     * @param streamId  the ID of the client-initiated bidirectional stream the handler was registered for.
+     */
+    void unregisterDatagramHandler(Long streamId);
+
+    /**
+     * Register a fallback handler for receiving HTTP Datagrams that have no handler registered yet for a particular stream ID.
+     * The handler receives the stream ID (full stream ID, not quarter stream ID) and the datagram payload.
+     * See https://www.rfc-editor.org/rfc/rfc9297
+     */
+    void registerDefaultDatagramHandler(BiFunction<Long, byte[], Boolean> handler);
 
     /**
      * HTTP/3 extension method: create a new unidirectional stream for the given stream type.
@@ -52,6 +75,14 @@ public interface Http3Connection {
      * frames or in a format that is compatible with HTTP/3 framing.
      */
     HttpStream createBidirectionalStream() throws IOException;
+
+    /**
+     * Sends a HTTP Datagram.
+     * See https://www.rfc-editor.org/rfc/rfc9297
+     * @param streamId the ID of the client-initiated bidirectional stream that the datagram is associated with.
+     * @param data the data to send in the datagram
+     */
+    void sendDatagram(long streamId, byte[] data);
 
     /**
      * HTTP/3 extension method for adding additional settings.

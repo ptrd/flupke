@@ -20,6 +20,8 @@ package tech.kwik.flupke.webtransport.impl;
 
 import tech.kwik.flupke.HttpStream;
 import tech.kwik.flupke.impl.CapsuleProtocolStreamImpl;
+import tech.kwik.flupke.impl.StructuredFields;
+import tech.kwik.flupke.impl.StructuredFieldsException;
 import tech.kwik.flupke.server.Http3ServerConnection;
 import tech.kwik.flupke.server.Http3ServerExtension;
 import tech.kwik.flupke.webtransport.Session;
@@ -27,37 +29,72 @@ import tech.kwik.flupke.webtransport.Session;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.http.HttpHeaders;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
-import java.util.function.Consumer;
-import java.util.function.IntConsumer;
+import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
 
 public class WebTransportExtension implements Http3ServerExtension {
 
     private final ServerSessionFactoryImpl sessionFactory;
-    private final Map<String, Consumer<Session>> handlers;
+    private final Map<String, WebTransportHandlerRegistration> handlers;
+    private final List<WebTransportHandlerRegistration> regexHandlers;
     private final ExecutorService executor;
 
-    public WebTransportExtension(Http3ServerConnection http3ServerConnection, Map<String, Consumer<Session>> webTransportHandlers,
-                                 ExecutorService executorService) {
-        sessionFactory = new ServerSessionFactoryImpl(http3ServerConnection);
-        this.handlers = webTransportHandlers;
+    public WebTransportExtension(Http3ServerConnection http3ServerConnection, List<WebTransportHandlerRegistration> registrations,
+                                 ExecutorService executorService, int maxStreamsQueued, int maxDatagramsQueued) {
+        sessionFactory = new ServerSessionFactoryImpl(http3ServerConnection, executorService, maxStreamsQueued, maxDatagramsQueued);
+        // Preprocessing: split registrations into a map for static paths (O(1) lookup) and an ordered list for regexes.
+        this.handlers = registrations.stream()
+                .filter(r -> !r.isRegexBased())
+                .collect(Collectors.toMap(WebTransportHandlerRegistration::staticPath, r -> r));
+        this.regexHandlers = registrations.stream()
+                .filter(WebTransportHandlerRegistration::isRegexBased)
+                .collect(Collectors.toList());
         this.executor = executorService;
     }
 
+
     @Override
-    public void handleExtendedConnect(HttpHeaders headers, String protocol, String authority, String pathAndQuery, IntConsumer statusCallback, HttpStream requestResponseSteam) {
-        Optional<Consumer<Session>> handler = findHandler(pathAndQuery);
-        if (handler.isPresent()) {
+    public void handleExtendedConnect(HttpHeaders headers, String protocol, String authority, String pathAndQuery, BiConsumer<Integer, Map<String, List<String>>> statusCallback, HttpStream requestResponseSteam) {
+        Optional<WebTransportHandlerRegistration> registration = findHandler(pathAndQuery);
+        if (registration.isPresent()) {
+            // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-15.html#section-3.3
+            // "The client MAY include a WT-Available-Protocols header field in the CONNECT request. (...)
+            //  If the server receives such a header, it MAY include a WT-Protocol field in a successful (2xx) response.
+            //  If it does, the server MUST include a single choice from the client's list in that field. Servers MAY
+            //  reject the request if the client did not include a suitable protocol."
+            List<String> applicationProtocols = registration.get().applicationProtocols();
+            Map<String, List<String>> responseHeaders = Map.of();
+            String negotiatedProtocol = null;
+            if (!applicationProtocols.isEmpty() && headers.firstValue("WT-Available-Protocols").isPresent()) {
+                try {
+                    List<String> clientProtocols = StructuredFields.parseStringList(headers.allValues("WT-Available-Protocols"));
+                    Optional<String> match = clientProtocols.stream()
+                            .filter(applicationProtocols::contains)
+                            .findFirst();
+                    if (match.isEmpty()) {
+                        statusCallback.accept(404, Map.of());
+                        return;
+                    }
+                    negotiatedProtocol = match.get();
+                    responseHeaders = Map.of("WT-Protocol", List.of(StructuredFields.serializeString(negotiatedProtocol)));
+                }
+                catch (StructuredFieldsException e) {
+                    // https://www.rfc-editor.org/rfc/rfc9651#section-2.2
+                    // "When parsing fails, the entire field is ignored (see Section 4.2). "
+                }
+            }
             sessionFactory.prepareServerSession();
-            statusCallback.accept(200);
-            WebTransportContext context = new WebTransportContext(headers, authority, pathAndQuery);
+            statusCallback.accept(200, responseHeaders);
+            WebTransportContext context = new WebTransportContext(headers, authority, pathAndQuery, negotiatedProtocol);
             Session session = sessionFactory.createServerSession(context, new CapsuleProtocolStreamImpl(requestResponseSteam));
-            async(() -> handler.get().accept(session));
+            async(() -> registration.get().handler().accept(session));
         }
         else {
-            statusCallback.accept(404);
+            statusCallback.accept(404, Map.of());
         }
     }
 
@@ -65,13 +102,17 @@ public class WebTransportExtension implements Http3ServerExtension {
         executor.submit(runnable);
     }
 
-    private Optional<Consumer<Session>> findHandler(String pathAndQuery) {
+    private Optional<WebTransportHandlerRegistration> findHandler(String pathAndQuery) {
         try {
             String path = new URI(pathAndQuery).getPath();
-            return handlers.keySet().stream()
-                    .filter(path::equals)
-                    .findFirst()
-                    .map(handlers::get);
+            // Static registrations are tried first.
+            if (handlers.containsKey(path)) {
+                return Optional.of(handlers.get(path));
+            }
+            // Then regex registrations, in the order they were registered (first match wins).
+            return regexHandlers.stream()
+                    .filter(r -> r.pathPattern().matcher(path).matches())
+                    .findFirst();
         }
         catch (URISyntaxException e) {
             return Optional.empty();

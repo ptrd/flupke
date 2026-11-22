@@ -48,6 +48,8 @@ public class Http3ClientBuilder implements HttpClient.Builder {
     private Duration connectTimeout;
     private Long receiveBufferSize;
     private boolean disableCertificateCheck;
+    private boolean datagramEnabled;
+    private boolean reliableStreamResetEnabled;
     private Logger logger;
     private int additionalUnidirectionalStreams;
     private int additionalBidirectionalStreams;
@@ -171,8 +173,26 @@ public class Http3ClientBuilder implements HttpClient.Builder {
         return this;
     }
 
+    /**
+     * Enables the HTTP/3 datagram extension (RFC 9297).
+     * @return this builder
+     */
+    public Http3ClientBuilder enableDatagram() {
+        this.datagramEnabled = true;
+        return this;
+    }
+
+    /**
+     * Enables the QUIC reliable stream reset extension (draft-ietf-quic-reliable-stream-reset).
+     * @return this builder
+     */
+    public Http3ClientBuilder enableReliableStreamReset() {
+        this.reliableStreamResetEnabled = true;
+        return this;
+    }
+
     @Override
     public HttpClient build() {
-        return new Http3Client(connectTimeout, receiveBufferSize, disableCertificateCheck, additionalUnidirectionalStreams, additionalBidirectionalStreams, address, trustManager, keyManager, logger);
+        return new Http3Client(connectTimeout, receiveBufferSize, disableCertificateCheck, datagramEnabled, reliableStreamResetEnabled, additionalUnidirectionalStreams, additionalBidirectionalStreams, address, trustManager, keyManager, logger);
     }
 }

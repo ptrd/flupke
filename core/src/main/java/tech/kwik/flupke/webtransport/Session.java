@@ -19,6 +19,7 @@
 package tech.kwik.flupke.webtransport;
 
 import java.io.IOException;
+import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -61,6 +62,15 @@ public interface Session {
     WebTransportStream createBidirectionalStream() throws IOException;
 
     /**
+     * Send a datagram.
+     * https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-15.html#section-2.2
+     * "Both client and server can send datagrams using HTTP Datagrams."
+     * @param data  the datagram data to send
+     * @throws IOException
+     */
+    void sendDatagram(byte[] data) throws IOException;
+
+    /**
      * https://www.ietf.org/archive/id/draft-ietf-webtrans-overview-06.html#name-streams
      * "Any WebTransport protocol SHALL provide the following operations on the session:
      *  -  receive a unidirectional stream
@@ -75,6 +85,14 @@ public interface Session {
      *  Removes a stream from the queue of incoming unidirectional streams, if one is available."
      */
     void setBidirectionalStreamReceiveHandler(Consumer<WebTransportStream> handler);
+
+    /**
+     * Set a handler for receiving datagrams.
+     * https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-15.html#section-2.2
+     * "Both client and server can send datagrams using HTTP Datagrams."
+     * @param handler
+     */
+    void setDatagramHandler(Consumer<byte[]> handler);
 
     /**
      * Close the session with an error.
@@ -115,6 +133,12 @@ public interface Session {
      * @return
      */
     String getPath();
+
+    /**
+     * Gets the negotiated application protocol, if any.
+     * @return the negotiated protocol, or empty if no protocol was negotiated
+     */
+    Optional<String> getNegotiatedProtocol();
 
     boolean isOpen();
 }

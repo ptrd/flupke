@@ -59,13 +59,18 @@ public class Http3Client extends HttpClient implements Http3ConnectionSettings {
     private Http3ClientConnection http3Connection;
     protected Http3ConnectionFactory http3ConnectionFactory;
     private final ExecutorService executorService;
+    private boolean enableDatagram;
+    private boolean enableReliableStreamReset;
 
-    Http3Client(Duration connectTimeout, Long receiveBufferSize, boolean disableCertificateCheck,
+    Http3Client(Duration connectTimeout, Long receiveBufferSize, boolean disableCertificateCheck, boolean enableDatagram,
+                boolean enableReliableStreamReset,
                 int maxAdditionalPeerInitiatedUnidirectionalStreams, int maxAdditionalPeerInitiatedBidirectionalStreams,
                 InetAddress inetAddress, X509TrustManager trustManager, X509ExtendedKeyManager keyManager, Logger logger) {
         this.connectTimeout = connectTimeout;
         this.receiveBufferSize = receiveBufferSize;
         this.disableCertificateCheck = disableCertificateCheck;
+        this.enableDatagram = enableDatagram;
+        this.enableReliableStreamReset = enableReliableStreamReset;
         this.maxAdditionalPeerInitiatedUnidirectionalStreams = maxAdditionalPeerInitiatedUnidirectionalStreams;
         this.maxAdditionalPeerInitiatedBidirectionalStreams = maxAdditionalPeerInitiatedBidirectionalStreams;
         this.trustManager = trustManager;
@@ -73,7 +78,7 @@ public class Http3Client extends HttpClient implements Http3ConnectionSettings {
         this.logger = logger;
 
         executorService = Executors.newCachedThreadPool(new DaemonThreadFactory("http3"));
-        this.http3ConnectionFactory = new Http3ConnectionFactory(this, executorService);
+        this.http3ConnectionFactory = new Http3ConnectionFactory(this, enableDatagram, enableReliableStreamReset, executorService);
         this.datagramSocketFactory = new InterfaceBoundDatagramSocketFactory(inetAddress);
     }
 
@@ -162,6 +167,14 @@ public class Http3Client extends HttpClient implements Http3ConnectionSettings {
     @Override
     public X509ExtendedKeyManager keyManager() {
         return keyManager;
+    }
+
+    public boolean enableDatagram() {
+        return enableDatagram;
+    }
+
+    public boolean enableReliableStreamReset() {
+        return enableReliableStreamReset;
     }
 
     public DatagramSocketFactory getDatagramSocketFactory() {

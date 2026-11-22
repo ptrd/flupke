@@ -25,6 +25,7 @@ import tech.kwik.flupke.webtransport.impl.ClientSessionFactoryImpl;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpRequest;
+import java.util.List;
 import java.util.function.Consumer;
 
 /**
@@ -84,6 +85,38 @@ public interface ClientSessionFactory {
                           Consumer<WebTransportStream> bidirectionalStreamHandler) throws IOException, HttpError;
 
     /**
+     * Creates a WebTransport session with application protocol negotiation.
+     * The client advertises the given protocols via the {@code WT-Available-Protocols} request header;
+     * the server selects one and returns it in the {@code WT-Protocol} response header.
+     * The negotiated protocol (if any) is available via {@link Session#getNegotiatedProtocol()}.
+     *
+     * @param serverUri          the WebTransport server URI
+     * @param availableProtocols the application protocols the client is willing to use
+     * @return the WebTransport session
+     * @throws IOException
+     * @throws HttpError
+     */
+    Session createSession(URI serverUri, List<String> availableProtocols) throws IOException, HttpError;
+
+    /**
+     * Creates a WebTransport session with application protocol negotiation and stream handlers.
+     * The client advertises the given protocols via the {@code WT-Available-Protocols} request header;
+     * the server selects one and returns it in the {@code WT-Protocol} response header.
+     * The negotiated protocol (if any) is available via {@link Session#getNegotiatedProtocol()}.
+     *
+     * @param serverUri                   the WebTransport server URI
+     * @param availableProtocols          the application protocols the client is willing to use
+     * @param unidirectionalStreamHandler handler for incoming unidirectional streams
+     * @param bidirectionalStreamHandler  handler for incoming bidirectional streams
+     * @return the WebTransport session
+     * @throws IOException
+     * @throws HttpError
+     */
+    Session createSession(URI serverUri, List<String> availableProtocols,
+                          Consumer<WebTransportStream> unidirectionalStreamHandler,
+                          Consumer<WebTransportStream> bidirectionalStreamHandler) throws IOException, HttpError;
+
+    /**
      * Returns the URI of the server this factory connects with.
      * @return  server URI
      */
@@ -105,5 +138,23 @@ public interface ClientSessionFactory {
         Builder serverUri(URI serverUri);
 
         Builder httpClient(Http3Client httpClient);
+
+        /**
+         * Sets the maximum number of streams that can be queued per session. When a new stream is received for a session
+         * that is not yet created, it is queued until the session is created. If the number of queued streams exceeds this
+         * limit, the stream is rejected with a WEBTRANSPORT_BUFFERED_STREAM_REJECTED error code.
+         * @param maxStreamsQueued
+         */
+        Builder maxStreamsQueued(int maxStreamsQueued);
+
+        /**
+         * Sets the maximum number of datagrams that can be queued per session. When a new datagram is received for a
+         * session that is not yet created, it is queued until the session is created. If the number of queued datagrams
+         * exceeds this limit, the datagram is dropped.
+         *
+         * @param maxStreamsQueued
+         * @return
+         */
+        Builder maxDatagramsQueued(int maxStreamsQueued);
     }
 }

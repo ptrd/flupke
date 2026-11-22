@@ -26,7 +26,10 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static tech.kwik.flupke.webtransport.Constants.WEBTRANSPORT_BUFFERED_STREAM_REJECTED;
@@ -34,19 +37,40 @@ import static tech.kwik.flupke.webtransport.Constants.WEBTRANSPORT_SESSION_GONE;
 
 public abstract class AbstractSessionFactoryImpl implements SessionFactory {
 
-    // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-13.html#section-9.2
-    // "The SETTINGS_WT_MAX_SESSIONS setting indicates that the specified HTTP/3 endpoint is WebTransport-capable and
-    //  the number of concurrent sessions it is willing to receive."
-    // "Setting Name: WT_MAX_SESSIONS
-    //  Value: 0x14e9cd29"
-    public static final long SETTINGS_WT_MAX_SESSIONS = 0x14e9cd29L;
+    // WebTransport setting IDs — multiple variants for cross-draft compatibility.
+
+    // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-13.html
+    // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-14.html
+    public static final long SETTINGS_WT_MAX_SESSIONS_DRAFT_13_14 = 0x14e9cd29L;
+    // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-07.html
+    // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-12.html
+    public static final long SETTINGS_WT_MAX_SESSIONS_DRAFT_07_12 = 0xc671706aL;
+    // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-06.html
+    public static final long SETTINGS_WT_ENABLE_DRAFT_06 = 0x2b603742L;
+    // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-04.html
+    // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-05.html
+    public static final long SETTINGS_WT_MAX_SESSIONS_DRAFT_04_05 = 0x2b603743L;
+
+    private enum SessionState {
+        NOT_CREATED, OPEN, CLOSED
+    }
 
     protected final Map<Long, SessionImpl> sessionRegistry = new ConcurrentHashMap<>();
     private final ReentrantLock registrationLock = new ReentrantLock();
     private final Map<Long, List<HttpStream>> streamQueue = new ConcurrentHashMap<>();
     private volatile int streamsQueued;
-    private final int maxStreamsQueued = 3;
-    private volatile long latestSessionId = -1;
+    private final int maxStreamsQueued;
+    private volatile int datagramsQueued;
+    private final int maxDatagramsQueued;
+    private volatile long lastRegisteredSessionId = -1;
+    protected final ExecutorService executor;
+    private final Map<Long, Queue<byte[]>> earlyDatagrams = new ConcurrentHashMap<>();
+
+    public AbstractSessionFactoryImpl(ExecutorService executor, int maxStreamsQueued, int maxDatagramsQueued) {
+        this.executor = executor;
+        this.maxStreamsQueued = maxStreamsQueued;
+        this.maxDatagramsQueued = maxDatagramsQueued;
+    }
 
     protected void handleUnidirectionalStream(HttpStream httpStream) {
         try {
@@ -88,43 +112,55 @@ public abstract class AbstractSessionFactoryImpl implements SessionFactory {
     }
 
     private void attachStreamToSessionOrQueue(long sessionId, HttpStream httpStream) throws BufferedStreamsLimitExceededException {
+        SessionImpl session;
+        SessionState sessionState;
         registrationLock.lock();
         try {
-            SessionImpl session = sessionRegistry.get(sessionId);
+            session = sessionRegistry.get(sessionId);
             if (session != null && session.isOpen()) {
-                session.handleStream(httpStream);
+                sessionState = SessionState.OPEN;
             }
             else {
-                if (session == null && sessionId <= latestSessionId) {
-                    // Session already closed, ignore the stream
-                    httpStream.abortReading(WEBTRANSPORT_SESSION_GONE);
-                    if (httpStream.isBidirectional()) {
-                        httpStream.resetStream(WEBTRANSPORT_SESSION_GONE);
+                if (session == null && sessionId <= lastRegisteredSessionId) {
+                    sessionState = SessionState.CLOSED;
+                }
+                else {
+                    sessionState = SessionState.NOT_CREATED;
+                    // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-buffering-incoming-streams-
+                    // "Similarly, a client may receive a server-initiated stream or a datagram before receiving the CONNECT
+                    //  response headers from the server. To handle this case, WebTransport endpoints SHOULD buffer streams
+                    //  and datagrams until those can be associated with an established session. To avoid resource exhaustion,
+                    //  the endpoints MUST limit the number of buffered streams and datagrams."
+                    // Checking the limit and queueing must be done while holding the lock, to ensure the limit is not
+                    // exceeded by concurrent streams and the stream is not queued after the session has been started.
+                    if (streamsQueued >= maxStreamsQueued) {
+                        throw new BufferedStreamsLimitExceededException();
                     }
-                    return;
+                    // Session not yet created, queue the stream
+                    streamQueue.computeIfAbsent(sessionId, k -> new ArrayList<>()).add(httpStream);
+                    streamsQueued++;
                 }
-                // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-09.html#name-buffering-incoming-streams-
-                // "Similarly, a client may receive a server-initiated stream or a datagram before receiving the CONNECT
-                //  response headers from the server. To handle this case, WebTransport endpoints SHOULD buffer streams
-                //  and datagrams until those can be associated with an established session. To avoid resource exhaustion,
-                //  the endpoints MUST limit the number of buffered streams and datagrams."
-                if (streamsQueued >= maxStreamsQueued) {
-                    throw new BufferedStreamsLimitExceededException();
-                }
-                // Session not yet created, queue the stream
-                streamQueue.computeIfAbsent(sessionId, k -> new ArrayList<>()).add(httpStream);
-                streamsQueued++;
             }
         }
         finally {
             registrationLock.unlock();
+        }
+        if (sessionState == SessionState.OPEN) {
+            session.handleStream(httpStream);
+        }
+        else if (sessionState == SessionState.CLOSED) {
+            // Session already closed, ignore the stream
+            httpStream.abortReading(WEBTRANSPORT_SESSION_GONE);
+            if (httpStream.isBidirectional()) {
+                httpStream.resetStream(WEBTRANSPORT_SESSION_GONE);
+            }
         }
     }
 
     protected void registerSession(SessionImpl session) {
         registrationLock.lock();
         try {
-            latestSessionId = session.getSessionId();
+            lastRegisteredSessionId = session.getSessionId();
             sessionRegistry.put(session.getSessionId(), session);
         }
         finally {
@@ -132,31 +168,99 @@ public abstract class AbstractSessionFactoryImpl implements SessionFactory {
         }
     }
 
-    @Override
-    public void startSession(SessionImpl session) {
+    protected boolean handleEarlyDatagram(long streamId, byte[] data) {
+        // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-15.html#name-buffering-incoming-streams-
+        // "To handle this case, WebTransport endpoints SHOULD buffer streams and datagrams until they can be associated
+        //  with an established session. To avoid resource exhaustion, endpoints MUST limit the number of buffered streams
+        //  and datagrams."
+        // "When the number of buffered datagrams is exceeded, a datagram SHALL be dropped. It is up to an implementation
+        //  to choose what stream or datagram to discard."
+        SessionImpl openSession = null;
         registrationLock.lock();
         try {
-            // Check queue for streams that are waiting for this session
-            List<HttpStream> bufferedStreams = streamQueue.remove(session.getSessionId());
-            if (bufferedStreams != null) {
-                bufferedStreams.forEach(session::handleStream);
-                streamsQueued -= bufferedStreams.size();
+            SessionImpl session = sessionRegistry.get(streamId);
+            if (session != null && session.isOpen()) {
+                // Session is already started, so the datagram is not "early" and should be passed to the session immediately.
+                openSession = session;
+            }
+            else if (session == null && streamId <= lastRegisteredSessionId) {
+                // Session already closed, so the datagram can never be delivered; drop it.
+                return false;
+            }
+            else {
+                if (datagramsQueued >= maxDatagramsQueued) {
+                    return false;
+                }
+                earlyDatagrams.computeIfAbsent(streamId, k -> new ConcurrentLinkedQueue<>()).add(data);
+                datagramsQueued++;
             }
         }
         finally {
             registrationLock.unlock();
         }
+        if (openSession != null) {
+            openSession.handleDatagram(data);
+        }
+        return true;
+    }
+
+    @Override
+    public void startSession(SessionImpl session) {
+        List<HttpStream> bufferedStreams;
+        Queue<byte[]> bufferedDatagrams;
+        registrationLock.lock();
+        try {
+            // Check queue for streams that are waiting for this session
+            bufferedStreams = streamQueue.remove(session.getSessionId());
+            if (bufferedStreams != null) {
+                streamsQueued -= bufferedStreams.size();
+            }
+            // Check queue for datagrams that arrived before the session was started
+            bufferedDatagrams = earlyDatagrams.remove(session.getSessionId());
+            if (bufferedDatagrams != null) {
+                datagramsQueued -= bufferedDatagrams.size();
+            }
+        }
+        finally {
+            registrationLock.unlock();
+        }
+        if (bufferedStreams != null) {
+            bufferedStreams.forEach(stream -> executor.submit(() -> session.handleStream(stream)));
+        }
+        if (bufferedDatagrams != null) {
+            bufferedDatagrams.forEach(datagram -> executor.submit(() -> session.handleDatagram(datagram)));
+        }
     }
 
     @Override
     public void removeSession(SessionImpl session) {
+        List<HttpStream> bufferedStreams;
         registrationLock.lock();
         try {
             sessionRegistry.remove(session.getSessionId());
-            streamQueue.remove(session.getSessionId());
+            bufferedStreams = streamQueue.remove(session.getSessionId());
+            if (bufferedStreams != null) {
+                streamsQueued -= bufferedStreams.size();
+            }
+            Queue<byte[]> bufferedDatagrams = earlyDatagrams.remove(session.getSessionId());
+            if (bufferedDatagrams != null) {
+                datagramsQueued -= bufferedDatagrams.size();
+            }
         }
         finally {
             registrationLock.unlock();
+        }
+        if (bufferedStreams != null) {
+            // https://datatracker.ietf.org/doc/html/draft-ietf-webtrans-http3-13#section-6
+            // "Upon learning that the session has been terminated, the endpoint MUST reset the send side and abort
+            //  reading on the receive side of all unidirectional and bidirectional streams associated with the session
+            //  (see Section 2.4 of [RFC9000]) using the WT_SESSION_GONE error code; "
+            bufferedStreams.forEach(httpStream -> {
+                httpStream.abortReading(WEBTRANSPORT_SESSION_GONE);
+                if (httpStream.isBidirectional()) {
+                    httpStream.resetStream(WEBTRANSPORT_SESSION_GONE);
+                }
+            });
         }
     }
 }

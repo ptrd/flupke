@@ -21,8 +21,11 @@ package tech.kwik.flupke.webtransport.impl;
 import tech.kwik.flupke.Http3Client;
 import tech.kwik.flupke.Http3ClientConnection;
 import tech.kwik.flupke.HttpError;
+import tech.kwik.flupke.HttpStream;
 import tech.kwik.flupke.core.CapsuleProtocolStream;
 import tech.kwik.flupke.impl.CapsuleProtocolStreamImpl;
+import tech.kwik.flupke.impl.StructuredFields;
+import tech.kwik.flupke.impl.StructuredFieldsException;
 import tech.kwik.flupke.webtransport.ClientSessionFactory;
 import tech.kwik.flupke.webtransport.Session;
 import tech.kwik.flupke.webtransport.WebTransportStream;
@@ -32,7 +35,12 @@ import java.io.InterruptedIOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 
 import static tech.kwik.flupke.webtransport.Constants.STREAM_TYPE_WEBTRANSPORT;
@@ -47,15 +55,32 @@ public class ClientSessionFactoryImpl extends AbstractSessionFactoryImpl impleme
     private final String server;
     private final int serverPort;
     private final Http3ClientConnection httpClientConnection;
-    private final long maxSessions;
+    private final int maxSessions;
 
     /**
      * Creates a new WebTransport session factory for a given server.
-     * @param serverUri     server URI, only the host and port are used (i.e. path etc. is ignored)
-     * @param httpClient    the client to use for creating the HTTP/3 connection
-     * @throws IOException  if the connection to the server cannot be established
+     *
+     * @param serverUri       server URI, only the host and port are used (i.e. path etc. is ignored)
+     * @param httpClient      the client to use for creating the HTTP/3 connection
+     * @param executor
+     * @throws IOException if the connection to the server cannot be established
      */
-    public ClientSessionFactoryImpl(URI serverUri, Http3Client httpClient) throws IOException {
+    public ClientSessionFactoryImpl(URI serverUri, Http3Client httpClient, ExecutorService executor) throws IOException {
+        this(serverUri, httpClient, executor, 3, 3);
+    }
+
+    /**
+     * Creates a new WebTransport session factory for a given server.
+     *
+     * @param serverUri           server URI, only the host and port are used (i.e. path etc. is ignored)
+     * @param httpClient          the client to use for creating the HTTP/3 connection
+     * @param executor
+     * @param maxStreamsQueued    the maximum number of streams that can be queued per session
+     * @param maxDatagramsQueued  the maximum number of datagrams that can be buffered before a session is established
+     * @throws IOException if the connection to the server cannot be established
+     */
+    public ClientSessionFactoryImpl(URI serverUri, Http3Client httpClient, ExecutorService executor, int maxStreamsQueued, int maxDatagramsQueued) throws IOException {
+        super(executor, maxStreamsQueued, maxDatagramsQueued);
         this.server = serverUri.getHost();
         this.serverPort = serverUri.getPort();
 
@@ -63,19 +88,28 @@ public class ClientSessionFactoryImpl extends AbstractSessionFactoryImpl impleme
             HttpRequest request = HttpRequest.newBuilder(new URI("https://" + server + ":" + serverPort)).build();
             httpClientConnection = httpClient.createConnection(request);
 
-            // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-13.html#section-3.1
-            // "A client supporting WebTransport over HTTP/3 MUST send the SETTINGS_WT_MAX_SESSIONS setting with a value greater than "0"."
-            httpClientConnection.addSettingsParameter(SETTINGS_WT_MAX_SESSIONS, 1);
+            // Send all WebTransport setting variants for maximum cross-implementation compatibility.
+            // Current (draft-06+)
+            httpClientConnection.addSettingsParameter(SETTINGS_WT_MAX_SESSIONS_DRAFT_07_12, 1);
+            // Draft-13 (used by moqtail.dev / older Flupke servers)
+            httpClientConnection.addSettingsParameter(SETTINGS_WT_MAX_SESSIONS_DRAFT_13_14, 1);
+            // Deprecated variants (used by some servers)
+            httpClientConnection.addSettingsParameter(SETTINGS_WT_ENABLE_DRAFT_06, 1);
+            httpClientConnection.addSettingsParameter(SETTINGS_WT_MAX_SESSIONS_DRAFT_04_05, 1);
             httpClientConnection.connect();
 
-            // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-13.html#section-5.2
-            // "This document defines a SETTINGS_WT_MAX_SESSIONS setting that allows the server to limit the maximum number
-            //  of concurrent WebTransport sessions on a single HTTP/3 connection.
-            //  The client MUST NOT open more simultaneous sessions than indicated in the server SETTINGS parameter. "
-            maxSessions = httpClientConnection.getPeerSettingsParameter(SETTINGS_WT_MAX_SESSIONS).orElse(0L);
+            // Check all WT_MAX_SESSIONS variants the server might advertise.
+            // Default to unlimited since many servers omit this setting.
+            long advertisedMax = httpClientConnection.getPeerSettingsParameter(SETTINGS_WT_MAX_SESSIONS_DRAFT_07_12)
+                .or(() -> httpClientConnection.getPeerSettingsParameter(SETTINGS_WT_MAX_SESSIONS_DRAFT_13_14))
+                .or(() -> httpClientConnection.getPeerSettingsParameter(SETTINGS_WT_MAX_SESSIONS_DRAFT_04_05))
+                .orElse(Long.MAX_VALUE);
+
+            maxSessions = advertisedMax > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) advertisedMax;
 
             httpClientConnection.registerUnidirectionalStreamType(STREAM_TYPE_WEBTRANSPORT, this::handleUnidirectionalStream);
             httpClientConnection.registerBidirectionalStreamHandler(this::handleBidirectionalStream);
+            httpClientConnection.registerDefaultDatagramHandler((streamId, data) -> handleEarlyDatagram(streamId, data)); // TODO: moet dit ook niet voor server?
         }
         catch (URISyntaxException e) {
             throw new IOException("Invalid server URI: " + server);
@@ -100,6 +134,25 @@ public class ClientSessionFactoryImpl extends AbstractSessionFactoryImpl impleme
     }
 
     @Override
+    public Session createSession(URI serverUri, List<String> availableProtocols) throws IOException, HttpError {
+        return createSession(serverUri, availableProtocols, s -> {}, s -> {});
+    }
+
+    @Override
+    public Session createSession(URI serverUri, List<String> availableProtocols,
+                                 Consumer<WebTransportStream> unidirectionalStreamHandler,
+                                 Consumer<WebTransportStream> bidirectionalStreamHandler) throws IOException, HttpError {
+        // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-15.html#section-3.3
+        // "The client MAY include a WT-Available-Protocols header field in the CONNECT request."
+        // "Both WT-Available-Protocols and WT-Protocol are Structured Fields [FIELDS]. WT-Available-Protocols is a List.
+        // (...) In both cases, the only valid value type is a String."
+        HttpRequest request = HttpRequest.newBuilder(serverUri)
+                .header("wt-available-protocols", StructuredFields.serializeStringList(availableProtocols))
+                .build();
+        return createSession(request, unidirectionalStreamHandler, bidirectionalStreamHandler);
+    }
+
+    @Override
     public Session createSession(HttpRequest request, Consumer<WebTransportStream> unidirectionalStreamHandler,
                                  Consumer<WebTransportStream> bidirectionalStreamHandler) throws IOException, HttpError {
         if (!server.equals(request.uri().getHost()) || serverPort != request.uri().getPort()) {
@@ -118,14 +171,27 @@ public class ClientSessionFactoryImpl extends AbstractSessionFactoryImpl impleme
             //  The :scheme field MUST be https. "
             String protocol = "webtransport";
             String schema = "https";
-            CapsuleProtocolStream connectStream = new CapsuleProtocolStreamImpl(httpClientConnection.sendExtendedConnect(request, protocol, schema, Duration.ofSeconds(5)));
-            WebTransportContext context = new WebTransportContext(request.uri());
+            HttpResponse<HttpStream> connectResponse = httpClientConnection.sendExtendedConnectAndGetResponse(request, protocol, schema, Duration.ofSeconds(5));
+            // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-15.html#section-3.3
+            // "If the server receives such a header, it MAY include a WT-Protocol field in a successful (2xx) response."
+            String negotiatedProtocol = null;
+            Optional<String> wtProtocolHeader = connectResponse.headers().firstValue("wt-protocol");
+            if (wtProtocolHeader.isPresent()) {
+                try {
+                    negotiatedProtocol = StructuredFields.parseString(wtProtocolHeader.get());
+                }
+                catch (StructuredFieldsException e) {
+                    // Malformed WT-Protocol header; treat as if no protocol was negotiated.
+                }
+            }
+            CapsuleProtocolStream connectStream = new CapsuleProtocolStreamImpl(connectResponse.body());
+            WebTransportContext context = new WebTransportContext(request.uri(), negotiatedProtocol);
             SessionImpl session = new SessionImpl(httpClientConnection, context, connectStream, unidirectionalStreamHandler, bidirectionalStreamHandler, this);
             registerSession(session);
             return session;
         }
         catch (InterruptedException e) {
-            // Thrown by sendExtendedConnect
+            // Thrown by sendExtendedConnectAndGetResponse
             throw new InterruptedIOException("HTTP CONNECT request was interrupted");
         }
     }
@@ -148,10 +214,12 @@ public class ClientSessionFactoryImpl extends AbstractSessionFactoryImpl impleme
 
         private URI serverUri;
         private Http3Client httpClient;
+        private int maxStreamsQueued = 3;
+        private int maxDatagramsQueued = 3;
 
         @Override
         public ClientSessionFactory build() throws IOException {
-            return new ClientSessionFactoryImpl(serverUri, httpClient);
+            return new ClientSessionFactoryImpl(serverUri, httpClient, Executors.newCachedThreadPool(), maxStreamsQueued, maxDatagramsQueued);
         }
 
         @Override
@@ -162,7 +230,32 @@ public class ClientSessionFactoryImpl extends AbstractSessionFactoryImpl impleme
 
         @Override
         public Builder httpClient(Http3Client httpClient) {
+            // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-15.html#section-3.1
+            // "WebTransport over HTTP/3 requires support for HTTP/3 datagrams and the Capsule Protocol, and both the
+            //  client and the server indicate support for HTTP/3 datagrams by sending a SETTINGS_H3_DATAGRAM setting
+            //  value set to 1 in their SETTINGS frame"
+            if (! httpClient.enableDatagram()) {
+                throw new IllegalArgumentException("Http3Client must have datagram support enabled to be used with WebTransport");
+            }
+            // https://www.ietf.org/archive/id/draft-ietf-webtrans-http3-15.html#section-3.1
+            // "WebTransport over HTTP/3 relies on the RESET_STREAM_AT frame defined in [RESET-STREAM-AT]. To indicate
+            //  support, both the client and the server enable the extension "
+            if (! httpClient.enableReliableStreamReset()) {
+                throw new IllegalArgumentException("Http3Client must have reliable stream reset enabled to be used with WebTransport");
+            }
             this.httpClient = httpClient;
+            return this;
+        }
+
+        @Override
+        public Builder maxStreamsQueued(int maxStreamsQueued) {
+            this.maxStreamsQueued = maxStreamsQueued;
+            return this;
+        }
+
+        @Override
+        public Builder maxDatagramsQueued(int maxDatagramsQueued) {
+            this.maxDatagramsQueued = maxDatagramsQueued;
             return this;
         }
     }

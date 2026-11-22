@@ -40,6 +40,8 @@ public class BatonClient {
 
         Http3ClientBuilder builder = Http3Client.newBuilder();
         httpClient = (Http3Client) builder
+                .enableDatagram()
+                .enableReliableStreamReset()
                 .disableCertificateCheck()
                 .maxAdditionalOpenPeerInitiatedUnidirectionalStreams(100)
                 .maxAdditionalOpenPeerInitiatedBidirectionalStreams(100)

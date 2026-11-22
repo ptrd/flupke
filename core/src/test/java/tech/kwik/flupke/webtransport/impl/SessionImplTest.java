@@ -27,7 +27,11 @@ import tech.kwik.flupke.HttpError;
 import tech.kwik.flupke.HttpStream;
 import tech.kwik.flupke.core.CapsuleProtocolStream;
 import tech.kwik.flupke.impl.CapsuleProtocolStreamImpl;
+import tech.kwik.flupke.impl.Http3ConnectionImpl;
 import tech.kwik.flupke.test.ByteUtils;
+import tech.kwik.flupke.test.FieldReader;
+import tech.kwik.flupke.test.Http3ConnectionBuilder;
+import tech.kwik.flupke.test.TestExecutor;
 import tech.kwik.flupke.test.WriteableByteArrayInputStream;
 import tech.kwik.flupke.webtransport.Session;
 import tech.kwik.flupke.webtransport.WebTransportStream;
@@ -39,6 +43,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
@@ -50,6 +56,8 @@ import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static tech.kwik.flupke.webtransport.Constants.WEBTRANSPORT_BUFFERED_STREAM_REJECTED;
+import static tech.kwik.flupke.webtransport.Constants.WEBTRANSPORT_SESSION_GONE;
 
 class SessionImplTest {
 
@@ -343,7 +351,7 @@ class SessionImplTest {
     void whenMaxSessionsIsReachedCreateSessionShouldFail() throws Exception {
         // Given
         Http3Client client = builder.buildClient();
-        ClientSessionFactoryImpl clientSessionFactory = new ClientSessionFactoryImpl(defaultWebtransportUri, client);
+        ClientSessionFactoryImpl clientSessionFactory = new ClientSessionFactoryImpl(defaultWebtransportUri, client, null);
         clientSessionFactory.createSession(defaultWebtransportUri);
 
         // When
@@ -360,7 +368,7 @@ class SessionImplTest {
         Http3Client client = builder
                 .withExtendedConnectStream(inputStream)
                 .buildClient();
-        ClientSessionFactoryImpl clientSessionFactory = new ClientSessionFactoryImpl(defaultWebtransportUri, client);
+        ClientSessionFactoryImpl clientSessionFactory = new ClientSessionFactoryImpl(defaultWebtransportUri, client, null);
         Session firstSession = clientSessionFactory.createSession(defaultWebtransportUri);
 
         // Register a listener that will open a new session when the first one is closed
@@ -480,6 +488,145 @@ class SessionImplTest {
         // Then
         verify(bidirectionalHttpStream).resetStream(anyLong());
         verify(bidirectionalHttpStream).abortReading(anyLong());
+    }
+
+    @Test
+    void whenOutputStreamOfUnidirectionalStreamIsClosedItIsNotRetainedBySession() throws Exception {
+        // Given
+        Http3Client client = builder.buildClient();
+        Session session = createSessionWith(client);
+
+        WebTransportStream unidirectionalStream = session.createUnidirectionalStream();
+        assertThat(sendingStreamsOf(session).size()).isEqualTo(1);
+
+        // When
+        unidirectionalStream.getOutputStream().close();
+
+        // Then
+        assertThat(sendingStreamsOf(session).size()).isEqualTo(0);
+    }
+
+    @Test
+    void whenBothStreamsOfBidirectionalStreamAreClosedItIsNotRetainedBySession() throws Exception {
+        // Given
+        Http3Client client = builder.buildClient();
+        Session session = createSessionWith(client);
+
+        WebTransportStream bidirectionalStream = session.createBidirectionalStream();
+        assertThat(sendingStreamsOf(session).size()).isEqualTo(1);
+        assertThat(receivingStreamsOf(session).size()).isEqualTo(1);
+
+        // When
+        bidirectionalStream.getOutputStream().close();
+        bidirectionalStream.getInputStream().close();
+
+        // Then
+        assertThat(sendingStreamsOf(session).size()).isEqualTo(0);
+        assertThat(receivingStreamsOf(session).size()).isEqualTo(0);
+    }
+
+    @Test
+    void whenBidirectionalStreamIsReadUntilEndOfStreamItsReceiveSideIsNotRetainedBySession() throws Exception {
+        // Given
+        Http3Client client = builder
+                .withBidirectionalStreamInputOuput(new ByteArrayInputStream("Hello from peer!".getBytes(StandardCharsets.UTF_8)), new ByteArrayOutputStream())
+                .buildClient();
+        Session session = createSessionWith(client);
+
+        WebTransportStream bidirectionalStream = session.createBidirectionalStream();
+
+        // When the peer's data is read up to (and including) the end of the stream
+        bidirectionalStream.getInputStream().readAllBytes();
+
+        // Then
+        assertThat(receivingStreamsOf(session).size()).isEqualTo(0);
+        // And the send side is still retained, as it has not been closed
+        assertThat(sendingStreamsOf(session).size()).isEqualTo(1);
+    }
+
+    @Test
+    void whenPeerInitiatedUnidirectionalStreamIsReadUntilEndOfStreamItIsNotRetainedBySession() throws Exception {
+        // Given
+        Http3Client client = builder
+                .withExtendedConnectStream(createOpenInputStream())
+                .buildClient();
+
+        Consumer<WebTransportStream> unidirectionalStreamHandler = stream -> readStringFrom(stream.getInputStream());
+        Session session = createSessionWith(client, unidirectionalStreamHandler, null);
+        Consumer<HttpStream> handler = captureHttpConnectionUnidirectionalStreamHandler(builder.getHttp3connection());
+
+        // When the peer sends something on a (new) unidirectional stream and the handler reads it up to the end of the stream
+        String binarySessionId = "\u0004";  // (one byte, just 0x04)
+        handler.accept(unidirectionalHttpStreamWith(new ByteArrayInputStream((binarySessionId + "Hello from peer!").getBytes(StandardCharsets.UTF_8))));
+
+        // Then
+        assertThat(receivingStreamsOf(session).size()).isEqualTo(0);
+    }
+
+    @Test
+    void closingOutputStreamTwiceShouldRemoveStreamFromSendingStreamsOnlyOnce() throws Exception {
+        // Given
+        HttpStream firstHttpStream = mockHttpStream();
+        HttpStream secondHttpStream = mockHttpStream();
+        Http3Client client = builder.buildClient();
+        Session session = createSessionWith(client);
+        when(builder.getHttp3connection().createUnidirectionalStream(anyLong())).thenReturn(firstHttpStream, secondHttpStream);
+
+        WebTransportStream firstStream = session.createUnidirectionalStream();
+        session.createUnidirectionalStream();  // remains open
+        OutputStream outputStream = firstStream.getOutputStream();
+        outputStream.close();
+
+        // When
+        assertDoesNotThrow(() -> outputStream.close());
+
+        // Then only the stream that was closed has been removed
+        assertThat(sendingStreamsOf(session).size()).isEqualTo(1);
+        assertThat(sendingStreamsOf(session).contains(secondHttpStream)).isTrue();
+    }
+
+    @Test
+    void closingInputStreamAfterEndOfStreamShouldRemoveStreamFromReceivingStreamsOnlyOnce() throws Exception {
+        // Given
+        HttpStream firstHttpStream = mockBidirectionalHttpStream("Hello from peer!");
+        HttpStream secondHttpStream = mockBidirectionalHttpStream("Hello from peer!");
+        Http3Client client = builder.buildClient();
+        Session session = createSessionWith(client);
+        when(builder.getHttp3connection().createBidirectionalStream()).thenReturn(firstHttpStream, secondHttpStream);
+
+        WebTransportStream firstStream = session.createBidirectionalStream();
+        session.createBidirectionalStream();  // remains open
+        InputStream inputStream = firstStream.getInputStream();
+        inputStream.readAllBytes();
+
+        // When
+        assertDoesNotThrow(() -> inputStream.close());
+
+        // Then only the stream that was read until the end of the stream has been removed
+        assertThat(receivingStreamsOf(session).size()).isEqualTo(1);
+        assertThat(receivingStreamsOf(session).contains(secondHttpStream)).isTrue();
+    }
+
+    @Test
+    void whenSessionIsClosedStreamsThatAreAlreadyClosedAreNotReset() throws Exception {
+        // Given
+        HttpStream unidirectionalHttpStream = mockHttpStream();
+        InputStream connectStream = new WriteableByteArrayInputStream();
+        Http3Client client = builder
+                .withExtendedConnectStream(connectStream)
+                .with(unidirectionalHttpStream)
+                .buildClient();
+        Session session = createSessionWith(client);
+
+        session.createUnidirectionalStream().getOutputStream().close();
+
+        // When
+        connectStream.close();
+        // Processing connect stream happens async, so give other thread a chance to process
+        Thread.sleep(10);
+
+        // Then
+        verify(unidirectionalHttpStream, never()).resetStream(anyLong());
     }
 
     @Test
@@ -650,6 +797,152 @@ class SessionImplTest {
         verify(connectOutputStream, times(0)).close();
     }
 
+    @Test
+    void datagramsReceivedBeforeHandlerIsSetAreDeliveredOnceSessionIsOpened() throws Exception {
+        // Given
+        Http3Client client = builder.buildClient();
+        TestExecutor testExecutor = new TestExecutor();
+        var factory = new ClientSessionFactoryImpl(defaultWebtransportUri, client, testExecutor);
+        Session session = factory.createSession(defaultWebtransportUri);
+
+        // A datagram arrives before the user sets a datagram handler
+        byte[] datagram = new byte[] { 1, 2, 3 };
+        factory.handleEarlyDatagram(session.getSessionId(), datagram);
+
+        // When the user sets a datagram handler
+        AtomicReference<byte[]> received = new AtomicReference<>();
+        session.setDatagramHandler(received::set);
+
+        // And opens the session afterwards.
+        session.open();
+        testExecutor.executeAllPendingTasks();
+
+        // Then the buffered datagram is delivered to the handler
+        assertThat(received.get()).isEqualTo(datagram);
+    }
+
+    @Test
+    void datagramsReceivedForOpenSessionWithoutHandlerDoNotUseUpEarlyDatagramBuffer() throws Exception {
+        // Given
+        Http3Client client = builder.buildClient();
+        TestExecutor testExecutor = new TestExecutor();
+        int maxDatagramsQueued = 3;
+        var factory = new ClientSessionFactoryImpl(defaultWebtransportUri, client, testExecutor, 3, maxDatagramsQueued);
+        Session session = factory.createSession(defaultWebtransportUri);
+        session.open();
+        testExecutor.executeAllPendingTasks();
+
+        // When datagrams arrive for the already opened session before the user sets a datagram handler
+        for (int i = 0; i < maxDatagramsQueued; i++) {
+            factory.handleEarlyDatagram(session.getSessionId(), new byte[] { (byte) i });
+        }
+
+        // Then the buffer still has room for datagrams of a session that is not yet created
+        long nextSessionId = session.getSessionId() + 4;
+        assertThat(factory.handleEarlyDatagram(nextSessionId, new byte[] { 42 })).isTrue();
+    }
+
+    @Test
+    void datagramsReceivedForClosedSessionDoNotUseUpEarlyDatagramBuffer() throws Exception {
+        // Given
+        Http3Client client = builder.buildClient();
+        TestExecutor testExecutor = new TestExecutor();
+        int maxDatagramsQueued = 3;
+        var factory = new ClientSessionFactoryImpl(defaultWebtransportUri, client, testExecutor, 3, maxDatagramsQueued);
+        Session session = factory.createSession(defaultWebtransportUri);
+        session.open();
+        testExecutor.executeAllPendingTasks();
+        session.close();
+
+        // When datagrams for the closed session arrive late
+        for (int i = 0; i < maxDatagramsQueued; i++) {
+            factory.handleEarlyDatagram(session.getSessionId(), new byte[] { (byte) i });
+        }
+
+        // Then the buffer still has room for datagrams of a session that is not yet created
+        long nextSessionId = session.getSessionId() + 4;
+        assertThat(factory.handleEarlyDatagram(nextSessionId, new byte[] { 42 })).isTrue();
+    }
+
+    @Test
+    void streamsQueuedForSessionThatIsClosedBeforeBeingOpenedDoNotUseUpStreamBuffer() throws Exception {
+        // Given
+        WriteableByteArrayInputStream connectStream = new WriteableByteArrayInputStream();
+        Http3Client client = builder
+                .withExtendedConnectStream(connectStream)
+                .buildClient();
+        int maxStreamsQueued = 1;
+        var factory = new ClientSessionFactoryImpl(defaultWebtransportUri, client, new TestExecutor(), maxStreamsQueued, 3);
+        factory.createSession(defaultWebtransportUri);  // session id 4, not opened yet
+        Consumer<HttpStream> handler = captureHttpConnectionUnidirectionalStreamHandler(builder.getHttp3connection());
+
+        // A peer-initiated stream arrives before the session is opened, so it is queued
+        HttpStream streamForSession = unidirectionalHttpStreamWith(new ByteArrayInputStream(new byte[] { 0x04 }));
+        handler.accept(streamForSession);
+        verify(streamForSession, never()).abortReading(WEBTRANSPORT_BUFFERED_STREAM_REJECTED);
+
+        // When the session is closed by the peer before it was opened
+        connectStream.close();
+        // Processing connect stream happens async, so give other thread a chance to process
+        Thread.sleep(100);
+
+        // Then the queued stream is aborted, as the session is gone
+        verify(streamForSession).abortReading(WEBTRANSPORT_SESSION_GONE);
+
+        // And the buffer has room again for a stream of a session that is not yet created
+        HttpStream streamForNextSession = unidirectionalHttpStreamWith(new ByteArrayInputStream(new byte[] { 0x08 }));
+        handler.accept(streamForNextSession);
+        verify(streamForNextSession, never()).abortReading(WEBTRANSPORT_BUFFERED_STREAM_REJECTED);
+    }
+
+    @Test
+    void whenSessionIsClosedItsDatagramHandlerIsNotRetainedByConnection() throws Exception {
+        // Given
+        Http3ConnectionImpl http3Connection = new Http3ConnectionBuilder().withDatagramEnabled().build();
+        SessionImpl session = createSessionOn(http3Connection, 4L, createOpenInputStream());
+        session.open();
+        session.setDatagramHandler(data -> {});
+        assertThat(datagramHandlersOf(http3Connection).containsKey(4L)).isTrue();
+
+        // When
+        session.close();
+
+        // Then
+        assertThat(datagramHandlersOf(http3Connection).containsKey(4L)).isFalse();
+    }
+
+    @Test
+    void whenSessionIsClosedByPeerItsDatagramHandlerIsNotRetainedByConnection() throws Exception {
+        // Given
+        Http3ConnectionImpl http3Connection = new Http3ConnectionBuilder().withDatagramEnabled().build();
+        WriteableByteArrayInputStream connectStream = new WriteableByteArrayInputStream();
+        SessionImpl session = createSessionOn(http3Connection, 4L, connectStream);
+        session.open();
+        session.setDatagramHandler(data -> {});
+        assertThat(datagramHandlersOf(http3Connection).containsKey(4L)).isTrue();
+
+        // When
+        connectStream.close();
+        // Processing connect stream happens async, so give other thread a chance to process
+        Thread.sleep(10);
+
+        // Then
+        assertThat(datagramHandlersOf(http3Connection).containsKey(4L)).isFalse();
+    }
+
+    private SessionImpl createSessionOn(Http3ConnectionImpl http3Connection, long sessionId, InputStream connectStreamInput) {
+        HttpStream connectHttpStream = mock(HttpStream.class);
+        when(connectHttpStream.getStreamId()).thenReturn(sessionId);
+        when(connectHttpStream.getInputStream()).thenReturn(connectStreamInput);
+        when(connectHttpStream.getOutputStream()).thenReturn(new ByteArrayOutputStream());
+        return new SessionImpl(http3Connection, new WebTransportContext(defaultWebtransportUri),
+                new CapsuleProtocolStreamImpl(connectHttpStream), mock(SessionFactory.class));
+    }
+
+    private static Map<Long, Consumer<byte[]>> datagramHandlersOf(Http3ConnectionImpl http3Connection) throws Exception {
+        return (Map<Long, Consumer<byte[]>>) new FieldReader(http3Connection, Http3ConnectionImpl.class, "datagramHandlers").read();
+    }
+
     /**
      * Returns an input stream that is open but empty, so any read will block forever.
      * @return
@@ -659,8 +952,16 @@ class SessionImplTest {
     }
 
     private Session createSessionWith(Http3Client client) throws Exception {
-        Session session = new ClientSessionFactoryImpl(defaultWebtransportUri, client).createSession(defaultWebtransportUri);
+        Session session = new ClientSessionFactoryImpl(defaultWebtransportUri, client, null).createSession(defaultWebtransportUri);
         session.open();
+        return session;
+    }
+
+    private Session createSessionWith(Http3Client client, boolean openImmediately) throws Exception {
+        Session session = new ClientSessionFactoryImpl(defaultWebtransportUri, client, null).createSession(defaultWebtransportUri);
+        if (openImmediately) {
+            session.open();
+        }
         return session;
     }
 
@@ -670,8 +971,25 @@ class SessionImplTest {
         return bidirectionalHttpStream;
     }
 
+    private static HttpStream mockBidirectionalHttpStream(String dataFromPeer) {
+        HttpStream httpStream = mock(HttpStream.class);
+        when(httpStream.getOutputStream()).thenReturn(new ByteArrayOutputStream());
+        when(httpStream.getInputStream()).thenReturn(new ByteArrayInputStream(dataFromPeer.getBytes(StandardCharsets.UTF_8)));
+        when(httpStream.isUnidirectional()).thenReturn(false);
+        when(httpStream.isBidirectional()).thenReturn(true);
+        return httpStream;
+    }
+
+    private static Queue<HttpStream> sendingStreamsOf(Session session) throws Exception {
+        return (Queue<HttpStream>) new FieldReader(session, SessionImpl.class, "sendingStreams").read();
+    }
+
+    private static Queue<HttpStream> receivingStreamsOf(Session session) throws Exception {
+        return (Queue<HttpStream>) new FieldReader(session, SessionImpl.class, "receivingStreams").read();
+    }
+
     private Session createSessionWith(Http3Client client, Consumer<WebTransportStream> unidirectionalStreamHandler, Consumer<WebTransportStream> bidirectionalStreamHandler) throws IOException, HttpError {
-        Session session = new ClientSessionFactoryImpl(defaultWebtransportUri, client).createSession(defaultWebtransportUri, unidirectionalStreamHandler, bidirectionalStreamHandler);
+        Session session = new ClientSessionFactoryImpl(defaultWebtransportUri, client, null).createSession(defaultWebtransportUri, unidirectionalStreamHandler, bidirectionalStreamHandler);
         session.open();
         return session;
     }

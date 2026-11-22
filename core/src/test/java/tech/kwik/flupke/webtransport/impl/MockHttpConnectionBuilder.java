@@ -28,8 +28,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Collections;
 import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -37,7 +40,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static tech.kwik.flupke.webtransport.impl.ClientSessionFactoryImpl.SETTINGS_WT_MAX_SESSIONS;
+import static tech.kwik.flupke.webtransport.impl.ClientSessionFactoryImpl.SETTINGS_WT_MAX_SESSIONS_DRAFT_07_12;
 
 public class MockHttpConnectionBuilder {
 
@@ -50,7 +53,7 @@ public class MockHttpConnectionBuilder {
         Http3ClientConnection http3connection = buildHttp3Connection();
         Http3Client client = mock(Http3Client.class);
         when(client.createConnection(any(HttpRequest.class))).thenReturn(http3connection);
-        when(http3connection.getPeerSettingsParameter(SETTINGS_WT_MAX_SESSIONS)).thenReturn(Optional.of(1L));
+        when(http3connection.getPeerSettingsParameter(SETTINGS_WT_MAX_SESSIONS_DRAFT_07_12)).thenReturn(Optional.of(1L));
         return client;
     }
 
@@ -97,7 +100,10 @@ public class MockHttpConnectionBuilder {
             withBidirectionalStreamInputOuput(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream());
         }
 
-        when(http3connection.sendExtendedConnect(any(HttpRequest.class), anyString(), anyString(), any(Duration.class))).thenReturn(extendedConnectStream);
+        HttpResponse<HttpStream> connectResponse = mock(HttpResponse.class);
+        when(connectResponse.body()).thenReturn(extendedConnectStream);
+        when(connectResponse.headers()).thenReturn(HttpHeaders.of(Collections.emptyMap(), (k, v) -> true));
+        when(http3connection.sendExtendedConnectAndGetResponse(any(HttpRequest.class), anyString(), anyString(), any(Duration.class))).thenReturn(connectResponse);
         when(http3connection.createUnidirectionalStream(anyLong())).thenReturn(unidirectionalStream);
         when(http3connection.createBidirectionalStream()).thenReturn(bidirectionalStream);
         return http3connection;

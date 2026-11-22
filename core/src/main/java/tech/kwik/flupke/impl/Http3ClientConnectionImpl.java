@@ -71,12 +71,14 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     private long maxReceivedHeaderSize = MAX_RECEIVED_HEADER_SIZE;
     private long maxReceivedDataSize = MAX_RECEIVED_DATA_SIZE;
 
-    public Http3ClientConnectionImpl(String host, int port, Duration connectTimeout, Http3ConnectionSettings connectionSettings, DatagramSocketFactory datagramSocketFactory, ExecutorService executorService, Logger logger) throws IOException {
-        this(createQuicConnection(host, port, connectTimeout, connectionSettings, datagramSocketFactory, logger), executorService);
+    public Http3ClientConnectionImpl(String host, int port, Duration connectTimeout, Http3ConnectionSettings connectionSettings,
+                                     DatagramSocketFactory datagramSocketFactory, boolean datagramEnabled, boolean reliableStreamResetEnabled,
+                                     ExecutorService executorService, Logger logger) throws IOException {
+        this(createQuicConnection(host, port, connectTimeout, connectionSettings, datagramSocketFactory, datagramEnabled, reliableStreamResetEnabled, logger), datagramEnabled, executorService);
     }
 
-    public Http3ClientConnectionImpl(QuicConnection quicConnection, ExecutorService executorService) {
-        super(quicConnection);
+    public Http3ClientConnectionImpl(QuicConnection quicConnection, boolean datagramEnabled, ExecutorService executorService) {
+        super(quicConnection, datagramEnabled);
         this.executorService = Objects.requireNonNull(executorService);
 
         quicConnection.setPeerInitiatedStreamCallback(stream -> doAsync(() -> handleIncomingStream(stream)));
@@ -88,7 +90,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
     }
 
     Http3ClientConnectionImpl(String host, int port) throws IOException {
-        this(host, port, DEFAULT_CONNECT_TIMEOUT, defaultConnectionSettings(), null, Executors.newCachedThreadPool(), null);
+        this(host, port, DEFAULT_CONNECT_TIMEOUT, defaultConnectionSettings(), null, false, false, Executors.newCachedThreadPool(), null);
     }
 
     @Override
@@ -165,7 +167,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         }
     }
 
-    private static QuicConnection createQuicConnection(String host, int port, Duration connectTimeout, Http3ConnectionSettings connectionSettings, DatagramSocketFactory datagramSocketFactory, Logger logger) throws SocketException, UnknownHostException {
+    private static QuicConnection createQuicConnection(String host, int port, Duration connectTimeout, Http3ConnectionSettings connectionSettings, DatagramSocketFactory datagramSocketFactory, boolean enableQuicDatagram, boolean enableReliableStreamReset, Logger logger) throws SocketException, UnknownHostException {
         QuicClientConnection.Builder builder = QuicClientConnection.newBuilder();
         try {
             builder.uri(new URI("//" + host + ":" + port));
@@ -198,6 +200,12 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
 
         builder.socketFactory(datagramSocketFactory);
         builder.logger(logger != null? logger: new NullLogger());
+        if (enableQuicDatagram) {
+            builder.enableDatagramExtension();
+        }
+        if (enableReliableStreamReset) {
+            builder.enableReliableStreamReset();
+        }
         return builder.build();
     }
 
@@ -404,11 +412,16 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
                 ":authority", extractAuthority(request.uri()),
                 ":method", "CONNECT"));
 
-        return new HttpStreamImpl(createHttpStream(headersFrame));
+        return createHttpStreamWithHeaders(request, headersFrame).body();
     }
 
     @Override
     public HttpStream sendExtendedConnect(HttpRequest request, String protocol, String scheme, Duration settingsFrameTimeout) throws InterruptedException, HttpError, IOException {
+        return sendExtendedConnectAndGetResponse(request, protocol, scheme, settingsFrameTimeout).body();
+    }
+
+    @Override
+    public HttpResponse<HttpStream> sendExtendedConnectAndGetResponse(HttpRequest request, String protocol, String scheme, Duration settingsFrameTimeout) throws InterruptedException, HttpError, IOException {
         if (! settingsFrameReceived.await(settingsFrameTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
             throw new ProtocolException("No SETTINGS frame received in time.");
         }
@@ -429,7 +442,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
                 ":scheme", scheme,
                 ":path", extractPath(request.uri())));
 
-        return new HttpStreamImpl(createHttpStream(headersFrame));
+        return createHttpStreamWithHeaders(request, headersFrame);
     }
 
     private boolean isEnableConnectProtocol() {
@@ -449,7 +462,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         }
     }
 
-    private QuicStream createHttpStream(HeadersFrame headersFrame) throws IOException, HttpError {
+    private HttpResponse<HttpStream> createHttpStreamWithHeaders(HttpRequest request, HeadersFrame headersFrame) throws IOException, HttpError {
         QuicStream httpStream = quicConnection.createStream(true);
         httpStream.getOutputStream().write(headersFrame.toBytes(qpackEncoder));
         httpStream.getOutputStream().flush();
@@ -469,7 +482,7 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
             }
             int statusCode = responseInfo.statusCode();
             if (statusCode >= 200 && statusCode < 300) {
-                return httpStream;
+                return new Http3Response<>(request, statusCode, responseInfo.headers(), new HttpStreamImpl(httpStream));
             }
             else {
                 throw new HttpError("CONNECT request failed", statusCode);

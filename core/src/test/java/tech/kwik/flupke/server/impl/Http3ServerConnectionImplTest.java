@@ -55,8 +55,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-import java.util.function.IntConsumer;
 
 import static java.util.Collections.emptyMap;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -389,7 +389,7 @@ public class Http3ServerConnectionImplTest {
                 response.setStatus(201);
             }
         };
-        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), handler, executor, emptyMap());
+        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), handler, false, executor, emptyMap());
 
         // When
         HeadersFrame requestHeadersFrame = createHeadersFrame("GET", new URI("https://www.example.com/index.html"));
@@ -414,7 +414,7 @@ public class Http3ServerConnectionImplTest {
             }
         };
 
-        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), handler, executor, emptyMap());
+        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), handler, false, executor, emptyMap());
 
         // When
         HeadersFrame requestHeadersFrame = new HeadersFrame();
@@ -438,7 +438,7 @@ public class Http3ServerConnectionImplTest {
     void statusShouldAlwaysBeSetEvenWhenHandlerDoesNot() throws Exception {
         // Given
         HttpRequestHandler handler = (req, resp) -> {};
-        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), handler, executor, emptyMap());
+        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), handler, false, executor, emptyMap());
 
         // When
         HeadersFrame requestHeadersFrame = new HeadersFrame();
@@ -461,7 +461,7 @@ public class Http3ServerConnectionImplTest {
         HttpRequestHandler httpRequestHandler = (req, resp) -> {
             req.body().readAllBytes();
         };
-        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), httpRequestHandler, maxHeaderSize, maxDataSize, executor, emptyMap());
+        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), httpRequestHandler, maxHeaderSize, maxDataSize, false, executor, emptyMap());
         byte[] rawData = new byte[10000];
         rawData[0] = FRAME_TYPE_DATA;
         rawData[1] = 0x44; // 0x44ff == 1279
@@ -489,7 +489,7 @@ public class Http3ServerConnectionImplTest {
         // Given
         long maxHeaderSize = 1000;
         long maxDataSize = Long.MAX_VALUE;
-        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize, executor, emptyMap());
+        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize, false, executor, emptyMap());
         setEncoder(http3Connection, noOpEncoderDecoderBuilder.encoder());
         HeadersFrame largeHeaders = new HeadersFrame("superlarge", "*".repeat(1000));
 
@@ -512,7 +512,7 @@ public class Http3ServerConnectionImplTest {
         // Given
         long maxHeaderSize = 1024;
         long maxDataSize = Long.MAX_VALUE;
-        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize, executor, emptyMap());
+        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize, false, executor, emptyMap());
         setEncoder(http3Connection, noOpEncoderDecoderBuilder.encoder());
         // Mocked decoder expands a tiny headers frame into a field section larger than the max header size
         Decoder qpackDecoder = mock(Decoder.class);
@@ -544,7 +544,7 @@ public class Http3ServerConnectionImplTest {
         // Given
         long maxHeaderSize = 1000;
         long maxDataSize = Long.MAX_VALUE;
-        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize, executor, emptyMap());
+        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize, false, executor, emptyMap());
 
         HeadersFrame largeHeaders = new HeadersFrame("superlarge", "*".repeat(1000));
         byte[] data = largeHeaders.toBytes(Encoder.newBuilder().build());
@@ -610,7 +610,7 @@ public class Http3ServerConnectionImplTest {
         // Given
         Http3ServerExtension extensionHandler = mock(Http3ServerExtension.class);
         doAnswer(new StatusCallbackAnswer(200))
-                .when(extensionHandler).handleExtendedConnect(any(HttpHeaders.class), anyString(), anyString(), anyString(), any(IntConsumer.class), any(HttpStream.class));
+                .when(extensionHandler).handleExtendedConnect(any(HttpHeaders.class), anyString(), anyString(), anyString(), any(BiConsumer.class), any(HttpStream.class));
         Http3ServerExtensionFactory extensionFactory = http3ServerConnection -> extensionHandler;
 
         CapturingEncoder encoder = new CapturingEncoder();
@@ -641,9 +641,9 @@ public class Http3ServerConnectionImplTest {
         AtomicBoolean extensionCalled = new AtomicBoolean(false);
         Http3ServerExtension extensionHandler = new Http3ServerExtension() {
             @Override
-            public void handleExtendedConnect(HttpHeaders headers, String protocol, String authority, String pathAndQuery, IntConsumer statusCallback, HttpStream requestResponseStream) {
+            public void handleExtendedConnect(HttpHeaders headers, String protocol, String authority, String pathAndQuery, BiConsumer<Integer, Map<String, List<String>>> statusCallback, HttpStream requestResponseStream) {
                 extensionCalled.set(true);
-                statusCallback.accept(200);
+                statusCallback.accept(200, Map.of());
             }
         };
 
@@ -669,15 +669,46 @@ public class Http3ServerConnectionImplTest {
     }
 
     @Test
+    void extendedConnectShouldReturnHeadersProvidedByExtension() throws Exception {
+        // Given
+        Map<String, List<String>> expectedHeaders = Map.of(
+                "Sec-WebSocket-Protocol", List.of("chat"),
+                "Sec-WebSocket-Extensions", List.of("permessage-deflate")
+        );
+
+        Http3ServerExtension extensionHandler = (headers, protocol, authority, pathAndQuery, statusCallback, requestResponseStream)
+                -> statusCallback.accept(200, expectedHeaders);
+        Http3ServerExtensionFactory extensionFactory = http3ServerConnection -> extensionHandler;
+
+        CapturingEncoder encoder = new CapturingEncoder();
+        Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
+                .withHeaders(Map.of(":method", "CONNECT", ":protocol", "websockets", ":authority", "example.com", ":path", "/"))
+                .withExtensionHandler("websockets", extensionFactory)
+                .withHandler(((req, resp) -> resp.setStatus(200)))
+                .withEncoder(encoder)
+                .buildServerConnection();
+        QuicStream requestResponseStream = new QuicStreamBuilder()
+                .withInputData(fakeHeadersFrameData())
+                .build();
+
+        // When
+        http3Connection.handleBidirectionalStream(requestResponseStream);
+
+        // Then
+        assertThat(encoder.getCapturedHeaders().get("sec-websocket-protocol")).isEqualTo("chat");
+        assertThat(encoder.getCapturedHeaders().get("sec-websocket-extensions")).isEqualTo("permessage-deflate");
+    }
+
+    @Test
     void extendedConnectShouldSucceedWhenRequestHandlerDoesNotSetStatus() throws Exception {
         // Given
         HttpRequestHandler requestHandler = mock(HttpRequestHandler.class);
         AtomicBoolean extensionCalled = new AtomicBoolean(false);
         Http3ServerExtension extensionHandler = new Http3ServerExtension() {
             @Override
-            public void handleExtendedConnect(HttpHeaders headers, String protocol, String authority, String pathAndQuery, IntConsumer statusCallback, HttpStream requestResponseStream) {
+            public void handleExtendedConnect(HttpHeaders headers, String protocol, String authority, String pathAndQuery, BiConsumer<Integer, Map<String, List<String>>> statusCallback, HttpStream requestResponseStream) {
                 extensionCalled.set(true);
-                statusCallback.accept(200);
+                statusCallback.accept(200, Map.of());
             }
         };
 
@@ -728,7 +759,7 @@ public class Http3ServerConnectionImplTest {
         // Then
         assertThat(encoder.getCapturedHeaders().get(":status")).isEqualTo("403");
         verify(outputStream).close();
-        verify(extensionHandler, never()).handleExtendedConnect(any(HttpHeaders.class), anyString(), anyString(), anyString(), any(IntConsumer.class), any(HttpStream.class));
+        verify(extensionHandler, never()).handleExtendedConnect(any(HttpHeaders.class), anyString(), anyString(), anyString(), any(BiConsumer.class), any(HttpStream.class));
     }
 
     @Test
@@ -764,7 +795,7 @@ public class Http3ServerConnectionImplTest {
         // Given
         Http3ServerExtension extensionHandler = mock(Http3ServerExtension.class);
         doAnswer(new StatusCallbackAnswer(200))
-                .when(extensionHandler).handleExtendedConnect(any(HttpHeaders.class), anyString(), anyString(), anyString(), any(IntConsumer.class), any(HttpStream.class));
+                .when(extensionHandler).handleExtendedConnect(any(HttpHeaders.class), anyString(), anyString(), anyString(), any(BiConsumer.class), any(HttpStream.class));
         Http3ServerExtensionFactory extensionFactory = http3ServerConnection -> extensionHandler;
 
         CapturingEncoder encoder = new CapturingEncoder();
@@ -785,7 +816,7 @@ public class Http3ServerConnectionImplTest {
                 argThat(p -> p.equals("webtransport")),
                 argThat(a -> a.equals("example.com")),
                 argThat(p -> p.equals("/")),
-                any(IntConsumer.class),
+                any(BiConsumer.class),
                 any(HttpStream.class));
         assertThat(encoder.getCapturedHeaders().get(":status")).isEqualTo("200");
     }
@@ -795,7 +826,7 @@ public class Http3ServerConnectionImplTest {
         // Given
         Http3ServerExtension extensionHandler = mock(Http3ServerExtension.class);
         doAnswer(new StatusCallbackAnswer(404))
-                .when(extensionHandler).handleExtendedConnect(any(HttpHeaders.class), anyString(), anyString(), anyString(), any(IntConsumer.class), any(HttpStream.class));
+                .when(extensionHandler).handleExtendedConnect(any(HttpHeaders.class), anyString(), anyString(), anyString(), any(BiConsumer.class), any(HttpStream.class));
         Http3ServerExtensionFactory extensionFactory = http3ServerConnection -> extensionHandler;
 
         Http3ServerConnectionImpl http3Connection = new HttpConnectionBuilder()
@@ -823,7 +854,7 @@ public class Http3ServerConnectionImplTest {
 
         Http3ServerExtension extensionHandler = new Http3ServerExtension() {
             @Override
-            public void handleExtendedConnect(HttpHeaders headers, String protocol, String authority, String path, IntConsumer statusCallback, HttpStream stream) {
+            public void handleExtendedConnect(HttpHeaders headers, String protocol, String authority, String path, BiConsumer<Integer, Map<String, List<String>>> statusCallback, HttpStream stream) {
                 // Accessing the stream before setting the status
                 try {
                     stream.getOutputStream().write("This should not be allowed".getBytes());
@@ -935,8 +966,8 @@ public class Http3ServerConnectionImplTest {
         }
 
         public Void answer(InvocationOnMock invocation) {
-            IntConsumer statusCallback = (IntConsumer) invocation.getArguments()[4];
-            statusCallback.accept(status);
+            BiConsumer statusCallback = (BiConsumer) invocation.getArguments()[4];
+            statusCallback.accept(status, Map.of());
             return null;
         }
     }

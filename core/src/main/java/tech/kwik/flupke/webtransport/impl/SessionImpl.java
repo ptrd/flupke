@@ -26,6 +26,8 @@ import tech.kwik.flupke.impl.VariableLengthIntegerUtil;
 import tech.kwik.flupke.webtransport.Session;
 import tech.kwik.flupke.webtransport.WebTransportStream;
 
+import java.io.FilterInputStream;
+import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -63,6 +65,7 @@ public class SessionImpl implements Session {
     private BiConsumer<Long, String> sessionTerminatedEventListener;
     private Queue<HttpStream> sendingStreams = new ConcurrentLinkedQueue();
     private Queue<HttpStream> receivingStreams = new ConcurrentLinkedQueue();
+    private volatile Consumer<byte[]> datagramHandler;
 
     SessionImpl(Http3Connection http3Connection, WebTransportContext context, CapsuleProtocolStream connectStream, SessionFactory sessionFactory) {
         this(http3Connection, context, connectStream, s -> {}, s -> {}, sessionFactory);
@@ -163,6 +166,11 @@ public class SessionImpl implements Session {
         }
     }
 
+    public void sendDatagram(byte[] data) throws IOException {
+        checkState();
+        http3Connection.sendDatagram(sessionId, data);
+    }
+
     @Override
     public void setUnidirectionalStreamReceiveHandler(Consumer<WebTransportStream> handler) {
         unidirectionalStreamReceiveHandler = Objects.requireNonNull(handler);
@@ -171,6 +179,22 @@ public class SessionImpl implements Session {
     @Override
     public void setBidirectionalStreamReceiveHandler(Consumer<WebTransportStream> handler) {
         bidirectionalStreamReceiveHandler = Objects.requireNonNull(handler);
+    }
+
+    @Override
+    public void setDatagramHandler(Consumer<byte[]> handler) {
+        datagramHandler = handler;
+        http3Connection.registerDatagramHandler(sessionId, Objects.requireNonNull(handler));
+        if (state == State.CLOSING || state == State.CLOSED) {
+            // Session was closed concurrently (or before), so the handler must not be retained by the connection.
+            unregisterDatagramHandler();
+        }
+    }
+
+    private void unregisterDatagramHandler() {
+        if (datagramHandler != null) {
+            http3Connection.unregisterDatagramHandler(sessionId);
+        }
     }
 
     @Override
@@ -195,6 +219,7 @@ public class SessionImpl implements Session {
         resetSenders();
         abortReading();
         stopReceivingCapsules();
+        unregisterDatagramHandler();
         sessionTerminatedEventListener.accept(applicationErrorCode, applicationErrorMessage);
         sessionFactory.removeSession(this);
     }
@@ -215,6 +240,12 @@ public class SessionImpl implements Session {
     @Override
     public void registerSessionTerminatedEventListener(BiConsumer<Long, String> listener) {
         sessionTerminatedEventListener = Objects.requireNonNull(listener);
+    }
+
+    void handleDatagram(byte[] data) {
+        if (datagramHandler != null) {
+            datagramHandler.accept(data);
+        }
     }
 
     void handleStream(HttpStream httpStream) {
@@ -273,6 +304,7 @@ public class SessionImpl implements Session {
         }
         catch (IOException e) {}
 
+        unregisterDatagramHandler();
         sessionFactory.removeSession(this);
         sessionTerminatedEventListener.accept(applicationErrorCode, applicationErrorMessage);
     }
@@ -293,12 +325,27 @@ public class SessionImpl implements Session {
         return new WebTransportStream() {
             @Override
             public OutputStream getOutputStream() {
-                return httpStream.getOutputStream();
+                return wrapSendStream(httpStream);
             }
 
             @Override
             public InputStream getInputStream() {
-                return httpStream.getInputStream();
+                return wrapReceiveStream(httpStream);
+            }
+
+            @Override
+            public boolean isUnidirectional() {
+                return httpStream.isUnidirectional();
+            }
+
+            @Override
+            public boolean isBidirectional() {
+                return httpStream.isBidirectional();
+            }
+
+            @Override
+            public long getStreamId() {
+                return httpStream.getStreamId();
             }
         };
     }
@@ -312,7 +359,94 @@ public class SessionImpl implements Session {
 
             @Override
             public InputStream getInputStream() {
-                return inputStream.getInputStream();
+                return wrapReceiveStream(inputStream);
+            }
+
+            @Override
+            public boolean isUnidirectional() {
+                return inputStream.isUnidirectional();
+            }
+
+            @Override
+            public boolean isBidirectional() {
+                return inputStream.isBidirectional();
+            }
+
+            @Override
+            public long getStreamId() {
+                return inputStream.getStreamId();
+            }
+        };
+    }
+
+    // Wraps the underlying OutputStream so closing it removes the HttpStream
+    // from {@link #sendingStreams}. Without this, every stream we create stays
+    // referenced for the session's lifetime — even after the user has called
+    // close() and Kwik's StreamManager has removed it — because {@code
+    // sendingStreams} (used by {@link #resetSenders} on session termination)
+    // never shrinks when streams close normally. That retention propagates to
+    // the underlying QuicStreamImpl + SendBuffer + RetransmitBuffer instances.
+    private OutputStream wrapSendStream(HttpStream httpStream) {
+        return new FilterOutputStream(httpStream.getOutputStream()) {
+            private boolean removed = false;
+
+            @Override
+            public void write(byte[] b, int off, int len) throws IOException {
+                out.write(b, off, len);  // bypass FilterOutputStream's byte-by-byte
+            }
+
+            @Override
+            public void close() throws IOException {
+                try {
+                    out.close();
+                }
+                finally {
+                    if (!removed) {
+                        removed = true;
+                        sendingStreams.remove(httpStream);
+                    }
+                }
+            }
+        };
+    }
+
+    // Wraps the underlying InputStream so EOF or close() removes the HttpStream
+    // from {@link #receivingStreams}. Mirrors {@link #wrapSendStream} for the
+    // receive direction so peer-initiated streams (unidirectional or
+    // bidirectional) don't pin the underlying QuicStream after the peer FINs.
+    private InputStream wrapReceiveStream(HttpStream httpStream) {
+        return new FilterInputStream(httpStream.getInputStream()) {
+            private boolean removed = false;
+
+            private void onDone() {
+                if (!removed) {
+                    removed = true;
+                    receivingStreams.remove(httpStream);
+                }
+            }
+
+            @Override
+            public int read() throws IOException {
+                int b = in.read();
+                if (b == -1) onDone();
+                return b;
+            }
+
+            @Override
+            public int read(byte[] buf, int off, int len) throws IOException {
+                int n = in.read(buf, off, len);
+                if (n == -1) onDone();
+                return n;
+            }
+
+            @Override
+            public void close() throws IOException {
+                try {
+                    in.close();
+                }
+                finally {
+                    onDone();
+                }
             }
         };
     }
@@ -350,6 +484,11 @@ public class SessionImpl implements Session {
     @Override
     public String getPath() {
         return context.getPathAndQuery();
+    }
+
+    @Override
+    public Optional<String> getNegotiatedProtocol() {
+        return context.getNegotiatedProtocol();
     }
 
     @Override
