@@ -29,6 +29,7 @@ import tech.kwik.core.server.ServerConnection;
 import tech.kwik.flupke.HttpStream;
 import tech.kwik.flupke.impl.ConnectionError;
 import tech.kwik.flupke.impl.HeadersFrame;
+import tech.kwik.flupke.impl.Http3ConnectionImpl;
 import tech.kwik.flupke.impl.SettingsFrame;
 import tech.kwik.flupke.server.*;
 import tech.kwik.flupke.test.CapturingEncoder;
@@ -36,6 +37,7 @@ import tech.kwik.flupke.test.FieldSetter;
 import tech.kwik.flupke.test.NoOpEncoderDecoderBuilder;
 import tech.kwik.flupke.test.QuicStreamBuilder;
 import tech.kwik.flupke.webtransport.impl.WebTransportExtensionFactory;
+import tech.kwik.qpack.Decoder;
 import tech.kwik.qpack.Encoder;
 
 import java.io.ByteArrayOutputStream;
@@ -45,7 +47,9 @@ import java.io.OutputStream;
 import java.net.URI;
 import java.net.http.HttpHeaders;
 import java.nio.ByteBuffer;
+import java.util.AbstractMap;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -65,6 +69,8 @@ import static tech.kwik.flupke.impl.Http3ConnectionImpl.FRAME_TYPE_DATA;
 
 
 public class Http3ServerConnectionImplTest {
+
+    private static final long MAX_FIELD_SECTION_SIZE = 1024;
 
     private ExecutorService executor = Executors.newSingleThreadExecutor();
     private NoOpEncoderDecoderBuilder noOpEncoderDecoderBuilder;
@@ -393,7 +399,7 @@ public class Http3ServerConnectionImplTest {
         http3Connection.handleHttpRequest(requestHeadersFrame, stream, noOpEncoderDecoderBuilder.encoder());
 
         // Then
-        HeadersFrame responseHeadersFrame = new HeadersFrame().parsePayload(output.toByteArray(), noOpEncoderDecoderBuilder.decoder());
+        HeadersFrame responseHeadersFrame = new HeadersFrame().parsePayload(output.toByteArray(), noOpEncoderDecoderBuilder.decoder(), MAX_FIELD_SECTION_SIZE);
         assertThat(responseHeadersFrame.getPseudoHeader(":status")).isEqualTo("201");
     }
 
@@ -474,7 +480,7 @@ public class Http3ServerConnectionImplTest {
         http3Connection.handleHttpRequest(createHeadersFrame("GET", "/"), requestResponseStream, noOpEncoderDecoderBuilder.encoder());
 
         // Then
-        HeadersFrame responseHeadersFrame = new HeadersFrame().parsePayload(output.toByteArray(), noOpEncoderDecoderBuilder.decoder());
+        HeadersFrame responseHeadersFrame = new HeadersFrame().parsePayload(output.toByteArray(), noOpEncoderDecoderBuilder.decoder(), MAX_FIELD_SECTION_SIZE);
         assertThat(responseHeadersFrame.getPseudoHeader(":status")).isEqualTo("413");
     }
 
@@ -497,7 +503,39 @@ public class Http3ServerConnectionImplTest {
         http3Connection.handleStandardRequestResponseStream(requestResponseStream);
 
         // Then
-        HeadersFrame responseHeadersFrame = new HeadersFrame().parsePayload(output.toByteArray(), noOpEncoderDecoderBuilder.decoder());
+        HeadersFrame responseHeadersFrame = new HeadersFrame().parsePayload(output.toByteArray(), noOpEncoderDecoderBuilder.decoder(), MAX_FIELD_SECTION_SIZE);
+        assertThat(responseHeadersFrame.getPseudoHeader(":status")).isEqualTo("431");
+    }
+
+    @Test
+    void requestHeadersThatDecompressToMoreThanMaxAreNotAccepted() throws Exception {
+        // Given
+        long maxHeaderSize = 1024;
+        long maxDataSize = Long.MAX_VALUE;
+        Http3ServerConnectionImpl http3Connection = new Http3ServerConnectionImpl(createMockQuicConnection(), mock(HttpRequestHandler.class), maxHeaderSize, maxDataSize, executor, emptyMap());
+        setEncoder(http3Connection, noOpEncoderDecoderBuilder.encoder());
+        // Mocked decoder expands a tiny headers frame into a field section larger than the max header size
+        Decoder qpackDecoder = mock(Decoder.class);
+        when(qpackDecoder.decodeStream(any(InputStream.class))).thenReturn(List.of(
+                new AbstractMap.SimpleEntry<>(":method", "GET"),
+                new AbstractMap.SimpleEntry<>(":scheme", "https"),
+                new AbstractMap.SimpleEntry<>(":path", "/"),
+                new AbstractMap.SimpleEntry<>(":authority", "example.com"),
+                new AbstractMap.SimpleEntry<>("superlarge", "*".repeat(900))
+        ));
+        FieldSetter.setField(http3Connection, Http3ConnectionImpl.class.getDeclaredField("qpackDecoder"), qpackDecoder);
+
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        QuicStream requestResponseStream = new QuicStreamBuilder()
+                .withInputData(new byte[] { 0x01, 0x01, 0x00 })  // Headers frame with 1 byte payload
+                .withOutputStream(output)
+                .build();
+
+        // When
+        http3Connection.handleStandardRequestResponseStream(requestResponseStream);
+
+        // Then
+        HeadersFrame responseHeadersFrame = new HeadersFrame().parsePayload(output.toByteArray(), noOpEncoderDecoderBuilder.decoder(), MAX_FIELD_SECTION_SIZE);
         assertThat(responseHeadersFrame.getPseudoHeader(":status")).isEqualTo("431");
     }
 

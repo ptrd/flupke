@@ -33,12 +33,15 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
 
 
 public class HeadersFrameTest {
+
+    private static final long MAX_FIELD_SECTION_SIZE = 1024;
 
     @Test
     public void frameReturnsNormalHeadersReturnedByDecoder() throws Exception {
@@ -48,7 +51,7 @@ public class HeadersFrameTest {
                 new AbstractMap.SimpleEntry<>(":status", "200"),
                 new AbstractMap.SimpleEntry<>("content-type", "text/plain")
         ));
-        HeadersFrame headersFrame = new HeadersFrame().parsePayload(new byte[0], qpackDecoder);
+        HeadersFrame headersFrame = new HeadersFrame().parsePayload(new byte[0], qpackDecoder, MAX_FIELD_SECTION_SIZE);
 
         assertThat(headersFrame.headers().map()).containsEntry("content-type", List.of("text/plain"));
     }
@@ -61,7 +64,7 @@ public class HeadersFrameTest {
                 new AbstractMap.SimpleEntry<>(":status", "200"),
                 new AbstractMap.SimpleEntry<>("content-type", "text/plain")
         ));
-        HeadersFrame headersFrame = new HeadersFrame().parsePayload(new byte[0], qpackDecoder);
+        HeadersFrame headersFrame = new HeadersFrame().parsePayload(new byte[0], qpackDecoder, MAX_FIELD_SECTION_SIZE);
 
         assertThat(headersFrame.headers().map()).doesNotContainKey(":status");
     }
@@ -74,9 +77,32 @@ public class HeadersFrameTest {
                 new AbstractMap.SimpleEntry<>("content-type", "text/html"),
                 new AbstractMap.SimpleEntry<>("accept", "text/html")
         ));
-        HeadersFrame headersFrame = new HeadersFrame().parsePayload(new byte[0], qpackDecoder);
+        HeadersFrame headersFrame = new HeadersFrame().parsePayload(new byte[0], qpackDecoder, MAX_FIELD_SECTION_SIZE);
 
         assertThat(headersFrame.headers().allValues("accept")).containsExactly("text/plain", "text/html");
+    }
+
+    @Test
+    public void decodedFieldSectionLargerThanMaxIsRejected() throws Exception {
+        Decoder qpackDecoder = mock(Decoder.class);
+        when(qpackDecoder.decodeStream(any(InputStream.class))).thenReturn(List.of(
+                new AbstractMap.SimpleEntry<>("name", "value")  // 4 + 5 + 32 = 41
+        ));
+
+        assertThatThrownBy(() -> new HeadersFrame().parsePayload(new byte[0], qpackDecoder, 40))
+                .isInstanceOf(MaxHeaderSizeExceededException.class);
+    }
+
+    @Test
+    public void decodedFieldSectionEqualToMaxIsAccepted() throws Exception {
+        Decoder qpackDecoder = mock(Decoder.class);
+        when(qpackDecoder.decodeStream(any(InputStream.class))).thenReturn(List.of(
+                new AbstractMap.SimpleEntry<>("name", "value")  // 4 + 5 + 32 = 41
+        ));
+
+        HeadersFrame headersFrame = new HeadersFrame().parsePayload(new byte[0], qpackDecoder, 41);
+
+        assertThat(headersFrame.headers().firstValue("name")).hasValue("value");
     }
 
     @Test
@@ -201,7 +227,7 @@ public class HeadersFrameTest {
                 new AbstractMap.SimpleEntry<>("set-cookie", "sample=foo"),
                 new AbstractMap.SimpleEntry<>("set-cookie", "sample=bar")
         ));
-        HeadersFrame headersFrame = new HeadersFrame().parsePayload(new byte[0], qpackDecoder);
+        HeadersFrame headersFrame = new HeadersFrame().parsePayload(new byte[0], qpackDecoder, MAX_FIELD_SECTION_SIZE);
 
         assertThat(headersFrame.headers().map()).containsEntry("set-cookie", List.of("sample=foo", "sample=bar"));
     }

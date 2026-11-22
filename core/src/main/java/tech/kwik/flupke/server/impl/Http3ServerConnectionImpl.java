@@ -207,7 +207,13 @@ public class Http3ServerConnectionImpl extends Http3ConnectionImpl implements Ht
         if (payloadLength > maxHeadersSize) {
             throw new HttpError("max header size exceeded", 431);
         }
-        HeadersFrame headersFrame = new HeadersFrame().parsePayload(readExact(inputStream, payloadLength), qpackDecoder);
+        HeadersFrame headersFrame;
+        try {
+            headersFrame = new HeadersFrame().parsePayload(readExact(inputStream, payloadLength), qpackDecoder, maxHeadersSize);
+        }
+        catch (MaxHeaderSizeExceededException tooLarge) {
+            throw new HttpError("max header size exceeded", 431);
+        }
         String method = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_METHOD);
         String scheme = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_SCHEME);
         String path = headersFrame.getPseudoHeader(HeadersFrame.PSEUDO_HEADER_PATH);

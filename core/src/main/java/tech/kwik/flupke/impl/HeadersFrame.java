@@ -105,8 +105,18 @@ public class HeadersFrame extends Http3Frame {
         return data;
     }
 
-    public HeadersFrame parsePayload(byte[] headerBlock, Decoder decoder) throws IOException {
+    /**
+     * Parses the header block, rejecting it when the decoded field section is larger than the given maximum.
+     * As QPACK can expand a small header block into a much larger field section, limiting the size of the
+     * (compressed) frame alone is not sufficient.
+     * @param maxFieldSectionSize  maximum size of the decoded field section, as defined by RFC 9114 section 4.2.2
+     * @throws MaxHeaderSizeExceededException  when the decoded field section is larger than the given maximum
+     */
+    public HeadersFrame parsePayload(byte[] headerBlock, Decoder decoder, long maxFieldSectionSize) throws IOException {
         List<Map.Entry<String, String>> headersList = decoder.decodeStream(new ByteArrayInputStream(headerBlock));
+        if (fieldSectionSize(headersList) > maxFieldSectionSize) {
+            throw new MaxHeaderSizeExceededException();
+        }
         // Append to a mutable list per name; merging immutable lists would be quadratic in the number of duplicate fields.
         Map<String, List<String>> headersMap = new HashMap<>();
         for (Map.Entry<String, String> entry : headersList) {
@@ -117,6 +127,17 @@ public class HeadersFrame extends Http3Frame {
         extractPseudoHeaders(headersMap);
         httpHeaders = HttpHeaders.of(headersMap, (key, value) -> ! key.startsWith(":"));
         return this;
+    }
+
+    private static long fieldSectionSize(List<Map.Entry<String, String>> fields) {
+        // https://www.rfc-editor.org/rfc/rfc9114.html#section-4.2.2
+        // "The size of a field list is calculated based on the uncompressed size of fields, including the length of
+        //  the name and value in bytes plus an overhead of 32 bytes for each field."
+        long size = 0;
+        for (Map.Entry<String, String> field : fields) {
+            size += field.getKey().length() + field.getValue().length() + 32;
+        }
+        return size;
     }
 
     private void extractPseudoHeaders(Map<String, List<String>> headersMap) {

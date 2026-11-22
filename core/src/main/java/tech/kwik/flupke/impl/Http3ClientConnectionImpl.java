@@ -334,7 +334,12 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
         if (payloadLength > maxHeadersFrameSize) {
             throw new HttpError("max header size exceeded", 414);
         }
-        return new HeadersFrame().parsePayload(readExact(inputStream, payloadLength), qpackDecoder);
+        try {
+            return new HeadersFrame().parsePayload(readExact(inputStream, payloadLength), qpackDecoder, maxHeadersFrameSize);
+        }
+        catch (MaxHeaderSizeExceededException tooLarge) {
+            throw new HttpError("max header size exceeded", 414);
+        }
     }
 
     void registerServerInitiatedStream(QuicStream stream) {
