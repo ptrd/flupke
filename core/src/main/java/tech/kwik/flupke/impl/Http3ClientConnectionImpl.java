@@ -300,26 +300,22 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
             // input stream (as long as all unread bytes are re-read before returning from this method).
             PushbackInputStream inputStream = new PushbackInputStream(responseStream, 8);
             long frameType = VariableLengthIntegerUtil.peekLong(inputStream);
-            if (frameType == FRAME_TYPE_HEADERS) {
-                HeadersFrame headersFrame = readHeadersFrame(inputStream, maxReceivedHeaderSize);
-                frameSequenceChecker.gotHeader();
-                return headersFrame;
-            }
-            else if (frameType == FRAME_TYPE_DATA) {
-                frameType = VariableLengthInteger.parseLong(inputStream);
+            // Iterate instead of recurse, as a peer can send an arbitrary number of frames before the headers frame.
+            while (frameType != FRAME_TYPE_HEADERS) {
+                VariableLengthInteger.parseLong(inputStream);  // Consume the (peeked) frame type
                 long frameLength = VariableLengthInteger.parseLong(inputStream);
-                inputStream.skip(frameLength);
-                frameSequenceChecker.gotData();
-                return null;  // Will not happen, checker will throw exception
+                inputStream.skip(frameLength);  // Skip: looking for the headers frame
+                if (frameType == FRAME_TYPE_DATA) {
+                    frameSequenceChecker.gotData();
+                }
+                else {
+                    frameSequenceChecker.gotOther(frameType);
+                }
+                frameType = VariableLengthIntegerUtil.peekLong(inputStream);
             }
-            else {
-                frameType = VariableLengthInteger.parseLong(inputStream);
-                long frameLength = VariableLengthInteger.parseLong(inputStream);
-                inputStream.skip(frameLength);
-                frameSequenceChecker.gotOther(frameType);
-                // If it gets here, the unknown frame is ignored, continue to (try to) read a headers frame
-                return readHeadersFrame(responseStream, frameSequenceChecker);
-            }
+            HeadersFrame headersFrame = readHeadersFrame(inputStream, maxReceivedHeaderSize);
+            frameSequenceChecker.gotHeader();
+            return headersFrame;
         }
         catch (EOFException e) {
             throw new ConnectionError(H3_FRAME_ERROR);

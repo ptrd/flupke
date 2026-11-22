@@ -522,24 +522,24 @@ public class Http3ConnectionImpl implements Http3Connection {
 
                 private void advanceToNextNonEmptyDataFrame() throws IOException {
                     assert dataFrameBytesRemaining == 0;
-                    int firstByte = sourceInputStream.read();
-                    if (firstByte == -1) {
-                        atEndOfStream = true;
-                        return;
+                    // Don't use recursion (which would be simpler), as a (malicious) peer can send an arbitrary number of empty or non-data frames.
+                    long frameType;
+                    long frameLength;
+                    do {
+                        int firstByte = sourceInputStream.read();
+                        if (firstByte == -1) {
+                            atEndOfStream = true;
+                            return;
+                        }
+                        sourceInputStream.unread(firstByte);
+                        frameType = VariableLengthInteger.parseLong(sourceInputStream);    // will throw if eof
+                        frameLength = VariableLengthInteger.parseLong(sourceInputStream);  // will throw if eof
+                        if (frameType != FRAME_TYPE_DATA) {
+                            sourceInputStream.skip(frameLength);
+                        }
                     }
-                    sourceInputStream.unread(firstByte);
-                    long frameType = VariableLengthInteger.parseLong(sourceInputStream);
-                    long frameLength = VariableLengthInteger.parseLong(sourceInputStream);
-                    if (frameType != FRAME_TYPE_DATA) {
-                        sourceInputStream.skip(frameLength);
-                        advanceToNextNonEmptyDataFrame();
-                    }
-                    else if (frameLength == 0) {
-                        advanceToNextNonEmptyDataFrame();
-                    }
-                    else {
-                        dataFrameBytesRemaining = frameLength;
-                    }
+                    while (frameType != FRAME_TYPE_DATA || frameLength == 0);
+                    dataFrameBytesRemaining = frameLength;
                 }
             };
         }
