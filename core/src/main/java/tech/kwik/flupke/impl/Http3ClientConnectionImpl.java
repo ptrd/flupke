@@ -728,10 +728,18 @@ public class Http3ClientConnectionImpl extends Http3ConnectionImpl implements Ht
                 int bytesRead;
                 do {
                     byte[] buffer = new byte[MAX_DATA_FRAME_READ_CHUNK_SIZE];
-                    bytesRead = dataFramesReader.read(buffer);
-                    if (bytesRead > 0) {
+                    int totalRead = 0;
+                    do {
+                        bytesRead = dataFramesReader.read(buffer, totalRead, buffer.length - totalRead);
+                        if (bytesRead > 0) {
+                            totalRead += bytesRead;
+                        }
+                    }
+                    while (bytesRead > 0 && totalRead < buffer.length);
+
+                    if (totalRead > 0) {
                         n--;
-                        bodySubscriber.onNext(List.of(ByteBuffer.wrap(buffer, 0, bytesRead)));
+                        bodySubscriber.onNext(List.of(ByteBuffer.wrap(buffer, 0, totalRead)));
                     }
                 } while (n > 0 && bytesRead > 0);
 
