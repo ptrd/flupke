@@ -1,5 +1,20 @@
 # Releases
 
+## 0.9.5 (2026-11-23)
+
+- added support for HTTP/3 datagrams (RFC 9297), both on client and server
+- WebTransport additions:
+  - support for draft-15 (in addition to draft-13)
+  - sending and receiving datagrams
+  - application protocol negotiation
+  - server handlers can be registered on a path pattern (regex)
+  - configurable limits for streams and datagrams that arrive before the session is established
+- deprecated `Http3ClientConnection.sendExtendedConnect()` in favour of `sendExtendedConnectAndGetResponse()`, which also returns the response headers
+- reduced memory usage when receiving large responses or request bodies (data is now streamed)
+- improved robustness against misbehaving or malicious peers
+- several WebTransport fixes, including proper cleanup when a session is closed
+- upgraded kwik dependency to 0.11 and qpack to 2.1
+
 ## 0.9.4 (2025-12-28)
 
 **Note:** this release introduces the use of request handlers for WebTransport. This might lead to different
